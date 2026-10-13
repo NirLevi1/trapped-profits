@@ -10,6 +10,8 @@
 
 ### התקנה במשרד (ווינדוס) – פעם אחת
 
+**הדרך הקצרה:** להעביר את `install.bat` (מייל / דיסק-און-קי), לחיצה כפולה – מתקין פייתון וגיט אם חסרים, מושך את הקוד ל-`%USERPROFILE%\trapped-profits` ומפעיל. ידנית:
+
 1. פייתון 3.10 ומעלה וגיט. הכי קל מ-cmd: `winget install -e --id Python.Python.3.12` ואז `winget install -e --id Git.Git` (או מהאתרים python.org – "Windows installer (64-bit)", ו-git-scm.com). לסגור ולפתוח cmd אחרי ההתקנה. `run.bat` עובד גם אם "Add to PATH" לא סומן (נופל ל-`py`). כרום/אדג' – לייצוא PDF.
 2. לפתוח cmd ולהדביק:
    ```
