@@ -36,3 +36,34 @@ def test_settings_flags_apply_to_clients():
     s.recompute_all()
     b = s.list()[0]["result"]["simulator"]["option_50pct"]
     assert a == 1_950_000 and b == 350_000
+
+
+def test_new_client_with_existing_company_id_is_rejected():
+    s, inp = _store()
+    s.save(inp)
+    import pytest
+    with pytest.raises(ValueError):
+        s.save(inp)                      # לקוח "חדש" עם אותו ח.פ.
+    s.save(inp, s.list()[0]["id"])      # עריכה – מותר
+    assert len(s.list()) == 1
+
+
+def test_data_as_of_is_normalized_to_iso():
+    s, inp = _store()
+    inp["data_as_of"] = "30.9.2026"
+    rec = s.save(inp)
+    assert rec["input"]["data_as_of"] == "2026-09-30"
+    inp["data_as_of"] = "מחצית השנה"
+    rec = s.save(inp, rec["id"])
+    assert rec["input"]["data_as_of"] == "מחצית השנה"
+
+
+def test_export_when_file_locked_gives_hebrew_error(monkeypatch):
+    s, inp = _store()
+    rec = s.save(inp)
+    import trapped_profits.documents as docs
+    def boom(*a, **k): raise PermissionError("locked")
+    monkeypatch.setattr(docs, "render_docx", boom)
+    import pytest
+    with pytest.raises(RuntimeError, match="פתוח"):
+        s.export_document(rec["id"], "accountant", "docx")

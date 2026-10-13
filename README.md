@@ -60,7 +60,7 @@ examples/
 
 ```bash
 pip install openpyxl pytest
-python -m pytest -q                                      # 34 בדיקות
+python -m pytest -q                                      # כל הבדיקות
 python -m trapped_profits run examples/example_client.json
 python -m trapped_profits run examples/example_client.json --json
 python -m trapped_profits run golden/logic_v1.xlsx       # קלט ישירות מהאקסל

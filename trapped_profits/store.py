@@ -35,6 +35,19 @@ _KEYS = {
 }
 
 
+def _normalize_date(s: str) -> str:
+    """'נכון ל-' בכל פורמט נפוץ (30.9.2026, 30/09/2026, 2026-09-30) → ISO; טקסט לא מזוהה נשאר כמו שהוא."""
+    s = str(s).strip()
+    if not s:
+        return ""
+    for fmt in ("%Y-%m-%d", "%d.%m.%Y", "%d/%m/%Y", "%d-%m-%Y", "%d.%m.%y", "%d/%m/%y"):
+        try:
+            return datetime.strptime(s, fmt).date().isoformat()
+        except ValueError:
+            continue
+    return s
+
+
 def _is_stale(rec: dict, stale_days: int) -> bool:
     """החלטה 15: נתוני הלקוח ישנים מ-N ימים (לפי 'נכון ל-', ואם אין – לפי מועד העדכון)."""
     src = (rec.get("input") or {}).get("data_as_of") or rec.get("updated_at") or ""
@@ -141,9 +154,13 @@ class ClientStore:
     def save(self, inp: dict[str, Any], cid: str | None = None) -> dict[str, Any]:
         inp = dict(inp)
         inp["flags"] = {**(inp.get("flags") or {}), **self.settings.load()["flags"]}   # הדגלים מההגדרות גוברים
+        inp["data_as_of"] = _normalize_date(inp.get("data_as_of") or "")
         ci = ClientInput.from_dict(inp)          # מאמת שדות
+        is_new = cid is None
         cid = cid or self._new_id(inp)
         prev = self.get(cid)
+        if is_new and prev:                      # לקוח חדש עם ח.פ. של לקוח קיים – לא דורסים בשקט
+            raise ValueError(f"לקוח עם ח.פ. {cid} כבר קיים ({(prev.get('input') or {}).get('structure', {}).get('name', '')}) – לערוך אותו במקום")
         rec = {
             "id": cid,
             "input": ci.to_dict(),
@@ -194,8 +211,11 @@ class ClientStore:
         if not rec or not rec.get("result"):
             return None
         st = self.settings.load()
-        return export(compute(ClientInput.from_dict(rec["input"])), kind, fmt, self.root.parent / "reports",
-                      handling=rec.get("handling"), firm_name=st.get("firm_name", ""), accountant_name=st.get("accountant_name", ""))
+        try:
+            return export(compute(ClientInput.from_dict(rec["input"])), kind, fmt, self.root.parent / "reports",
+                          handling=rec.get("handling"), firm_name=st.get("firm_name", ""), accountant_name=st.get("accountant_name", ""))
+        except PermissionError as e:
+            raise RuntimeError("הקובץ הקודם פתוח (בוורד/בדפדפן) – לסגור אותו ולייצא שוב") from e
 
     def export_report(self, cid: str) -> Path | None:
         rec = self.get(cid)

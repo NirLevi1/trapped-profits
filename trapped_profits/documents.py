@@ -189,7 +189,11 @@ def build_client_doc(r: ClientResult, firm_name: str = "", accountant_name: str 
     b.append(Block("h2", "רווחיות החברה"))
     if not r.applies_62a:
         b.append(Block("p", "הסעיף אינו חל על החברה."))
-    elif s.section_applies or r.s62a.taxable_income_personal_effort and s.attributed_income > 0:
+    elif r.s62a is not None and s.attributed_income > 0 and not s.section_applies:
+        # מבחן הריכוזיות – ייחוס מלא בלי קשר לשיעור הרווחיות
+        b.append(Block("p", f"עיקר הכנסות החברה מגיע מגורם אחד לאורך זמן, ולכן לפי החוק {_ils(s.attributed_income)} "
+                            f"מהרווח מיוחסים לבעל המניות וממוסים כמשכורת – עלות נוספת מוערכת של {_ils(s.extra_tax_cost)}."))
+    elif s.section_applies:
         b.append(Block("p", f"רווחיות החברה מהפעילות השוטפת היא {_pct(s.governing_profitability)}, מעל הסף של 25% שקבע החוק. "
                             f"במצב זה {_ils(s.attributed_income)} מהרווח מיוחסים לבעל המניות וממוסים כמשכורת – עלות נוספת מוערכת של {_ils(s.extra_tax_cost)}."))
         b.append(Block("p", f"ניתן למנוע זאת בתשלום שכר לבעל המניות הפעיל בסך {_ils(s.attributed_income)} עד 31.12."))

@@ -404,7 +404,7 @@
     const dates = [...new Set(rs.map(c => c.data_as_of).filter(Boolean))].sort();
     $('asof').textContent = !dates.length ? '' : dates.length === 1 ? `נכון ל־${dates[0]}` : `נתונים מ־${dates[0]} עד ${dates.at(-1)}`;
     const lv = rs[0]?.logic_version || records[0]?.logic_version || '';
-    $('statusCard').innerHTML = `<b>${records.length} לקוחות · שנת מס ${rs[0]?.tax_year ?? ''}</b>גרסת לוגיקה <span class="num">${esc(lv)}</span>${MOCK ? '<br>תצוגת דפדפן – החישוב רץ רק בתוכנה' : ''}`;
+    $('statusCard').innerHTML = `<b>${records.length} לקוחות · שנת מס ${rs[0]?.tax_year ?? settings?.default_tax_year ?? Y}</b>${lv ? `גרסת לוגיקה <span class="num">${esc(lv)}</span>` : 'עדיין אין חישובים'}${MOCK ? '<br>תצוגת דפדפן – החישוב רץ רק בתוכנה' : ''}`;
   }
   function renderReview(){
     const items = sortRisk(results()).filter(c => c.manual_review.length);
@@ -549,8 +549,8 @@
     {g:'זיהוי', main:1, k:'structure.company_id', t:'text', l:'מספר ח.פ.'},
     {g:'זיהוי', main:1, k:'structure.tax_year', t:'int', l:'שנת המס הנבדקת', d:Y},
     {g:'זיהוי', main:1, k:'structure.last_closed_report_year', t:'int', l:'שנת הדוח הסגור האחרון', h:'אם נמוכה משנה קודמת – תרחיש ב׳, התוצאה מסומנת אומדן', d:Y-2},
-    {g:'זיהוי', main:1, k:'data_as_of', t:'text', l:'נתונים נכון ל־', h:'תאריך הקובץ האחיד / הדוח, למשל 2026-09-30'},
-    {g:'זיהוי', main:1, k:'data_through_month', t:'int', l:'נתוני השנה הנבדקת עד חודש', h:'1–12. אם חסר – המערכת מכפילה לשנה מלאה (לינארי). ריק = שנה מלאה'},
+    {g:'זיהוי', main:1, k:'data_as_of', t:'text', l:'נתונים נכון ל־', h:'תאריך הקובץ האחיד / הדוח, למשל 30.9.2026'},
+    {g:'זיהוי', main:1, k:'data_through_month', t:'int', l:'נתוני השנה הנבדקת עד חודש', h:'1–12. אם מוזן – הכנסות, הכנסה חייבת והוצאות השנה מוזנים עד אותו חודש והמערכת מכפילה לשנה מלאה (לינארי). ריק = הוזנו נתוני שנה מלאה'},
 
     {g:'בעלות ושליטה', main:1, k:'structure.controlling_owner_name', t:'text', l:'שם בעל השליטה', h:'לקיבוץ חברות של אותו בעל שליטה בתור'},
     {g:'בעלות ושליטה', main:1, k:'structure.controlling_owners_count', t:'int', l:'מספר בעלי השליטה', h:'בעל שליטה וקרובו נמנים כאחד', d:1},
@@ -561,7 +561,7 @@
     {g:'רווחים נצברים – לתום השנה הקודמת', main:1, k:'retained.balance_sheet_retained_earnings', t:'num', l:'יתרת העודפים במאזן הסגור האחרון', h:'הבסיס למסלול 81 (החלטת הפיילוט)'},
     {g:'רווחים נצברים – לתום השנה הקודמת', main:1, k:'distributions.excess_profits_prev_year', t:'num', l:'רווחים עודפים לתום השנה הקודמת', h:'מהחישוב של השנה שעברה; בשנה הראשונה – ידני'},
 
-    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.expenses_current_year', t:'num', l:'הוצאות מותרות בניכוי – השנה הנבדקת (אומדן שנתי)', h:'ללא רכישת נכסים מיוחדים ופחת/מימון בגינם'},
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.expenses_current_year', t:'num', l:'הוצאות מותרות בניכוי – השנה הנבדקת', h:'ללא רכישת נכסים מיוחדים ופחת/מימון בגינם. אם הוזן "עד חודש" – הסכום עד אותו חודש'},
     {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.expenses_prev_year', t:'num', l:'הוצאות – שנה קודמת'},
     {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.expenses_prev2_year', t:'num', l:'הוצאות – שנתיים קודם'},
     {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.total_assets_cost', t:'num', l:'עלות כלל נכסי החברה', h:'מחיר מקורי, לא נטו מפחת'},
@@ -578,10 +578,10 @@
     {g:'חלוקות והוראות מעבר', main:1, k:'distributions.start_day_excess_profits', t:'num', l:'רווחים עודפים ליום התחילה', h:'לתום 2024 – נקודה 1 לאישור אברהם'},
     {g:'חלוקות והוראות מעבר', main:1, k:'distributions.start_day_dividends_taxed', t:'num', l:'דיבידנדים ששולם עליהם מס מתוך רווחים אלה'},
 
-    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.total_revenue', t:'num', l:'סך הכנסות (אומדן שנתי)', h:'לפי עונתיות השנה הקודמת'},
+    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.total_revenue', t:'num', l:'סך הכנסות', h:'שנה מלאה (אומדן), או עד החודש שהוזן למעלה'},
     {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.other_interest', t:'num', l:'מתוכן: ריבית והפרשי הצמדה'},
     {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.other_rent', t:'num', l:'מתוכן: דמי שכירות'},
-    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.taxable_income_personal_effort', t:'num', l:'הכנסה חייבת מפעילות עתירת יגיעה אישית (אומדן)', h:'אחרי ייחוס הוצאות ל"הכנסה אחרת"'},
+    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.taxable_income_personal_effort', t:'num', l:'הכנסה חייבת מפעילות עתירת יגיעה אישית', h:'אחרי ייחוס הוצאות ל"הכנסה אחרת". שנה מלאה, או עד החודש שהוזן'},
     {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.concentration_test_met', t:'bool', l:'70% מהמחזור מגורם אחד ב-22 מתוך 36 חודשים', h:'מבחן הריכוזיות – ייחוס מלא'},
 
     // ── נוספים ──
@@ -675,6 +675,8 @@
   async function saveForm(){
     const inp = collectForm();
     if (!inp.structure.name){ toast('צריך שם חברה'); $(fid('structure.name')).focus(); return; }
+    if (inp.data_through_month != null && (inp.data_through_month < 1 || inp.data_through_month > 12)){ toast('"עד חודש" חייב להיות בין 1 ל-12'); $(fid('data_through_month')).focus(); return; }
+    if (inp.structure.company_id && !/^\d{5,9}$/.test(inp.structure.company_id)){ toast('מספר ח.פ. – ספרות בלבד (5–9)'); $(fid('structure.company_id')).focus(); return; }
     const rec = await api('save_client', inp, editingId);
     if (!rec || rec.error && !rec.id){ toast('לא נשמר: ' + (rec?.error || '')); return; }
     await reload();

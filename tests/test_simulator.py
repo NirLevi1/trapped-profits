@@ -56,3 +56,16 @@ def test_recommendation_text_has_numbers_for_both_tracks():
     assert "57,300" in t and "850,000" in t
     ci = _ci(); ci.structure.is_few_holders_company = False
     assert "אינו חל" in compute(ci).simulator.recommendation_text
+
+
+def test_what_if_salary_is_annual_even_with_partial_year_data():
+    """החלטה 4 + 9: שכר עד 31.12 הוא סכום שנתי – לא מוכפל שוב במקדם האומדן."""
+    from dataclasses import replace
+    from trapped_profits.engine import what_if, compute
+    ci = _ci()
+    ci9 = replace(ci, data_through_month=9)
+    sal = compute(ci9).s62a.attributed_income          # שכר התיקון (סכום שנתי)
+    r = what_if(ci9, 0, sal)
+    assert abs(r.s62a.governing_profitability - 0.25) < 1e-6   # בדיוק לסף, לא מתחתיו
+    assert r.s62a.attributed_income == 0
+    assert abs(r.shields.expenses_current_adjusted - (compute(ci9).shields.expenses_current_adjusted + sal)) < 1

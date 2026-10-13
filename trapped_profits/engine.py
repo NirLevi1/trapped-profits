@@ -598,8 +598,12 @@ def what_if(ci: ClientInput, extra_dividend: float = 0.0, salary: float = 0.0) -
     דיבידנד: מתווסף לדיבידנדים ששולם עליהם מס השנה (מבחני הפטור ובסיס תוספת המס).
     """
     d = replace(ci.distributions, dividends_taxed_current_year=ci.distributions.dividends_taxed_current_year + extra_dividend)
-    s = replace(ci.s62a, taxable_income_personal_effort=max(0.0, ci.s62a.taxable_income_personal_effort - salary))
-    sh = replace(ci.shields, expenses_current_year=ci.shields.expenses_current_year + salary,
+    # השכר הוא סכום שנתי (עד 31.12). כשהנתונים הם עד חודש N, המנוע מכפיל את תזרימי השנה פי 12/N –
+    # לכן מכניסים את השכר מחולק באותו מקדם, כך שאחרי ההכפלה הוא שווה בדיוק לסכום שהוזן.
+    _, factor = _annualize(ci)
+    salary_ytd = salary / factor
+    s = replace(ci.s62a, taxable_income_personal_effort=max(0.0, ci.s62a.taxable_income_personal_effort - salary_ytd))
+    sh = replace(ci.shields, expenses_current_year=ci.shields.expenses_current_year + salary_ytd,
                  pay_62a_salary_by_year_end=False)   # השכר כבר בתוך ההוצאות – לא לספור פעמיים
     return compute(replace(ci, distributions=d, s62a=s, shields=sh))
 
