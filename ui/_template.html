@@ -104,14 +104,14 @@
 
   /* ── lists ── */
   .tablewrap{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
   th{text-align:start;font-weight:500;color:var(--ink-3);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
   td{padding:9px 8px;border-bottom:1px solid var(--line-soft);vertical-align:top}
   tbody tr.rowlink{cursor:pointer}
   tr:hover td{background:var(--canvas-2)}
   tbody tr:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
   td .file{font-weight:500}
-  td:first-child{min-width:280px}
+  td:first-child{min-width:200px}
   td .sub,td.num{white-space:nowrap}
   ul.rev{margin:0;padding-inline-start:18px} ul.rev li{line-height:1.45}
   td .sub{color:var(--ink-3);font-size:12px;margin-top:2px}
@@ -325,7 +325,8 @@
   const strip = s => s.replace(/^\S+ – /, '');
   const fmtv = v => typeof v === 'number' ? ils(v) : esc(v);
   const pill = (color, text) => `<span class="pill ${KIND[color] || ''}">${ICON[KIND[color]] || ICON.neutral} ${esc(text || color)}</span>`;
-  function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200); }
+  let toastTimer = null;
+  function toast(msg, ms){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms || (/לא נשמר|נכשל|שגיאה|כבר קיים|חייב|בלבד|לסגור/.test(msg) ? 6000 : 2200)); }
 
   let records = [], selectedId = null, editingId = null;
   const results = () => records.filter(r => r.result).map(r => Object.assign(r.result, {_id: r.id, _updated: r.updated_at, _stale: !!r.stale, _handling: r.handling || {status:'טרם טופל'}, _owner: r.input?.structure?.controlling_owner_name || '', _cid: r.input?.structure?.company_id || ''}));
@@ -343,20 +344,18 @@
 
   // ── queue ──
   const sortRisk = rs => [...rs].sort((a,b) => (ORDER[a.dashboard.color_overall]-ORDER[b.dashboard.color_overall]) || (b.calc81.surtax-a.calc81.surtax) || (b.s62a.attributed_income-a.s62a.attributed_income));
-  const HEAD = `<th>לקוח</th><th>כולל</th><th>סעיף 81</th><th>סעיף 62א</th><th>תוספת מס</th><th>פער לחלוקה</th><th>שכר לתיקון</th><th>מוגן עד</th><th>טיפול</th>`;
+  const HEAD = `<th>לקוח</th><th>כולל</th><th>סעיף 81</th><th>סעיף 62א</th><th>תוספת מס</th><th>פער לחלוקה</th><th>שכר לתיקון</th><th>טיפול</th>`;
   const handlingPill = h => { const st = h?.status || 'טרם טופל'; const k = st.startsWith('הוחלט') || st === 'טופל' ? 'good' : st === 'בשיחה' ? 'info' : ''; return `<span class="pill ${k}">${esc(st)}</span>`; };
   function row(c){
     return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
-      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(c.data_as_of || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(c.data_as_of)}` : '')}</div></td>
+      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(c.data_as_of || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(c.data_as_of)}` : '')}</div></td>
       <td>${pill(c.dashboard.color_overall)}</td>
       <td>${pill(c.dashboard.color_81, strip(c.dashboard.status_81))}</td>
       <td>${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}</td>
       <td>${ils(c.calc81.surtax)}</td>
       <td>${c.simulator.action_required ? ils(c.simulator.gap_to_close) : '<span style="color:var(--ink-4)">לא נדרש</span>'}</td>
       <td>${c.s62a.attributed_income ? ils(c.s62a.attributed_income) : '<span style="color:var(--ink-4)">—</span>'}</td>
-      <td>${esc(c.dashboard.protected_until)}</td>
       <td>${handlingPill(c._handling)}</td>
-      <td class="actions"><button class="quiet">כרטיס</button></td>
     </tr>`;
   }
   function bind(el){
@@ -396,12 +395,12 @@
       list.forEach(c => (groups[c._owner || 'ללא בעל שליטה'] ||= []).push(c));
       body = Object.entries(groups).sort((a,b) => a[0].localeCompare(b[0],'he')).map(([g, cs]) => {
         const surtax = cs.reduce((x,c) => x + c.calc81.surtax, 0), sal = cs.reduce((x,c) => x + c.s62a.attributed_income, 0);
-        return `<tr class="group"><td colspan="10">${esc(g)} · ${cs.length} חברות · תוספת מס ${ils(surtax)} · שכר לתיקון ${ils(sal)}</td></tr>` + cs.map(row).join('');
+        return `<tr class="group"><td colspan="8">${esc(g)} · ${cs.length} חברות · תוספת מס ${ils(surtax)} · שכר לתיקון ${ils(sal)}</td></tr>` + cs.map(row).join('');
       }).join('');
     } else body = list.map(row).join('');
     if (!rs.length){ el.innerHTML = pendingNote + `<div class="empty"><b>עדיין אין לקוחות מחושבים.</b>הוסיפו לקוח ומלאו את נתוני הבסיס – החישוב רץ בשמירה.</div>`; }
     else if (!list.length){ el.innerHTML = pendingNote + `<div class="empty"><b>אין לקוחות שמתאימים לסינון.</b></div>`; }
-    else el.innerHTML = pendingNote + `<table><thead><tr>${HEAD}<th></th></tr></thead><tbody>${body}</tbody></table>`;
+    else el.innerHTML = pendingNote + `<table><thead><tr>${HEAD}</tr></thead><tbody>${body}</tbody></table>`;
     bind(el);
     $('queueCount').textContent = rs.length || '';
     $('clientsCount').textContent = records.length || '';
@@ -453,10 +452,10 @@
         <div><div class="detail-head"><h1>${esc(title)}</h1>${status}</div>
         <p class="lead" style="margin:0" id="cardLead"></p></div>
         <div class="spacer"></div>
+        <button class="quiet" onclick="show('queue')">חזרה לתור</button>
         <button onclick="editClient('${esc(rec.id)}')">עריכת נתונים</button>
-        <div class="seg"><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">דוח לרו"ח</button><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></div>
-        <div class="seg"><button type="button" onclick="exportDoc('${esc(rec.id)}','client','pdf')">מכתב ללקוח</button><button type="button" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></div>
-        <button onclick="show('queue')">חזרה לתור</button>
+        <div class="seg" title="דוח מלא לרואה החשבון"><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">דוח לרו"ח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></div>
+        <div class="seg" title="מכתב בשפה פשוטה ללקוח"><button type="button" onclick="exportDoc('${esc(rec.id)}','client','pdf')">מכתב ללקוח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></div>
       </div>`;
     const c = rec.result;
     if (!c){
@@ -697,7 +696,8 @@
     const st = $('h_status').value, note = $('h_note').value.trim();
     const r = await api('set_handling', id, st, note);
     if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
-    await reload(); renderClient(); toast('סטטוס הטיפול נשמר');
+    const top = document.querySelector('main').scrollTop;
+    await reload(); renderClient(); document.querySelector('main').scrollTop = top; toast('סטטוס הטיפול נשמר');
   }
 
   // ── delete (אישור בתוך הדף – אין חלונות קופצים) ──

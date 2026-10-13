@@ -9,7 +9,7 @@
     "gap_to_close": 429900.0,
     "salary_fix_62a": 850000.0,
     "protected_until": "אין",
-    "manual_review": 2,
+    "manual_review": 3,
     "data_as_of": "2026-09-28"
   },
   {
@@ -22,7 +22,7 @@
     "gap_to_close": 0.0,
     "salary_fix_62a": 850000.0,
     "protected_until": "2028",
-    "manual_review": 2,
+    "manual_review": 3,
     "data_as_of": "2026-09-28"
   },
   {
@@ -35,7 +35,7 @@
     "gap_to_close": 0.0,
     "salary_fix_62a": 850000.0,
     "protected_until": "אין",
-    "manual_review": 2,
+    "manual_review": 3,
     "data_as_of": "2026-09-28"
   },
   {
@@ -48,7 +48,7 @@
     "gap_to_close": 429900.0,
     "salary_fix_62a": 0.0,
     "protected_until": "אין",
-    "manual_review": 3,
+    "manual_review": 4,
     "data_as_of": "2026-09-28"
   },
   {
@@ -61,7 +61,7 @@
     "gap_to_close": 0.0,
     "salary_fix_62a": 0.0,
     "protected_until": "אין",
-    "manual_review": 2,
+    "manual_review": 3,
     "data_as_of": "2026-09-28"
   },
   {
@@ -74,7 +74,7 @@
     "gap_to_close": 429900.0,
     "salary_fix_62a": 850000.0,
     "protected_until": "אין",
-    "manual_review": 4,
+    "manual_review": 5,
     "data_as_of": "2026-09-28"
   }
 ]

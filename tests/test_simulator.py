@@ -69,3 +69,13 @@ def test_what_if_salary_is_annual_even_with_partial_year_data():
     assert abs(r.s62a.governing_profitability - 0.25) < 1e-6   # בדיוק לסף, לא מתחתיו
     assert r.s62a.attributed_income == 0
     assert abs(r.shields.expenses_current_adjusted - (compute(ci9).shields.expenses_current_adjusted + sal)) < 1
+
+
+def test_what_if_full_fix_turns_62a_green():
+    """שכר התיקון מוריד את הרווחיות ל-25.0% בדיוק – זה לא "מעל 25%" ולא אדום (עיגול נקודה צפה)."""
+    from trapped_profits.engine import what_if, compute
+    ci = _ci()
+    sal = compute(ci).s62a.attributed_income
+    r = what_if(ci, 0, sal)
+    assert r.s62a.attributed_income == 0
+    assert r.dashboard.color_62a != "אדום"

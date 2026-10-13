@@ -288,6 +288,7 @@ def render_docx(doc: Doc, path: Path) -> Path:
                 el = OxmlElement(tag); el.set(qn("w:val"), val); rPr.append(el)
         if color:
             run.font.color.rgb = RGBColor.from_string(color)
+        lang = OxmlElement("w:lang"); lang.set(qn("w:bidi"), "he-IL"); lang.set(qn("w:val"), "he-IL"); rPr.append(lang)
         rFonts = OxmlElement("w:rFonts")
         for a in ("w:ascii", "w:hAnsi", "w:cs"):
             rFonts.set(qn(a), "Arial")
@@ -296,6 +297,19 @@ def render_docx(doc: Doc, path: Path) -> Path:
 
     d = Document()
     st = d.styles["Normal"]; st.font.name = "Arial"; st.font.size = Pt(11)
+    # שפת המסמך עברית (אחרת וורד מנחש "ערבית") ומצב תאימות של וורד עדכני (בלי "[Compatibility Mode]" בכותרת)
+    st_rPr = st.element.get_or_add_rPr()
+    lang = OxmlElement("w:lang"); lang.set(qn("w:val"), "he-IL"); lang.set(qn("w:bidi"), "he-IL"); st_rPr.append(lang)
+    settings = d.settings.element
+    compat = settings.find(qn("w:compat"))
+    if compat is None:
+        compat = OxmlElement("w:compat"); settings.append(compat)
+    for cs in list(compat):
+        if cs.tag == qn("w:compatSetting") and cs.get(qn("w:name")) == "compatibilityMode":
+            compat.remove(cs)
+    cs = OxmlElement("w:compatSetting")
+    cs.set(qn("w:name"), "compatibilityMode"); cs.set(qn("w:uri"), "http://schemas.microsoft.com/office/word"); cs.set(qn("w:val"), "15")
+    compat.append(cs)
     for s in d.sections:
         s.left_margin = s.right_margin = Pt(50)
 

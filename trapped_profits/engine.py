@@ -181,8 +181,10 @@ def _retained_full(ci: ClientInput, special_assets_net: float) -> RetainedResult
     alt1 = max(0.0, exempt_total - special_assets_net)                        # B30
     alt2 = r.exempt_profits_last_7_years                                      # B33
     reasons: list[str] = []
-    if used_bs:
-        reasons.append("רווחים נצברים נלקחו מיתרת העודפים במאזן (אין נתוני מס מצטברים)")
+    # יתרת העודפים במאזן היא הבסיס של הפיילוט (החלטת 13.10) – לא סיבה לבדיקה ידנית.
+    # הנתון נשמר ב-used_balance_sheet לדוח; לבדיקה ידנית רק כשהוזנו נתוני מס והנוסחה נמוכה מהמאזן.
+    if not used_bs and formula < cap:
+        reasons.append("רווחים נצברים לפי הנוסחה המיסויית נמוכים מיתרת העודפים במאזן – לאמת את נתוני המס המצטברים")
     return RetainedResult(
         formula_profits=formula,
         accounting_cap=cap,
@@ -213,7 +215,7 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
         governing = min(profitability, s.avg_profitability_2023_2025)
     else:
         governing = profitability
-    crossed = governing > 0.25                                                  # B21
+    crossed = governing > 0.25 + 1e-9                                           # B21 – "עולה על 25%"; 25.0% בדיוק (אחרי שכר תיקון) אינו חצייה
     threshold = 30_000_000.0 * max(1, st.controlling_owners_count)              # B24
     below = personal < threshold                                                # B25
     exemption_750k = (not st.owner_controls_another_company) and retained_for_81a <= 750_000  # B26
@@ -457,7 +459,7 @@ def _dashboard(ci: ClientInput, s62: Section62AResult, tr: TransitionResult,
         status62 = "ירוק – הסעיף אינו חל"
     elif ci.s62a.concentration_test_met:
         status62 = "אדום – מבחן ריכוזיות: ייחוס מלא"
-    elif s62.section_applies:
+    elif s62.section_applies and s62.attributed_income > 0.5:
         status62 = "אדום – ייחוס הכנסה לבעל המניות"
     elif s62.governing_profitability > f.profitability_warning_threshold:
         status62 = "צהוב – רווחיות מתקרבת לסף 25%"
