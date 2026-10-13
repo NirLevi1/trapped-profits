@@ -8,10 +8,21 @@
 
 חלון מקומי כמו ממיין החשבוניות: פייתון מאחור, הממשק בחלון, הנתונים נשארים במשרד.
 
+### התקנה במשרד (ווינדוס) – פעם אחת
+
+1. פייתון 3.10 ומעלה מ-python.org (לסמן "Add python.exe to PATH"); גיט מ-git-scm.com. כרום/אדג' – לייצוא PDF.
+2. לפתוח cmd ולהדביק:
+   ```
+   git clone https://github.com/NirLevi1/trapped-profits %USERPROFILE%\trapped-profits && cd %USERPROFILE%\trapped-profits && run.bat
+   ```
+3. מכאן: `run.bat` להפעלה (לחיצה כפולה), `update.bat` לעדכון מגיטהאב והפעלה מחדש. נתוני הלקוחות ב-`data\clients` לא נוגעים בעדכון. תקלות בהתקנה – `setup.log`.
+
+מק: `run.command`. מפתחים:
+
 ```bash
 pip install -r requirements.txt
 python app.py            # פותח את החלון
-build.bat                # (ווינדוס) בונה TrappedProfits.exe בתיקיית dist
+build.bat                # (ווינדוס) בונה TrappedProfits.exe בתיקיית dist – לא לפיילוט
 ```
 
 - לקוחות נשמרים ב-`data/clients/<ח.פ.>.json` ליד התוכנה (קלט + תוצאה + חותמת עדכון + סטטוס טיפול). הגדרות ודגלים ב-`data/clients/_settings.json`.
