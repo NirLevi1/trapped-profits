@@ -1,0 +1,756 @@
+<title>פורטרה · רווחים כלואים</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600&family=Frank+Ruhl+Libre:wght@500&display=swap" rel="stylesheet">
+<style>
+  /* ── Fortera tokens (packages/ui/src/tokens.css) – single light theme, as in the product ── */
+  :root{
+    --font-display:'Frank Ruhl Libre',Georgia,'Times New Roman',serif;
+    --font-sans:'Heebo','Segoe UI',Arial,system-ui,sans-serif;
+    --canvas:#fafaf9;--canvas-2:#f2f1f0;--surface:#fff;
+    --ink:#0f0e0d;--ink-2:#33312c;--ink-3:#706d66;--ink-4:#a3a099;
+    --line:#cccac6;--line-soft:#e4e2de;
+    --good:#12876b;--good-bg:#e6f2ee;--warn:#b0790f;--warn-bg:#f7eeda;
+    --serious:#c2542f;--serious-bg:#f8e9e3;--info:#2f5fa8;--info-bg:#e6ecf6;--neutral-bg:#eeedea;
+    --radius:8px; color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--font-sans);font-size:14px;line-height:1.3;-webkit-font-smoothing:antialiased;display:flex;overflow:hidden;direction:rtl}
+  .num{font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+  ::selection{background:var(--ink);color:var(--canvas)}
+
+  /* ── shell ── */
+  aside{width:215px;flex:none;border-inline-end:1px solid var(--line-soft);padding:14px 10px;display:flex;flex-direction:column;background:var(--canvas)}
+  .brand{display:flex;align-items:center;gap:8px;padding:6px 8px 14px}
+  .badge{width:22px;height:22px;border-radius:5px;background:var(--ink);color:var(--canvas);font-family:var(--font-display);font-weight:500;font-size:14px;display:grid;place-items:center}
+  .brand .name{font-family:var(--font-display);font-weight:500;font-size:17px}
+  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;color:var(--ink-2);text-decoration:none;cursor:pointer;font-size:14px}
+  .nav a:hover{background:var(--canvas-2)}
+  .nav a.active{background:var(--neutral-bg);color:var(--ink);font-weight:500}
+  .nav a .ic{width:16px;height:16px;flex:none;color:var(--ink-3)}
+  .nav a.active .ic{color:var(--ink)}
+  .nav a .count{margin-inline-start:auto;font-size:12px;color:var(--ink-3)}
+  .nav a.active .count{color:var(--ink)}
+  .nav a:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+  aside .bottom{margin-top:auto}
+  .status-card{margin:0 0 8px;padding:10px 12px;border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--surface);font-size:12px;color:var(--ink-3)}
+  .status-card b{display:block;color:var(--ink);font-weight:500;margin-bottom:2px}
+
+  main{flex:1;min-width:0;overflow:auto;padding:28px 36px 40px}
+  .screen{display:none;max-width:1040px}
+  .screen.active{display:block}
+  h1{font-size:22px;font-weight:500;margin:0 0 4px;letter-spacing:-.01em}
+  .lead{color:var(--ink-3);margin:0 0 22px;font-size:14px}
+  h2{font-size:14px;font-weight:600;margin:26px 0 10px;color:var(--ink-2)}
+  .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  .toolbar .spacer{flex:1}
+
+  /* ── primitives ── */
+  button,.btn{font:inherit;font-size:13px;padding:7px 12px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+  button:hover{background:var(--canvas-2)}
+  button.primary{background:var(--ink);color:var(--canvas);border-color:var(--ink)}
+  button.primary:hover{background:var(--ink-2)}
+  button.quiet{border-color:transparent;background:transparent;color:var(--ink-3);padding:4px 8px}
+  button.quiet:hover{background:var(--canvas-2);color:var(--ink)}
+  button.danger{color:var(--serious)}
+  button:disabled{opacity:.5;cursor:default}
+  button:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+  input[type=text],input[type=number],select{font:inherit;font-size:14px;padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);width:100%}
+  input:focus,select:focus{outline:2px solid var(--ink);outline-offset:1px;border-color:var(--ink)}
+  input[type=number]{direction:ltr;text-align:left;font-variant-numeric:tabular-nums}
+  label.field{display:block;margin-bottom:12px;min-width:0}
+  label.field>span{display:block;font-size:13px;color:var(--ink-2);margin-bottom:5px;font-weight:500}
+  .hint{font-size:12px;color:var(--ink-3);margin-top:4px}
+  .row{display:flex;gap:10px;align-items:flex-start}
+  .row>*{flex:1}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg button{border:0;border-radius:0;padding:6px 12px}
+  .seg button.on{background:var(--ink);color:var(--canvas)}
+  tr.group td{background:var(--canvas-2);font-weight:500;color:var(--ink-2);font-size:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px}
+  .check{display:flex;gap:10px;align-items:flex-start;padding:8px 0;cursor:pointer}
+  .check input{margin:3px 0 0;width:15px;height:15px;accent-color:var(--ink);flex:none}
+  .check b{font-weight:500;display:block}
+  .check small{color:var(--ink-3);display:block;margin-top:2px;font-size:12px}
+  .card{border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--surface);padding:16px 18px;margin-bottom:14px}
+  .card h3{font-size:12px;font-weight:500;color:var(--ink-3);margin:0 0 10px;letter-spacing:.02em}
+  details.card{padding:0}
+  details.card>summary{padding:12px 18px;cursor:pointer;font-weight:500;color:var(--ink-2);list-style:none;display:flex;align-items:center;gap:8px}
+  details.card>summary::before{content:'';width:6px;height:6px;border-inline-end:1.5px solid var(--ink-3);border-bottom:1.5px solid var(--ink-3);transform:rotate(45deg);margin-inline-end:4px;transition:transform .15s}
+  details.card[open]>summary::before{transform:rotate(-135deg)}
+  details.card>summary small{color:var(--ink-3);font-weight:400;font-size:12px}
+  details.card>.inner{padding:4px 18px 10px}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:2px 8px;border-radius:999px;background:var(--neutral-bg);color:var(--ink-2);white-space:nowrap;vertical-align:middle}
+  .pill.good{background:var(--good-bg);color:var(--good)}
+  .pill.warn{background:var(--warn-bg);color:var(--warn)}
+  .pill.serious{background:var(--serious-bg);color:var(--serious)}
+  .pill.info{background:var(--info-bg);color:var(--info)}
+  .pill svg{width:11px;height:11px}
+  .stale{font-size:12px;color:var(--ink-3)}
+
+  /* ── summary strip ── */
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px}
+  .stat{border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--surface);padding:10px 12px;min-width:0}
+  .stat small{display:block;font-size:12px;color:var(--ink-3)}
+  .stat b{display:block;font-weight:500;font-size:20px;margin-top:2px;font-variant-numeric:tabular-nums}
+  .stat.serious b{color:var(--serious)} .stat.warn b{color:var(--warn)} .stat.good b{color:var(--good)}
+
+  /* ── lists ── */
+  .tablewrap{overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+  th{text-align:start;font-weight:500;color:var(--ink-3);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:9px 8px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  tbody tr.rowlink{cursor:pointer}
+  tr:hover td{background:var(--canvas-2)}
+  tbody tr:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+  td .file{font-weight:500}
+  td:first-child{min-width:280px}
+  td .sub,td.num{white-space:nowrap}
+  ul.rev{margin:0;padding-inline-start:18px} ul.rev li{line-height:1.45}
+  td .sub{color:var(--ink-3);font-size:12px;margin-top:2px}
+  td.actions{white-space:nowrap;text-align:end}
+  .empty{padding:36px 20px;text-align:start;color:var(--ink-3);border:1px dashed var(--line);border-radius:var(--radius);font-size:14px}
+  .empty b{display:block;color:var(--ink);font-weight:500;margin-bottom:4px}
+
+  /* ── detail ── */
+  .detail-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+  .detail-head h1{margin:0}
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .cols .card{margin:0}
+  .kv{display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:13px}
+  .kv .k{color:var(--ink-2)} .kv .v{text-align:end}
+  .kv .hl{font-weight:600;color:var(--ink)}
+  .kv .sep{grid-column:1/-1;border-top:1px solid var(--line-soft);margin:2px 0}
+  .rec{margin-top:12px;padding:9px 12px;border-radius:6px;background:var(--canvas-2);font-size:13px;color:var(--ink-2)}
+  .rec b{color:var(--ink);font-weight:500}
+  ul.rev{margin:0;padding-inline-start:18px;font-size:13px;color:var(--ink-2)}
+  ul.rev li{margin-bottom:4px}
+  .notice{padding:9px 12px;border-radius:6px;font-size:13px;margin-bottom:14px}
+  .notice.warn{background:var(--warn-bg);color:var(--warn)}
+  .notice.serious{background:var(--serious-bg);color:var(--serious)}
+  .toast{position:fixed;inset-inline-start:24px;bottom:20px;background:var(--ink);color:var(--canvas);padding:10px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+  .toast.show{opacity:1}
+  .confirm{display:inline-flex;gap:6px;align-items:center}
+
+  @media (max-width:720px){
+    body{flex-direction:column;overflow:auto}
+    aside{width:auto;border-inline-end:0;border-bottom:1px solid var(--line-soft);padding:10px 16px}
+    .nav{display:flex;gap:4px;overflow-x:auto}
+    .nav a{white-space:nowrap}
+    aside .bottom{display:none}
+    main{padding:18px 16px 32px}
+    h1{font-size:19px}
+  }
+  @media (prefers-reduced-motion:reduce){ .toast,details.card>summary::before{transition:none} }
+</style>
+
+<aside>
+  <div class="brand"><div class="badge">F</div><div class="name">פורטרה</div></div>
+  <nav class="nav">
+    <a data-screen="queue" class="active">
+      <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h12M2 12h8"/></svg>
+      תור עבודה <span class="count" id="queueCount"></span>
+    </a>
+    <a data-screen="review">
+      <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5M8 11h.01"/></svg>
+      לבדיקה ידנית <span class="count" id="reviewCount"></span>
+    </a>
+    <a data-screen="clients">
+      <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6" cy="6" r="2.5"/><path d="M1.5 13c.5-2.5 2.5-3.5 4.5-3.5s4 1 4.5 3.5M11 5.5a2 2 0 110 3M14.5 13c-.3-1.7-1.3-2.7-2.8-3.1"/></svg>
+      לקוחות <span class="count" id="clientsCount"></span>
+    </a>
+    <a data-screen="settings">
+      <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>
+      הגדרות
+    </a>
+  </nav>
+  <div class="bottom">
+    <div class="status-card" id="statusCard"><b>—</b><span id="statusText"></span></div>
+    <button class="quiet" onclick="api('open_data_folder')">פתיחת תיקיית הנתונים</button>
+  </div>
+</aside>
+
+<main>
+  <!-- ── Queue ── -->
+  <section class="screen active" id="s-queue">
+    <div class="toolbar">
+      <div><h1>רווחים כלואים</h1><p class="lead" style="margin:0">עם מי צריך לדבר לפני 31.12 — לפי סיכון, בשני המסלולים: תוספת מס 2% (סעיף 81) ורווחיות עודפת (סעיף 62א).</p></div>
+      <div class="spacer"></div>
+      <span class="stale" id="asof"></span>
+      <button onclick="newClient()">לקוח חדש</button>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <input type="text" id="q" placeholder="חיפוש לפי שם, ח.פ. או בעל שליטה" style="max-width:280px" oninput="renderQueue()">
+      <div class="seg" id="fColor">
+        <button type="button" class="on" data-v="">הכול</button><button type="button" data-v="אדום">טיפול נדרש</button><button type="button" data-v="צהוב">מעקב</button><button type="button" data-v="ירוק">תקין</button>
+      </div>
+      <div class="seg" id="fTrack">
+        <button type="button" class="on" data-v="">שני המסלולים</button><button type="button" data-v="81">סעיף 81</button><button type="button" data-v="62">סעיף 62א</button>
+      </div>
+      <label class="check" style="padding:0;border:0"><input type="checkbox" id="fOpen" onchange="renderQueue()"><div><b style="font-weight:400">רק לא טופלו</b></div></label>
+      <label class="check" style="padding:0;border:0"><input type="checkbox" id="fGroup" onchange="renderQueue()"><div><b style="font-weight:400">קיבוץ לפי בעל שליטה</b></div></label>
+    </div>
+    <div class="tablewrap" id="queueList"></div>
+  </section>
+
+  <!-- ── Review ── -->
+  <section class="screen" id="s-review">
+    <div class="toolbar"><div><h1>לבדיקה ידנית</h1><p class="lead" style="margin:0">לקוחות שהמנוע סימן: הבסיס אצלם עלול להיות לא מדויק, או שהם קרובים לסף.</p></div></div>
+    <div class="tablewrap" id="reviewList"></div>
+  </section>
+
+  <!-- ── Clients ── -->
+  <section class="screen" id="s-clients">
+    <div class="toolbar">
+      <div><h1>לקוחות</h1><p class="lead" style="margin:0">נתוני הבסיס של כל לקוח. שמירה מחשבת מיד ומעדכנת את התור.</p></div>
+      <div class="spacer"></div>
+      <button onclick="api('recompute_all').then(r=>{toast('חושבו מחדש '+(r?.n??0)+' לקוחות');reload();})">חישוב מחדש לכולם</button>
+      <button class="primary" onclick="newClient()">לקוח חדש</button>
+    </div>
+    <div class="tablewrap" id="clientsList"></div>
+  </section>
+
+  <!-- ── Settings ── -->
+  <section class="screen" id="s-settings">
+    <h1>הגדרות</h1>
+    <p class="lead">פרמטרים כלליים והדגלים של הנקודות הפתוחות. שינוי דגל מחשב מחדש את כל הלקוחות.</p>
+    <h2>כללי</h2>
+    <div class="card">
+      <div class="row">
+        <label class="field"><span>שנת מס ברירת מחדל ללקוח חדש</span><input type="number" id="st_year" step="1"></label>
+        <label class="field"><span>נתון מיושן אחרי (ימים)</span><input type="number" id="st_stale" step="1"><div class="hint">לקוח שה"נכון ל-" שלו ישן יותר מסומן בתור.</div></label>
+      </div>
+      <div class="row">
+        <label class="field"><span>שם המשרד (לחתימת המכתב ללקוח)</span><input type="text" id="st_firm"></label>
+        <label class="field"><span>שם רואה החשבון המטפל</span><input type="text" id="st_acc"></label>
+      </div>
+      <label class="field"><span>תיקיית הנתונים</span><input type="text" id="st_dir" dir="ltr" disabled></label>
+    </div>
+    <h2>נקודות פתוחות לאישור אברהם (דגלים)</h2>
+    <div class="card">
+      <label class="check"><input type="checkbox" id="fl_50"><div><b>נקודה 2 – להפחית את רווחי יום התחילה גם מבסיס מבחן ה-50%</b><small>כבוי = לפי הסיכום (שמרני). דלוק = כמו באקסל.</small></div></label>
+      <label class="check"><input type="checkbox" id="fl_20"><div><b>נקודה 3 – הוראת מעבר נוספת: חלוקה שוטפת של 20% מהרווחים שנותרו</b><small>דלוק = כמו באקסל.</small></div></label>
+      <label class="check"><input type="checkbox" id="fl_rel"><div><b>נקודה 6 – ניכוי ה-25% ב-62א מחושב אחרי הפחתת תשלומים לחברה קשורה</b><small>כבוי = לפי הסיכום. דלוק = כמו באקסל.</small></div></label>
+      <label class="field" style="margin-top:10px"><span>סף "צהוב" במסלול 62א (%)</span><input type="number" id="fl_thr" step="1" style="max-width:120px"><div class="hint">רווחיות מעל סף זה ומתחת ל-25% = מעקב.</div></label>
+    </div>
+    <div class="toolbar"><div class="spacer"></div><button class="primary" onclick="saveSettings()">שמירה וחישוב מחדש</button></div>
+  </section>
+
+  <!-- ── Client card ── -->
+  <section class="screen" id="s-client"><div id="clientView"></div></section>
+
+  <!-- ── Form ── -->
+  <section class="screen" id="s-form">
+    <div class="toolbar">
+      <div><h1 id="formTitle">לקוח חדש</h1><p class="lead" style="margin:0">השדות העיקריים למעלה. "נתונים נוספים" – רק אם רלוונטי; ריק = אפס.</p></div>
+      <div class="spacer"></div>
+      <button onclick="cancelForm()">ביטול</button>
+      <button class="primary" onclick="saveForm()">שמירה וחישוב</button>
+    </div>
+    <div class="card" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px"><b style="font-weight:500">ייבוא מקובץ</b><div class="hint">דוח שנתי סגור (פי־די־אף / אקסל) או מבנה אחיד – המערכת תמלא את השדות ותסמן "מהקובץ, לאישור". בקרוב.</div></div>
+      <button disabled title="ייבוא מדוח שנתי – בפיתוח">ייבוא מדוח שנתי</button>
+      <button disabled title="ייבוא ממבנה אחיד – בפיתוח">ייבוא ממבנה אחיד</button>
+    </div>
+    <div id="formBody"></div>
+    <div class="toolbar"><div class="spacer"></div><button onclick="cancelForm()">ביטול</button><button class="primary" onclick="saveForm()">שמירה וחישוב</button></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── bridge ──
+  // pywebview מזריק את window.pywebview אחרי טעינת הדף – לכן הבדיקה בזמן הקריאה, לא בזמן הטעינה
+  const isMock = () => !window.pywebview?.api;
+  let MOCK = isMock();
+  function api(name, ...args){
+    if (isMock()) return Promise.resolve(window.__mock ? window.__mock(name, ...args) : null);
+    return window.pywebview.api[name](...args);
+  }
+  /*MOCK_START*/
+  // תצוגה בדפדפן בלבד: אחסון בזיכרון, בלי מנוע. הלקוחות הם דמו.
+  window.__seed = [{"id": "demo1", "input": {"structure": {"name": "חברה א – חשופה בשני המסלולים", "company_id": "515000000", "tax_year": 2026, "is_few_holders_company": true, "preferred_or_approved_enterprise": false, "controlling_owners_count": 2, "group_companies_count": 2, "group_companies_waived": 0, "has_material_holder": true, "material_holder_total_profits": 4200000.0, "owner_controls_another_company": true, "partnership_income_share": 0.0, "encouragement_law_status": "אין", "controlling_owner_name": "דוד כהן"}, "retained": {"cumulative_taxable_income": 14500000.0, "cumulative_exempt_income": 0.0, "cumulative_land_appreciation": 0.0, "cumulative_tax": 3335000.0, "cumulative_dividends": 4000000.0, "uncredited_loss": 0.0, "balance_sheet_retained_earnings": 7800000.0, "capitalized_profits": 0.0, "transparent_entity_profits": 0.0, "attributed_to_shareholders": 0.0, "exempt_preferred_enterprise_income": 0.0, "exempt_industrial_sales_income": 0.0, "exempt_building_8a_income": 0.0, "exempt_financial_institution_income": 0.0, "exempt_profits_last_7_years": 0.0}, "shields": {"fixed_shield_base": 750000.0, "expenses_current_year": 3100000.0, "expenses_prev_year": 2900000.0, "expenses_prev2_year": 2600000.0, "pay_62a_salary_by_year_end": false, "total_assets_cost": 9400000.0, "special_securities": 2200000.0, "special_financial_asset": 0.0, "special_intangible_royalty": 0.0, "special_real_estate": 1500000.0, "special_loans_deposits_cash": 2800000.0, "excl_own_use_real_estate": 1500000.0, "excl_rental_building": 0.0, "excl_pledged_cash_financing": 0.0, "excl_regulatory_equity_cash": 0.0, "share_capital_and_premium": 100000.0, "related_party_loan": 0.0, "held_company_cost": 0.0}, "distributions": {"dividends_taxed_current_year": 0.0, "losses_current_year": 0.0, "excess_profits_prev_year": 3900000.0, "start_day_excess_profits": 4100000.0, "start_day_dividends_taxed": 900000.0, "retained_at_start_day": 7200000.0, "dividend_in_determining_period": 900000.0, "determining_period_paid_and_taxed": true, "current_year_profit_estimate": null}, "s62a": {"total_revenue": 8500000.0, "other_interest": 120000.0, "other_dividend": 0.0, "other_rent": 180000.0, "other_asset_sale": 0.0, "other_securities_inventory_sale": 0.0, "other_real_estate_sale": 0.0, "taxable_income_personal_effort": 2900000.0, "related_company_payments": 0.0, "avg_profitability_2023_2025": 0.0, "marginal_tax_rate": 0.5, "corporate_tax_rate": 0.23, "concentration_test_met": false, "officer_holds_under_25pct": false, "intercompany_dividend_received": 0.0, "holding_rate_in_paying_company": 0.0}, "simulator": {"dividend_tax_rate": 0.33, "surtax_rate": 0.02}, "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "profitability_warning_threshold": 0.2}, "data_as_of": "2026-09-28", "is_estimate": false}, "result": {"name": "חברה א – חשופה בשני המסלולים", "tax_year": 2026, "previous_year": 2025, "data_as_of": "2026-09-28", "is_estimate": false, "logic_version": "2026.09.28-a", "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "deduction_base_excludes_related_payments": false, "profitability_warning_threshold": 0.2}, "applies_81": true, "applies_62a": true, "companies_for_750k_split": 2, "retained": {"formula_profits": 7165000.0, "accounting_cap": 7800000.0, "used_balance_sheet": false, "retained_profits": 7165000.0, "retained_for_81a": 7165000.0, "exempt_sources_total": 0.0, "special_assets_net": 5000000.0, "exempt_alt1": 0.0, "exempt_alt2": 0.0, "taxable_retained_alt1": 7165000.0, "taxable_retained_alt2": 7165000.0, "manual_review_reasons": []}, "s62a": {"other_income_total": 300000.0, "personal_effort_income": 8200000.0, "taxable_income_personal_effort": 2900000.0, "profitability": 0.35365853658536583, "governing_profitability": 0.35365853658536583, "crossed_25pct": true, "revenue_threshold": 60000000.0, "below_revenue_threshold": true, "exemption_750k_applies": false, "section_applies": true, "deduction_25pct": 2050000.0, "attributed_income": 850000.0, "extra_tax_cost": 229500.00000000003, "partnership_under_10pct": false, "intercompany_dividend_attributed": 0.0}, "shields": {"fixed_shield": 375000.0, "salary_added_to_expenses": 0.0, "expenses_current_adjusted": 3100000.0, "expenses_avg_3y": 2866666.6666666665, "expenses_shield": 3100000.0, "special_assets_gross": 6500000.0, "special_assets_net": 5000000.0, "assets_shield": 4300000.0, "governing_shield_alt1": 3100000.0, "governing_shield_alt2": 4300000.0}, "transition": {"start_day_remaining": 3200000.0, "rule_20pct_met": false, "determining_period_rate": 0.125, "protected_until_year": 0, "protected_in_tax_year": false}, "calc81": {"transition_reduction": 0.0, "excess_alt1": 4065000.0, "excess_alt2": 2865000.0, "chosen_alternative": 2, "taxable_retained": 7165000.0, "governing_shield": 4300000.0, "excess_profits": 2865000.0, "dividend_deducted": 0.0, "surtax_base": 2865000.0, "required_distribution_rate": 0.06, "exempt_losses": false, "exempt_50pct": false, "exempt_6pct": false, "exempt_transition_2025": false, "is_exempt": false, "surtax": 57300.0}, "simulator": {"option_6pct": 429900.0, "option_50pct": 1950000.0, "cheaper_option": "חלופת 6%", "min_dividend": 429900.0, "already_distributed": 0.0, "gap_to_close": 429900.0, "dividend_tax_cost": 141867.0, "surtax_if_not_distributing": 57300.0, "difference": 84567.0, "years_to_breakeven": 2.4758638743455497, "recommendation": "תוספת המס זולה יותר השנה – יש לבחון את ההשפעה הרב-שנתית", "action_required": true, "option_20pct_start_day": 640000.0, "estimated_retained_year_end": null, "surtax_if_salary_paid": 57300.0, "recommendation_text": "מסלול 81: רווחים עודפים של 2,865,000 ₪ אחרי מגן של 4,300,000 ₪. ללא פעולה – תוספת מס של 57,300 ₪ (2%), וזה חוזר כל שנה. לפטור השנה נדרש דיבידנד של 429,900 ₪ (חלופת 6%); חולקו 0 ₪, הפער לסגירה עד 31.12 הוא 429,900 ₪. מס הדיבידנד על הפער: 141,867 ₪ (יקר מתוספת המס השנה; מתאזן אחרי 2.5 שנים). מסלול 62א: רווחיות של 35.4% מעל סף 25%. הכנסה מיוחסת של 850,000 ₪ – עלות מס נוספת מוערכת 229,500 ₪. תשלום שכר לבעל המניות הפעיל בגובה 850,000 ₪ עד 31.12 מוריד את הרווחיות ל-25%."}, "dashboard": {"status_81": "אדום – חשוף לתוספת מס", "status_62a": "אדום – ייחוס הכנסה לבעל המניות", "status_overall": "אדום – טיפול נדרש", "color_81": "אדום", "color_62a": "אדום", "color_overall": "אדום", "protected_until": "אין"}, "manual_review": ["חברה עם ני\"ע או החזקות – העודפים החשבונאיים עלולים לנפח את הבסיס", "הכנסות מריבית או שכירות – לוודא ייחוס הוצאות ל\"הכנסה אחרת\" (62א(ג1))"], "missing_fields": [], "annualization_factor": 1.0}, "error": null, "updated_at": "2026-10-13T12:00:00", "created_at": "2026-10-07T18:00:00", "logic_version": "2026.09.28-a", "stale": false, "handling": {"status": "בשיחה", "note": "", "at": null}}, {"id": "demo2", "input": {"structure": {"name": "חברה ב – מוגנת בהוראת מעבר", "company_id": "515000000", "tax_year": 2026, "is_few_holders_company": true, "preferred_or_approved_enterprise": false, "controlling_owners_count": 2, "group_companies_count": 2, "group_companies_waived": 0, "has_material_holder": true, "material_holder_total_profits": 4200000.0, "owner_controls_another_company": true, "partnership_income_share": 0.0, "encouragement_law_status": "אין", "controlling_owner_name": "דוד כהן"}, "retained": {"cumulative_taxable_income": 14500000.0, "cumulative_exempt_income": 0.0, "cumulative_land_appreciation": 0.0, "cumulative_tax": 3335000.0, "cumulative_dividends": 4000000.0, "uncredited_loss": 0.0, "balance_sheet_retained_earnings": 7800000.0, "capitalized_profits": 0.0, "transparent_entity_profits": 0.0, "attributed_to_shareholders": 0.0, "exempt_preferred_enterprise_income": 0.0, "exempt_industrial_sales_income": 0.0, "exempt_building_8a_income": 0.0, "exempt_financial_institution_income": 0.0, "exempt_profits_last_7_years": 0.0}, "shields": {"fixed_shield_base": 750000.0, "expenses_current_year": 3100000.0, "expenses_prev_year": 2900000.0, "expenses_prev2_year": 2600000.0, "pay_62a_salary_by_year_end": false, "total_assets_cost": 9400000.0, "special_securities": 2200000.0, "special_financial_asset": 0.0, "special_intangible_royalty": 0.0, "special_real_estate": 1500000.0, "special_loans_deposits_cash": 2800000.0, "excl_own_use_real_estate": 1500000.0, "excl_rental_building": 0.0, "excl_pledged_cash_financing": 0.0, "excl_regulatory_equity_cash": 0.0, "share_capital_and_premium": 100000.0, "related_party_loan": 0.0, "held_company_cost": 0.0}, "distributions": {"dividends_taxed_current_year": 0.0, "losses_current_year": 0.0, "excess_profits_prev_year": 3900000.0, "start_day_excess_profits": 4100000.0, "start_day_dividends_taxed": 900000.0, "retained_at_start_day": 7200000.0, "dividend_in_determining_period": 5760000, "determining_period_paid_and_taxed": true, "current_year_profit_estimate": null}, "s62a": {"total_revenue": 8500000.0, "other_interest": 120000.0, "other_dividend": 0.0, "other_rent": 180000.0, "other_asset_sale": 0.0, "other_securities_inventory_sale": 0.0, "other_real_estate_sale": 0.0, "taxable_income_personal_effort": 2900000.0, "related_company_payments": 0.0, "avg_profitability_2023_2025": 0.0, "marginal_tax_rate": 0.5, "corporate_tax_rate": 0.23, "concentration_test_met": false, "officer_holds_under_25pct": false, "intercompany_dividend_received": 0.0, "holding_rate_in_paying_company": 0.0}, "simulator": {"dividend_tax_rate": 0.33, "surtax_rate": 0.02}, "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "profitability_warning_threshold": 0.2}, "data_as_of": "2026-09-28", "is_estimate": false}, "result": {"name": "חברה ב – מוגנת בהוראת מעבר", "tax_year": 2026, "previous_year": 2025, "data_as_of": "2026-09-28", "is_estimate": false, "logic_version": "2026.09.28-a", "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "deduction_base_excludes_related_payments": false, "profitability_warning_threshold": 0.2}, "applies_81": true, "applies_62a": true, "companies_for_750k_split": 2, "retained": {"formula_profits": 7165000.0, "accounting_cap": 7800000.0, "used_balance_sheet": false, "retained_profits": 7165000.0, "retained_for_81a": 7165000.0, "exempt_sources_total": 0.0, "special_assets_net": 5000000.0, "exempt_alt1": 0.0, "exempt_alt2": 0.0, "taxable_retained_alt1": 7165000.0, "taxable_retained_alt2": 7165000.0, "manual_review_reasons": []}, "s62a": {"other_income_total": 300000.0, "personal_effort_income": 8200000.0, "taxable_income_personal_effort": 2900000.0, "profitability": 0.35365853658536583, "governing_profitability": 0.35365853658536583, "crossed_25pct": true, "revenue_threshold": 60000000.0, "below_revenue_threshold": true, "exemption_750k_applies": false, "section_applies": true, "deduction_25pct": 2050000.0, "attributed_income": 850000.0, "extra_tax_cost": 229500.00000000003, "partnership_under_10pct": false, "intercompany_dividend_attributed": 0.0}, "shields": {"fixed_shield": 375000.0, "salary_added_to_expenses": 0.0, "expenses_current_adjusted": 3100000.0, "expenses_avg_3y": 2866666.6666666665, "expenses_shield": 3100000.0, "special_assets_gross": 6500000.0, "special_assets_net": 5000000.0, "assets_shield": 4300000.0, "governing_shield_alt1": 3100000.0, "governing_shield_alt2": 4300000.0}, "transition": {"start_day_remaining": 3200000.0, "rule_20pct_met": false, "determining_period_rate": 0.8, "protected_until_year": 2028, "protected_in_tax_year": true}, "calc81": {"transition_reduction": 3200000.0, "excess_alt1": 865000.0, "excess_alt2": 0.0, "chosen_alternative": 2, "taxable_retained": 7165000.0, "governing_shield": 4300000.0, "excess_profits": 0.0, "dividend_deducted": 0.0, "surtax_base": 0.0, "required_distribution_rate": 0.06, "exempt_losses": false, "exempt_50pct": false, "exempt_6pct": false, "exempt_transition_2025": false, "is_exempt": false, "surtax": 0.0}, "simulator": {"option_6pct": 429900.0, "option_50pct": 1950000.0, "cheaper_option": "חלופת 6%", "min_dividend": 429900.0, "already_distributed": 0.0, "gap_to_close": 429900.0, "dividend_tax_cost": 141867.0, "surtax_if_not_distributing": 0.0, "difference": 141867.0, "years_to_breakeven": 0.0, "recommendation": "אין רווחים עודפים חייבים – אין פעולה נדרשת", "action_required": false, "option_20pct_start_day": 640000.0, "estimated_retained_year_end": null, "surtax_if_salary_paid": null, "recommendation_text": "מסלול 81: החברה מוגנת לפי הוראת המעבר עד 2028 (חילקה 80% מהרווחים הנצברים בתקופה הקובעת). אין צורך בחלוקה השנה. מסלול 62א: רווחיות של 35.4% מעל סף 25%. הכנסה מיוחסת של 850,000 ₪ – עלות מס נוספת מוערכת 229,500 ₪. תשלום שכר לבעל המניות הפעיל בגובה 850,000 ₪ עד 31.12 מוריד את הרווחיות ל-25%."}, "dashboard": {"status_81": "ירוק – מוגן לפי הוראת מעבר עד 2028", "status_62a": "אדום – ייחוס הכנסה לבעל המניות", "status_overall": "אדום – טיפול נדרש", "color_81": "ירוק", "color_62a": "אדום", "color_overall": "אדום", "protected_until": "2028"}, "manual_review": ["חברה עם ני\"ע או החזקות – העודפים החשבונאיים עלולים לנפח את הבסיס", "הכנסות מריבית או שכירות – לוודא ייחוס הוצאות ל\"הכנסה אחרת\" (62א(ג1))"], "missing_fields": [], "annualization_factor": 1.0}, "error": null, "updated_at": "2026-10-13T12:00:00", "created_at": "2026-10-07T18:00:00", "logic_version": "2026.09.28-a", "stale": false, "handling": {"status": "הוחלט: חלוקה", "note": "", "at": null}}, {"id": "demo3", "input": {"structure": {"name": "חברה ג – חילקה 6 אחוז", "company_id": "515000000", "tax_year": 2026, "is_few_holders_company": true, "preferred_or_approved_enterprise": false, "controlling_owners_count": 2, "group_companies_count": 2, "group_companies_waived": 0, "has_material_holder": true, "material_holder_total_profits": 4200000.0, "owner_controls_another_company": true, "partnership_income_share": 0.0, "encouragement_law_status": "אין", "controlling_owner_name": "דוד כהן"}, "retained": {"cumulative_taxable_income": 14500000.0, "cumulative_exempt_income": 0.0, "cumulative_land_appreciation": 0.0, "cumulative_tax": 3335000.0, "cumulative_dividends": 4000000.0, "uncredited_loss": 0.0, "balance_sheet_retained_earnings": 7800000.0, "capitalized_profits": 0.0, "transparent_entity_profits": 0.0, "attributed_to_shareholders": 0.0, "exempt_preferred_enterprise_income": 0.0, "exempt_industrial_sales_income": 0.0, "exempt_building_8a_income": 0.0, "exempt_financial_institution_income": 0.0, "exempt_profits_last_7_years": 0.0}, "shields": {"fixed_shield_base": 750000.0, "expenses_current_year": 3100000.0, "expenses_prev_year": 2900000.0, "expenses_prev2_year": 2600000.0, "pay_62a_salary_by_year_end": false, "total_assets_cost": 9400000.0, "special_securities": 2200000.0, "special_financial_asset": 0.0, "special_intangible_royalty": 0.0, "special_real_estate": 1500000.0, "special_loans_deposits_cash": 2800000.0, "excl_own_use_real_estate": 1500000.0, "excl_rental_building": 0.0, "excl_pledged_cash_financing": 0.0, "excl_regulatory_equity_cash": 0.0, "share_capital_and_premium": 100000.0, "related_party_loan": 0.0, "held_company_cost": 0.0}, "distributions": {"dividends_taxed_current_year": 450000, "losses_current_year": 0.0, "excess_profits_prev_year": 3900000.0, "start_day_excess_profits": 4100000.0, "start_day_dividends_taxed": 900000.0, "retained_at_start_day": 7200000.0, "dividend_in_determining_period": 900000.0, "determining_period_paid_and_taxed": true, "current_year_profit_estimate": null}, "s62a": {"total_revenue": 8500000.0, "other_interest": 120000.0, "other_dividend": 0.0, "other_rent": 180000.0, "other_asset_sale": 0.0, "other_securities_inventory_sale": 0.0, "other_real_estate_sale": 0.0, "taxable_income_personal_effort": 2900000.0, "related_company_payments": 0.0, "avg_profitability_2023_2025": 0.0, "marginal_tax_rate": 0.5, "corporate_tax_rate": 0.23, "concentration_test_met": false, "officer_holds_under_25pct": false, "intercompany_dividend_received": 0.0, "holding_rate_in_paying_company": 0.0}, "simulator": {"dividend_tax_rate": 0.33, "surtax_rate": 0.02}, "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "profitability_warning_threshold": 0.2}, "data_as_of": "2026-09-28", "is_estimate": false}, "result": {"name": "חברה ג – חילקה 6 אחוז", "tax_year": 2026, "previous_year": 2025, "data_as_of": "2026-09-28", "is_estimate": false, "logic_version": "2026.09.28-a", "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "deduction_base_excludes_related_payments": false, "profitability_warning_threshold": 0.2}, "applies_81": true, "applies_62a": true, "companies_for_750k_split": 2, "retained": {"formula_profits": 7165000.0, "accounting_cap": 7800000.0, "used_balance_sheet": false, "retained_profits": 7165000.0, "retained_for_81a": 7165000.0, "exempt_sources_total": 0.0, "special_assets_net": 5000000.0, "exempt_alt1": 0.0, "exempt_alt2": 0.0, "taxable_retained_alt1": 7165000.0, "taxable_retained_alt2": 7165000.0, "manual_review_reasons": []}, "s62a": {"other_income_total": 300000.0, "personal_effort_income": 8200000.0, "taxable_income_personal_effort": 2900000.0, "profitability": 0.35365853658536583, "governing_profitability": 0.35365853658536583, "crossed_25pct": true, "revenue_threshold": 60000000.0, "below_revenue_threshold": true, "exemption_750k_applies": false, "section_applies": true, "deduction_25pct": 2050000.0, "attributed_income": 850000.0, "extra_tax_cost": 229500.00000000003, "partnership_under_10pct": false, "intercompany_dividend_attributed": 0.0}, "shields": {"fixed_shield": 375000.0, "salary_added_to_expenses": 0.0, "expenses_current_adjusted": 3100000.0, "expenses_avg_3y": 2866666.6666666665, "expenses_shield": 3100000.0, "special_assets_gross": 6500000.0, "special_assets_net": 5000000.0, "assets_shield": 4300000.0, "governing_shield_alt1": 3100000.0, "governing_shield_alt2": 4300000.0}, "transition": {"start_day_remaining": 3200000.0, "rule_20pct_met": false, "determining_period_rate": 0.125, "protected_until_year": 0, "protected_in_tax_year": false}, "calc81": {"transition_reduction": 0.0, "excess_alt1": 4065000.0, "excess_alt2": 2865000.0, "chosen_alternative": 2, "taxable_retained": 7165000.0, "governing_shield": 4300000.0, "excess_profits": 2865000.0, "dividend_deducted": 450000, "surtax_base": 2415000.0, "required_distribution_rate": 0.06, "exempt_losses": false, "exempt_50pct": false, "exempt_6pct": true, "exempt_transition_2025": false, "is_exempt": true, "surtax": 0.0}, "simulator": {"option_6pct": 429900.0, "option_50pct": 1950000.0, "cheaper_option": "חלופת 6%", "min_dividend": 429900.0, "already_distributed": 450000, "gap_to_close": 0.0, "dividend_tax_cost": 0.0, "surtax_if_not_distributing": 0.0, "difference": 0.0, "years_to_breakeven": 0.0, "recommendation": "עומדת בפטור – אין פעולה נדרשת", "action_required": false, "option_20pct_start_day": 640000.0, "estimated_retained_year_end": null, "surtax_if_salary_paid": null, "recommendation_text": "מסלול 81: החברה עומדת במבחן פטור השנה – אין תוספת מס ואין צורך בחלוקה נוספת. מסלול 62א: רווחיות של 35.4% מעל סף 25%. הכנסה מיוחסת של 850,000 ₪ – עלות מס נוספת מוערכת 229,500 ₪. תשלום שכר לבעל המניות הפעיל בגובה 850,000 ₪ עד 31.12 מוריד את הרווחיות ל-25%."}, "dashboard": {"status_81": "ירוק – מוגן", "status_62a": "אדום – ייחוס הכנסה לבעל המניות", "status_overall": "אדום – טיפול נדרש", "color_81": "ירוק", "color_62a": "אדום", "color_overall": "אדום", "protected_until": "אין"}, "manual_review": ["חברה עם ני\"ע או החזקות – העודפים החשבונאיים עלולים לנפח את הבסיס", "הכנסות מריבית או שכירות – לוודא ייחוס הוצאות ל\"הכנסה אחרת\" (62א(ג1))"], "missing_fields": [], "annualization_factor": 1.0}, "error": null, "updated_at": "2026-10-13T12:00:00", "created_at": "2026-10-07T18:00:00", "logic_version": "2026.09.28-a", "stale": false, "handling": {"status": "טרם טופל", "note": "", "at": null}}, {"id": "demo4", "input": {"structure": {"name": "חברה ד – רווחיות גבולית", "company_id": "515000000", "tax_year": 2026, "is_few_holders_company": true, "preferred_or_approved_enterprise": false, "controlling_owners_count": 2, "group_companies_count": 2, "group_companies_waived": 0, "has_material_holder": true, "material_holder_total_profits": 4200000.0, "owner_controls_another_company": true, "partnership_income_share": 0.0, "encouragement_law_status": "אין", "controlling_owner_name": "דוד כהן"}, "retained": {"cumulative_taxable_income": 14500000.0, "cumulative_exempt_income": 0.0, "cumulative_land_appreciation": 0.0, "cumulative_tax": 3335000.0, "cumulative_dividends": 4000000.0, "uncredited_loss": 0.0, "balance_sheet_retained_earnings": 7800000.0, "capitalized_profits": 0.0, "transparent_entity_profits": 0.0, "attributed_to_shareholders": 0.0, "exempt_preferred_enterprise_income": 0.0, "exempt_industrial_sales_income": 0.0, "exempt_building_8a_income": 0.0, "exempt_financial_institution_income": 0.0, "exempt_profits_last_7_years": 0.0}, "shields": {"fixed_shield_base": 750000.0, "expenses_current_year": 3100000.0, "expenses_prev_year": 2900000.0, "expenses_prev2_year": 2600000.0, "pay_62a_salary_by_year_end": false, "total_assets_cost": 9400000.0, "special_securities": 2200000.0, "special_financial_asset": 0.0, "special_intangible_royalty": 0.0, "special_real_estate": 1500000.0, "special_loans_deposits_cash": 2800000.0, "excl_own_use_real_estate": 1500000.0, "excl_rental_building": 0.0, "excl_pledged_cash_financing": 0.0, "excl_regulatory_equity_cash": 0.0, "share_capital_and_premium": 100000.0, "related_party_loan": 0.0, "held_company_cost": 0.0}, "distributions": {"dividends_taxed_current_year": 0.0, "losses_current_year": 0.0, "excess_profits_prev_year": 3900000.0, "start_day_excess_profits": 4100000.0, "start_day_dividends_taxed": 900000.0, "retained_at_start_day": 7200000.0, "dividend_in_determining_period": 900000.0, "determining_period_paid_and_taxed": true, "current_year_profit_estimate": null}, "s62a": {"total_revenue": 8500000.0, "other_interest": 120000.0, "other_dividend": 0.0, "other_rent": 180000.0, "other_asset_sale": 0.0, "other_securities_inventory_sale": 0.0, "other_real_estate_sale": 0.0, "taxable_income_personal_effort": 1900000, "related_company_payments": 0.0, "avg_profitability_2023_2025": 0.0, "marginal_tax_rate": 0.5, "corporate_tax_rate": 0.23, "concentration_test_met": false, "officer_holds_under_25pct": false, "intercompany_dividend_received": 0.0, "holding_rate_in_paying_company": 0.0}, "simulator": {"dividend_tax_rate": 0.33, "surtax_rate": 0.02}, "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "profitability_warning_threshold": 0.2}, "data_as_of": "2026-09-28", "is_estimate": false}, "result": {"name": "חברה ד – רווחיות גבולית", "tax_year": 2026, "previous_year": 2025, "data_as_of": "2026-09-28", "is_estimate": false, "logic_version": "2026.09.28-a", "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "deduction_base_excludes_related_payments": false, "profitability_warning_threshold": 0.2}, "applies_81": true, "applies_62a": true, "companies_for_750k_split": 2, "retained": {"formula_profits": 7165000.0, "accounting_cap": 7800000.0, "used_balance_sheet": false, "retained_profits": 7165000.0, "retained_for_81a": 7165000.0, "exempt_sources_total": 0.0, "special_assets_net": 5000000.0, "exempt_alt1": 0.0, "exempt_alt2": 0.0, "taxable_retained_alt1": 7165000.0, "taxable_retained_alt2": 7165000.0, "manual_review_reasons": []}, "s62a": {"other_income_total": 300000.0, "personal_effort_income": 8200000.0, "taxable_income_personal_effort": 1900000, "profitability": 0.23170731707317074, "governing_profitability": 0.23170731707317074, "crossed_25pct": false, "revenue_threshold": 60000000.0, "below_revenue_threshold": true, "exemption_750k_applies": false, "section_applies": false, "deduction_25pct": 2050000.0, "attributed_income": 0.0, "extra_tax_cost": 0.0, "partnership_under_10pct": false, "intercompany_dividend_attributed": 0.0}, "shields": {"fixed_shield": 375000.0, "salary_added_to_expenses": 0.0, "expenses_current_adjusted": 3100000.0, "expenses_avg_3y": 2866666.6666666665, "expenses_shield": 3100000.0, "special_assets_gross": 6500000.0, "special_assets_net": 5000000.0, "assets_shield": 4300000.0, "governing_shield_alt1": 3100000.0, "governing_shield_alt2": 4300000.0}, "transition": {"start_day_remaining": 3200000.0, "rule_20pct_met": false, "determining_period_rate": 0.125, "protected_until_year": 0, "protected_in_tax_year": false}, "calc81": {"transition_reduction": 0.0, "excess_alt1": 4065000.0, "excess_alt2": 2865000.0, "chosen_alternative": 2, "taxable_retained": 7165000.0, "governing_shield": 4300000.0, "excess_profits": 2865000.0, "dividend_deducted": 0.0, "surtax_base": 2865000.0, "required_distribution_rate": 0.06, "exempt_losses": false, "exempt_50pct": false, "exempt_6pct": false, "exempt_transition_2025": false, "is_exempt": false, "surtax": 57300.0}, "simulator": {"option_6pct": 429900.0, "option_50pct": 1950000.0, "cheaper_option": "חלופת 6%", "min_dividend": 429900.0, "already_distributed": 0.0, "gap_to_close": 429900.0, "dividend_tax_cost": 141867.0, "surtax_if_not_distributing": 57300.0, "difference": 84567.0, "years_to_breakeven": 2.4758638743455497, "recommendation": "תוספת המס זולה יותר השנה – יש לבחון את ההשפעה הרב-שנתית", "action_required": true, "option_20pct_start_day": 640000.0, "estimated_retained_year_end": null, "surtax_if_salary_paid": null, "recommendation_text": "מסלול 81: רווחים עודפים של 2,865,000 ₪ אחרי מגן של 4,300,000 ₪. ללא פעולה – תוספת מס של 57,300 ₪ (2%), וזה חוזר כל שנה. לפטור השנה נדרש דיבידנד של 429,900 ₪ (חלופת 6%); חולקו 0 ₪, הפער לסגירה עד 31.12 הוא 429,900 ₪. מס הדיבידנד על הפער: 141,867 ₪ (יקר מתוספת המס השנה; מתאזן אחרי 2.5 שנים). מסלול 62א: רווחיות 23.2% – מתחת לסף אך קרוב. לעקוב עד סוף השנה."}, "dashboard": {"status_81": "אדום – חשוף לתוספת מס", "status_62a": "צהוב – רווחיות מתקרבת לסף 25%", "status_overall": "אדום – טיפול נדרש", "color_81": "אדום", "color_62a": "צהוב", "color_overall": "אדום", "protected_until": "אין"}, "manual_review": ["חברה עם ני\"ע או החזקות – העודפים החשבונאיים עלולים לנפח את הבסיס", "הכנסות מריבית או שכירות – לוודא ייחוס הוצאות ל\"הכנסה אחרת\" (62א(ג1))", "רווחיות בטווח 20%–30% – קרובה לסף 25%; לאמת מול הסימולטור של רשות המסים"], "missing_fields": [], "annualization_factor": 1.0}, "error": null, "updated_at": "2026-10-13T12:00:00", "created_at": "2026-10-07T18:00:00", "logic_version": "2026.09.28-a", "stale": true, "handling": {"status": "בשיחה", "note": "", "at": null}}, {"id": "demo5", "input": {"structure": {"name": "חברה ה – לא חברת מעטים", "company_id": "515000000", "tax_year": 2026, "is_few_holders_company": false, "preferred_or_approved_enterprise": false, "controlling_owners_count": 2, "group_companies_count": 2, "group_companies_waived": 0, "has_material_holder": true, "material_holder_total_profits": 4200000.0, "owner_controls_another_company": true, "partnership_income_share": 0.0, "encouragement_law_status": "אין", "controlling_owner_name": "דוד כהן"}, "retained": {"cumulative_taxable_income": 14500000.0, "cumulative_exempt_income": 0.0, "cumulative_land_appreciation": 0.0, "cumulative_tax": 3335000.0, "cumulative_dividends": 4000000.0, "uncredited_loss": 0.0, "balance_sheet_retained_earnings": 7800000.0, "capitalized_profits": 0.0, "transparent_entity_profits": 0.0, "attributed_to_shareholders": 0.0, "exempt_preferred_enterprise_income": 0.0, "exempt_industrial_sales_income": 0.0, "exempt_building_8a_income": 0.0, "exempt_financial_institution_income": 0.0, "exempt_profits_last_7_years": 0.0}, "shields": {"fixed_shield_base": 750000.0, "expenses_current_year": 3100000.0, "expenses_prev_year": 2900000.0, "expenses_prev2_year": 2600000.0, "pay_62a_salary_by_year_end": false, "total_assets_cost": 9400000.0, "special_securities": 2200000.0, "special_financial_asset": 0.0, "special_intangible_royalty": 0.0, "special_real_estate": 1500000.0, "special_loans_deposits_cash": 2800000.0, "excl_own_use_real_estate": 1500000.0, "excl_rental_building": 0.0, "excl_pledged_cash_financing": 0.0, "excl_regulatory_equity_cash": 0.0, "share_capital_and_premium": 100000.0, "related_party_loan": 0.0, "held_company_cost": 0.0}, "distributions": {"dividends_taxed_current_year": 0.0, "losses_current_year": 0.0, "excess_profits_prev_year": 3900000.0, "start_day_excess_profits": 4100000.0, "start_day_dividends_taxed": 900000.0, "retained_at_start_day": 7200000.0, "dividend_in_determining_period": 900000.0, "determining_period_paid_and_taxed": true, "current_year_profit_estimate": null}, "s62a": {"total_revenue": 8500000.0, "other_interest": 120000.0, "other_dividend": 0.0, "other_rent": 180000.0, "other_asset_sale": 0.0, "other_securities_inventory_sale": 0.0, "other_real_estate_sale": 0.0, "taxable_income_personal_effort": 2900000.0, "related_company_payments": 0.0, "avg_profitability_2023_2025": 0.0, "marginal_tax_rate": 0.5, "corporate_tax_rate": 0.23, "concentration_test_met": false, "officer_holds_under_25pct": false, "intercompany_dividend_received": 0.0, "holding_rate_in_paying_company": 0.0}, "simulator": {"dividend_tax_rate": 0.33, "surtax_rate": 0.02}, "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "profitability_warning_threshold": 0.2}, "data_as_of": "2026-09-28", "is_estimate": false}, "result": {"name": "חברה ה – לא חברת מעטים", "tax_year": 2026, "previous_year": 2025, "data_as_of": "2026-09-28", "is_estimate": false, "logic_version": "2026.09.28-a", "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "deduction_base_excludes_related_payments": false, "profitability_warning_threshold": 0.2}, "applies_81": false, "applies_62a": false, "companies_for_750k_split": 2, "retained": {"formula_profits": 7165000.0, "accounting_cap": 7800000.0, "used_balance_sheet": false, "retained_profits": 7165000.0, "retained_for_81a": 7165000.0, "exempt_sources_total": 0.0, "special_assets_net": 5000000.0, "exempt_alt1": 0.0, "exempt_alt2": 0.0, "taxable_retained_alt1": 7165000.0, "taxable_retained_alt2": 7165000.0, "manual_review_reasons": []}, "s62a": {"other_income_total": 300000.0, "personal_effort_income": 8200000.0, "taxable_income_personal_effort": 2900000.0, "profitability": 0.35365853658536583, "governing_profitability": 0.35365853658536583, "crossed_25pct": true, "revenue_threshold": 60000000.0, "below_revenue_threshold": true, "exemption_750k_applies": false, "section_applies": false, "deduction_25pct": 2050000.0, "attributed_income": 0.0, "extra_tax_cost": 0.0, "partnership_under_10pct": false, "intercompany_dividend_attributed": 0.0}, "shields": {"fixed_shield": 375000.0, "salary_added_to_expenses": 0.0, "expenses_current_adjusted": 3100000.0, "expenses_avg_3y": 2866666.6666666665, "expenses_shield": 3100000.0, "special_assets_gross": 6500000.0, "special_assets_net": 5000000.0, "assets_shield": 4300000.0, "governing_shield_alt1": 3100000.0, "governing_shield_alt2": 4300000.0}, "transition": {"start_day_remaining": 3200000.0, "rule_20pct_met": false, "determining_period_rate": 0.125, "protected_until_year": 0, "protected_in_tax_year": false}, "calc81": {"transition_reduction": 0.0, "excess_alt1": 4065000.0, "excess_alt2": 2865000.0, "chosen_alternative": 2, "taxable_retained": 7165000.0, "governing_shield": 4300000.0, "excess_profits": 2865000.0, "dividend_deducted": 0.0, "surtax_base": 2865000.0, "required_distribution_rate": 0.06, "exempt_losses": false, "exempt_50pct": false, "exempt_6pct": false, "exempt_transition_2025": false, "is_exempt": false, "surtax": 0.0}, "simulator": {"option_6pct": 429900.0, "option_50pct": 1950000.0, "cheaper_option": "חלופת 6%", "min_dividend": 429900.0, "already_distributed": 0.0, "gap_to_close": 429900.0, "dividend_tax_cost": 141867.0, "surtax_if_not_distributing": 0.0, "difference": 141867.0, "years_to_breakeven": 0.0, "recommendation": "החוק אינו חל – אין פעולה נדרשת", "action_required": false, "option_20pct_start_day": 640000.0, "estimated_retained_year_end": null, "surtax_if_salary_paid": null, "recommendation_text": "החוק אינו חל על החברה (אינה חברת מעטים). אין פעולה נדרשת."}, "dashboard": {"status_81": "ירוק – החוק אינו חל", "status_62a": "ירוק – הסעיף אינו חל", "status_overall": "ירוק", "color_81": "ירוק", "color_62a": "ירוק", "color_overall": "ירוק", "protected_until": "אין"}, "manual_review": ["חברה עם ני\"ע או החזקות – העודפים החשבונאיים עלולים לנפח את הבסיס", "הכנסות מריבית או שכירות – לוודא ייחוס הוצאות ל\"הכנסה אחרת\" (62א(ג1))"], "missing_fields": [], "annualization_factor": 1.0}, "error": null, "updated_at": "2026-10-13T12:00:00", "created_at": "2026-10-07T18:00:00", "logic_version": "2026.09.28-a", "stale": false, "handling": {"status": "הוחלט: חלוקה", "note": "", "at": null}}, {"id": "demo6", "input": {"structure": {"name": "חברה ו – מפעל תעשייתי", "company_id": "515000000", "tax_year": 2026, "is_few_holders_company": true, "preferred_or_approved_enterprise": false, "controlling_owners_count": 2, "group_companies_count": 2, "group_companies_waived": 0, "has_material_holder": true, "material_holder_total_profits": 4200000.0, "owner_controls_another_company": true, "partnership_income_share": 0.0, "encouragement_law_status": "אין", "controlling_owner_name": "דוד כהן"}, "retained": {"cumulative_taxable_income": 14500000.0, "cumulative_exempt_income": 0.0, "cumulative_land_appreciation": 0.0, "cumulative_tax": 3335000.0, "cumulative_dividends": 4000000.0, "uncredited_loss": 0.0, "balance_sheet_retained_earnings": 7800000.0, "capitalized_profits": 0.0, "transparent_entity_profits": 0.0, "attributed_to_shareholders": 0.0, "exempt_preferred_enterprise_income": 0.0, "exempt_industrial_sales_income": 6000000, "exempt_building_8a_income": 0.0, "exempt_financial_institution_income": 0.0, "exempt_profits_last_7_years": 1200000}, "shields": {"fixed_shield_base": 750000.0, "expenses_current_year": 3100000.0, "expenses_prev_year": 2900000.0, "expenses_prev2_year": 2600000.0, "pay_62a_salary_by_year_end": false, "total_assets_cost": 9400000.0, "special_securities": 2200000.0, "special_financial_asset": 0.0, "special_intangible_royalty": 0.0, "special_real_estate": 1500000.0, "special_loans_deposits_cash": 2800000.0, "excl_own_use_real_estate": 1500000.0, "excl_rental_building": 0.0, "excl_pledged_cash_financing": 0.0, "excl_regulatory_equity_cash": 0.0, "share_capital_and_premium": 100000.0, "related_party_loan": 0.0, "held_company_cost": 0.0}, "distributions": {"dividends_taxed_current_year": 0.0, "losses_current_year": 0.0, "excess_profits_prev_year": 3900000.0, "start_day_excess_profits": 4100000.0, "start_day_dividends_taxed": 900000.0, "retained_at_start_day": 7200000.0, "dividend_in_determining_period": 900000.0, "determining_period_paid_and_taxed": true, "current_year_profit_estimate": null}, "s62a": {"total_revenue": 8500000.0, "other_interest": 120000.0, "other_dividend": 0.0, "other_rent": 180000.0, "other_asset_sale": 0.0, "other_securities_inventory_sale": 0.0, "other_real_estate_sale": 0.0, "taxable_income_personal_effort": 2900000.0, "related_company_payments": 0.0, "avg_profitability_2023_2025": 0.0, "marginal_tax_rate": 0.5, "corporate_tax_rate": 0.23, "concentration_test_met": false, "officer_holds_under_25pct": false, "intercompany_dividend_received": 0.0, "holding_rate_in_paying_company": 0.0}, "simulator": {"dividend_tax_rate": 0.33, "surtax_rate": 0.02}, "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "profitability_warning_threshold": 0.2}, "data_as_of": "2026-09-28", "is_estimate": false}, "result": {"name": "חברה ו – מפעל תעשייתי", "tax_year": 2026, "previous_year": 2025, "data_as_of": "2026-09-28", "is_estimate": false, "logic_version": "2026.09.28-a", "flags": {"start_day_basis_year": 2024, "deduct_transition_from_50pct_base": false, "enable_20pct_current_year_rule": true, "deduction_base_excludes_related_payments": false, "profitability_warning_threshold": 0.2}, "applies_81": true, "applies_62a": true, "companies_for_750k_split": 2, "retained": {"formula_profits": 7165000.0, "accounting_cap": 7800000.0, "used_balance_sheet": false, "retained_profits": 7165000.0, "retained_for_81a": 7165000.0, "exempt_sources_total": 6000000.0, "special_assets_net": 5000000.0, "exempt_alt1": 1000000.0, "exempt_alt2": 1200000, "taxable_retained_alt1": 6165000.0, "taxable_retained_alt2": 5965000.0, "manual_review_reasons": []}, "s62a": {"other_income_total": 300000.0, "personal_effort_income": 8200000.0, "taxable_income_personal_effort": 2900000.0, "profitability": 0.35365853658536583, "governing_profitability": 0.35365853658536583, "crossed_25pct": true, "revenue_threshold": 60000000.0, "below_revenue_threshold": true, "exemption_750k_applies": false, "section_applies": true, "deduction_25pct": 2050000.0, "attributed_income": 850000.0, "extra_tax_cost": 229500.00000000003, "partnership_under_10pct": false, "intercompany_dividend_attributed": 0.0}, "shields": {"fixed_shield": 375000.0, "salary_added_to_expenses": 0.0, "expenses_current_adjusted": 3100000.0, "expenses_avg_3y": 2866666.6666666665, "expenses_shield": 3100000.0, "special_assets_gross": 6500000.0, "special_assets_net": 5000000.0, "assets_shield": 4300000.0, "governing_shield_alt1": 3100000.0, "governing_shield_alt2": 4300000.0}, "transition": {"start_day_remaining": 3200000.0, "rule_20pct_met": false, "determining_period_rate": 0.125, "protected_until_year": 0, "protected_in_tax_year": false}, "calc81": {"transition_reduction": 0.0, "excess_alt1": 3065000.0, "excess_alt2": 1665000.0, "chosen_alternative": 2, "taxable_retained": 5965000.0, "governing_shield": 4300000.0, "excess_profits": 1665000.0, "dividend_deducted": 0.0, "surtax_base": 1665000.0, "required_distribution_rate": 0.06, "exempt_losses": false, "exempt_50pct": false, "exempt_6pct": false, "exempt_transition_2025": false, "is_exempt": false, "surtax": 33300.0}, "simulator": {"option_6pct": 429900.0, "option_50pct": 1950000.0, "cheaper_option": "חלופת 6%", "min_dividend": 429900.0, "already_distributed": 0.0, "gap_to_close": 429900.0, "dividend_tax_cost": 141867.0, "surtax_if_not_distributing": 33300.0, "difference": 108567.0, "years_to_breakeven": 4.26027027027027, "recommendation": "תוספת המס זולה יותר השנה – יש לבחון את ההשפעה הרב-שנתית", "action_required": true, "option_20pct_start_day": 640000.0, "estimated_retained_year_end": null, "surtax_if_salary_paid": 33300.0, "recommendation_text": "מסלול 81: רווחים עודפים של 1,665,000 ₪ אחרי מגן של 4,300,000 ₪. ללא פעולה – תוספת מס של 33,300 ₪ (2%), וזה חוזר כל שנה. לפטור השנה נדרש דיבידנד של 429,900 ₪ (חלופת 6%); חולקו 0 ₪, הפער לסגירה עד 31.12 הוא 429,900 ₪. מס הדיבידנד על הפער: 141,867 ₪ (יקר מתוספת המס השנה; מתאזן אחרי 4.3 שנים). מסלול 62א: רווחיות של 35.4% מעל סף 25%. הכנסה מיוחסת של 850,000 ₪ – עלות מס נוספת מוערכת 229,500 ₪. תשלום שכר לבעל המניות הפעיל בגובה 850,000 ₪ עד 31.12 מוריד את הרווחיות ל-25%."}, "dashboard": {"status_81": "אדום – חשוף לתוספת מס", "status_62a": "אדום – ייחוס הכנסה לבעל המניות", "status_overall": "אדום – טיפול נדרש", "color_81": "אדום", "color_62a": "אדום", "color_overall": "אדום", "protected_until": "אין"}, "manual_review": ["חברה עם ני\"ע או החזקות – העודפים החשבונאיים עלולים לנפח את הבסיס", "הכנסות מריבית או שכירות – לוודא ייחוס הוצאות ל\"הכנסה אחרת\" (62א(ג1))", "רווחים ממקור פטור – לאמת את בחירת החלופה (81ג(ג)) מול רו\"ח", "חלופה (1) לרווחים פטורים: עלות הנכסים המיוחדים נלקחת לתום השנה הנבדקת (פישוט) – לאמת"], "missing_fields": [], "annualization_factor": 1.0}, "error": null, "updated_at": "2026-10-13T12:00:00", "created_at": "2026-10-07T18:00:00", "logic_version": "2026.09.28-a", "stale": false, "handling": {"status": "טרם טופל", "note": "", "at": null}}];
+  window.__mock = function(name, a, b){
+    const S = window.__seed;
+    switch(name){
+      case 'list_clients': return S;
+      case 'get_client': return S.find(r => r.id === a) || null;
+      case 'save_client': {
+        const id = b || ('new' + Date.now());
+        const prev = S.find(r => r.id === id);
+        const rec = { id, input: a, result: prev ? prev.result : null, error: prev ? null : 'החישוב רץ רק בתוכנה המותקנת (תצוגת דפדפן)', updated_at: new Date().toISOString().slice(0,19), logic_version: prev?.logic_version || '' };
+        if (prev) Object.assign(prev, rec); else S.push(rec);
+        return rec;
+      }
+      case 'delete_client': { const i = S.findIndex(r => r.id === a); if (i >= 0) S.splice(i,1); return {ok: i >= 0}; }
+      case 'recompute_all': return {n: S.length};
+      case 'what_if': return {error: 'הסימולציה רצה רק בתוכנה המותקנת (תצוגת דפדפן)'};
+      case 'set_handling': { const r = S.find(x => x.id === a); if (r) r.handling = {status: b, note: arguments[3] || '', at: new Date().toISOString().slice(0,19)}; return r; }
+      case 'get_settings': return window.__settings ||= {default_tax_year: 2026, stale_days: 60, data_dir: 'data/clients (תצוגה)', handling_statuses: ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל'], flags: {deduct_transition_from_50pct_base:false, enable_20pct_current_year_rule:true, deduction_base_excludes_related_payments:false, profitability_warning_threshold:.2}};
+      case 'save_settings': Object.assign(window.__settings, a, {flags: {...window.__settings.flags, ...a.flags}}); return {ok: true, recomputed: 0};
+      case 'export_report': return {path: null};
+      case 'export_document': return {error: 'ייצוא קבצים זמין רק בתוכנה המותקנת'};
+      case 'open_data_folder': return true;
+    }
+  };
+  /*MOCK_END*/
+
+  // ── helpers ──
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const ils = v => v == null ? '—' : `<span class="num">₪${Math.round(v).toLocaleString('en-US')}</span>`;
+  const pct = x => `<span class="num">${(x*100).toFixed(1)}%</span>`;
+  const yn = b => b ? 'כן' : 'לא';
+  const when = t => t ? new Date(t).toLocaleString('he-IL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
+  const ORDER = {'אדום':0,'צהוב':1,'ירוק':2};
+  const KIND = {'אדום':'serious','צהוב':'warn','ירוק':'good'};
+  const ICON = {
+    good: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg>',
+    warn: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 1.8v4.8M6 9.6v.2"/></svg>',
+    serious: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3l6 6M9 3l-6 6"/></svg>',
+    neutral: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 6h7"/></svg>'
+  };
+  const strip = s => s.replace(/^\S+ – /, '');
+  const fmtv = v => typeof v === 'number' ? ils(v) : esc(v);
+  const pill = (color, text) => `<span class="pill ${KIND[color] || ''}">${ICON[KIND[color]] || ICON.neutral} ${esc(text || color)}</span>`;
+  function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2200); }
+
+  let records = [], selectedId = null, editingId = null;
+  const results = () => records.filter(r => r.result).map(r => Object.assign(r.result, {_id: r.id, _updated: r.updated_at, _stale: !!r.stale, _handling: r.handling || {status:'טרם טופל'}, _owner: r.input?.structure?.controlling_owner_name || '', _cid: r.input?.structure?.company_id || ''}));
+  let settings = null;
+
+  // ── nav ──
+  document.querySelectorAll('.nav a').forEach(a => { a.tabIndex = 0; a.onclick = () => show(a.dataset.screen); a.onkeydown = e => { if (e.key === 'Enter') show(a.dataset.screen); }; });
+  async function show(id){
+    if (['queue','review','clients'].includes(id)) await reload();   // תמיד עדכני מול הקבצים בדיסק
+    document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.screen === id || (id === 'client' && a.dataset.screen === 'queue') || (id === 'form' && a.dataset.screen === 'clients')));
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + id));
+    if (id === 'client') renderClient();
+    document.querySelector('main').scrollTop = 0;
+  }
+
+  // ── queue ──
+  const sortRisk = rs => [...rs].sort((a,b) => (ORDER[a.dashboard.color_overall]-ORDER[b.dashboard.color_overall]) || (b.calc81.surtax-a.calc81.surtax) || (b.s62a.attributed_income-a.s62a.attributed_income));
+  const HEAD = `<th>לקוח</th><th>כולל</th><th>סעיף 81</th><th>סעיף 62א</th><th>תוספת מס</th><th>פער לחלוקה</th><th>שכר לתיקון</th><th>מוגן עד</th><th>טיפול</th>`;
+  const handlingPill = h => { const st = h?.status || 'טרם טופל'; const k = st.startsWith('הוחלט') || st === 'טופל' ? 'good' : st === 'בשיחה' ? 'info' : ''; return `<span class="pill ${k}">${esc(st)}</span>`; };
+  function row(c){
+    return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
+      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(c.data_as_of || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(c.data_as_of)}` : '')}</div></td>
+      <td>${pill(c.dashboard.color_overall)}</td>
+      <td>${pill(c.dashboard.color_81, strip(c.dashboard.status_81))}</td>
+      <td>${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}</td>
+      <td>${ils(c.calc81.surtax)}</td>
+      <td>${c.simulator.action_required ? ils(c.simulator.gap_to_close) : '<span style="color:var(--ink-4)">לא נדרש</span>'}</td>
+      <td>${c.s62a.attributed_income ? ils(c.s62a.attributed_income) : '<span style="color:var(--ink-4)">—</span>'}</td>
+      <td>${esc(c.dashboard.protected_until)}</td>
+      <td>${handlingPill(c._handling)}</td>
+      <td class="actions"><button class="quiet">כרטיס</button></td>
+    </tr>`;
+  }
+  function bind(el){
+    el.querySelectorAll('tr.rowlink').forEach(tr => {
+      const pick = () => { selectedId = tr.dataset.id; show('client'); };
+      tr.onclick = e => { if (e.target.closest('button[data-act]')) return; pick(); };
+      tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
+    });
+  }
+  function renderQueue(){
+    const rs = results();
+    const n = c => rs.filter(x => x.dashboard.color_overall === c).length;
+    const sum = f => rs.reduce((s,c) => s + f(c), 0);
+    $('stats').innerHTML = `
+      <div class="stat serious"><small>טיפול נדרש</small><b>${n('אדום')}</b></div>
+      <div class="stat warn"><small>מעקב</small><b>${n('צהוב')}</b></div>
+      <div class="stat good"><small>תקין</small><b>${n('ירוק')}</b></div>
+      <div class="stat"><small>תוספת מס 2% בסיכון</small><b>${ils(sum(c => c.calc81.surtax))}</b></div>
+      <div class="stat"><small>דיבידנדים לחלוקה עד 31.12</small><b>${ils(sum(c => c.simulator.action_required ? c.simulator.gap_to_close : 0))}</b></div>
+      <div class="stat"><small>שכר לתיקון 62א</small><b>${ils(sum(c => c.s62a.attributed_income))}</b></div>`;
+    const el = $('queueList');
+    const pending = records.filter(r => !r.result).length;
+    const pendingNote = pending ? `<div class="notice warn">${pending} לקוחות ללא חישוב – ראו רשימת הלקוחות.</div>` : '';
+    const q = ($('q')?.value || '').trim().toLowerCase();
+    const fc = document.querySelector('#fColor .on')?.dataset.v || '', ft = document.querySelector('#fTrack .on')?.dataset.v || '';
+    let list = sortRisk(rs).filter(c => {
+      if (q && !(c.name.toLowerCase().includes(q) || c._cid.includes(q) || c._owner.toLowerCase().includes(q))) return false;
+      if (fc && c.dashboard.color_overall !== fc) return false;
+      if (ft === '81' && c.dashboard.color_81 === 'ירוק') return false;
+      if (ft === '62' && c.dashboard.color_62a === 'ירוק') return false;
+      if ($('fOpen')?.checked && (c._handling.status.startsWith('הוחלט') || c._handling.status === 'טופל')) return false;
+      return true;
+    });
+    let body;
+    if ($('fGroup')?.checked){
+      const groups = {};
+      list.forEach(c => (groups[c._owner || 'ללא בעל שליטה'] ||= []).push(c));
+      body = Object.entries(groups).sort((a,b) => a[0].localeCompare(b[0],'he')).map(([g, cs]) => {
+        const surtax = cs.reduce((x,c) => x + c.calc81.surtax, 0), sal = cs.reduce((x,c) => x + c.s62a.attributed_income, 0);
+        return `<tr class="group"><td colspan="10">${esc(g)} · ${cs.length} חברות · תוספת מס ${ils(surtax)} · שכר לתיקון ${ils(sal)}</td></tr>` + cs.map(row).join('');
+      }).join('');
+    } else body = list.map(row).join('');
+    if (!rs.length){ el.innerHTML = pendingNote + `<div class="empty"><b>עדיין אין לקוחות מחושבים.</b>הוסיפו לקוח ומלאו את נתוני הבסיס – החישוב רץ בשמירה.</div>`; }
+    else if (!list.length){ el.innerHTML = pendingNote + `<div class="empty"><b>אין לקוחות שמתאימים לסינון.</b></div>`; }
+    else el.innerHTML = pendingNote + `<table><thead><tr>${HEAD}<th></th></tr></thead><tbody>${body}</tbody></table>`;
+    bind(el);
+    $('queueCount').textContent = rs.length || '';
+    $('clientsCount').textContent = records.length || '';
+    const dates = [...new Set(rs.map(c => c.data_as_of).filter(Boolean))].sort();
+    $('asof').textContent = !dates.length ? '' : dates.length === 1 ? `נכון ל־${dates[0]}` : `נתונים מ־${dates[0]} עד ${dates.at(-1)}`;
+    const lv = rs[0]?.logic_version || records[0]?.logic_version || '';
+    $('statusCard').innerHTML = `<b>${records.length} לקוחות · שנת מס ${rs[0]?.tax_year ?? ''}</b>גרסת לוגיקה <span class="num">${esc(lv)}</span>${MOCK ? '<br>תצוגת דפדפן – החישוב רץ רק בתוכנה' : ''}`;
+  }
+  function renderReview(){
+    const items = sortRisk(results()).filter(c => c.manual_review.length);
+    $('reviewCount').textContent = items.length || '';
+    const el = $('reviewList');
+    if (!items.length){ el.innerHTML = `<div class="empty"><b>אין לקוחות לבדיקה ידנית.</b>כל החישובים נשענים על נתונים שהמנוע סומך עליהם.</div>`; return; }
+    el.innerHTML = `<table><thead><tr><th>לקוח</th><th>כולל</th><th>למה</th><th></th></tr></thead><tbody>` +
+      items.map(c => `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
+        <td><div class="file">${esc(c.name)}</div></td>
+        <td>${pill(c.dashboard.color_overall)}</td>
+        <td><ul class="rev">${c.manual_review.map(m => `<li>${esc(m)}</li>`).join('')}</ul></td>
+        <td class="actions"><button class="quiet">כרטיס</button></td></tr>`).join('') + '</tbody></table>';
+    bind(el);
+  }
+  function renderClients(){
+    const el = $('clientsList');
+    if (!records.length){ el.innerHTML = `<div class="empty"><b>אין לקוחות עדיין.</b>לחצו "לקוח חדש" כדי להזין את הראשון.</div>`; return; }
+    el.innerHTML = `<table><thead><tr><th>לקוח</th><th>ח.פ.</th><th>שנת מס</th><th>דוח סגור אחרון</th><th>סטטוס</th><th>עודכן</th><th></th></tr></thead><tbody>` +
+      records.map(r => {
+        const st = r.input?.structure || {};
+        let status = r.error ? `<span class="pill serious">${ICON.serious} ${esc(r.error)}</span>` : r.result ? pill(r.result.dashboard.color_overall, r.result.dashboard.status_overall) : `<span class="pill">${ICON.neutral} לא חושב</span>`;
+        if (r.result?.missing_fields?.length) status += ` <span class="pill warn" title="${esc(r.result.missing_fields.join(', '))}">${ICON.warn} חסר ${r.result.missing_fields.length}</span>`;
+        if (r.changes?.length) status += ` <span class="pill info" title="${esc(r.changes.map(x => x.what).join(', '))}">השתנה</span>`;
+        return `<tr tabindex="0" class="rowlink" data-id="${esc(r.id)}">
+          <td><div class="file">${esc(st.name || r.id)}</div></td>
+          <td class="num">${esc(st.company_id || '')}</td>
+          <td class="num">${esc(st.tax_year ?? '')}</td>
+          <td class="num">${esc(st.last_closed_report_year ?? '—')}</td>
+          <td>${status}</td>
+          <td class="num" style="color:var(--ink-3)">${when(r.updated_at)}</td>
+          <td class="actions"><button class="quiet" data-act="edit" onclick="editClient('${esc(r.id)}')">עריכה</button> <button class="quiet danger" data-act="del" onclick="askDelete(this, '${esc(r.id)}')">מחיקה</button></td>
+        </tr>`; }).join('') + '</tbody></table>';
+    bind(el);
+  }
+
+  // ── client card ──
+  const kv = rows => `<div class="kv">${rows.map(r => r === null ? '<div class="sep"></div>' : `<div class="k ${r[2]?'hl':''}">${r[0]}</div><div class="v ${r[2]?'hl':''}">${r[1]}</div>`).join('')}</div>`;
+  function renderClient(){
+    const el = $('clientView'); const rec = records.find(r => r.id === selectedId);
+    if (!rec){ el.innerHTML = `<h1>כרטיס לקוח</h1><div class="empty"><b>לא נבחר לקוח.</b>לחיצה על שורה בתור העבודה פותחת את הכרטיס שלה כאן.</div>`; return; }
+    const head = (title, status) => `<div class="toolbar">
+        <div><div class="detail-head"><h1>${esc(title)}</h1>${status}</div>
+        <p class="lead" style="margin:0" id="cardLead"></p></div>
+        <div class="spacer"></div>
+        <button onclick="editClient('${esc(rec.id)}')">עריכת נתונים</button>
+        <div class="seg"><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">דוח לרו"ח</button><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></div>
+        <div class="seg"><button type="button" onclick="exportDoc('${esc(rec.id)}','client','pdf')">מכתב ללקוח</button><button type="button" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></div>
+        <button onclick="show('queue')">חזרה לתור</button>
+      </div>`;
+    const c = rec.result;
+    if (!c){
+      el.innerHTML = head(rec.input?.structure?.name || rec.id, `<span class="pill">${ICON.neutral} לא חושב</span>`) + `<div class="notice ${rec.error ? 'serious' : 'warn'}">${esc(rec.error || 'הלקוח טרם חושב.')}</div>`;
+      return;
+    }
+    const r = c.retained, k = c.calc81, s = c.s62a, m = c.simulator, sh = c.shields;
+    const tests = [];
+    if (k.exempt_losses) tests.push('הפסדי השנה מעל 10% מהרווחים הנצברים');
+    if (k.exempt_50pct) tests.push('דיבידנד ≥ 50% מהרווחים העודפים');
+    if (k.exempt_6pct) tests.push(`דיבידנד ≥ ${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`);
+    if (k.exempt_transition_2025) tests.push('הוראת מעבר 2025');
+    const notices = [];
+    if (c.missing_fields?.length) notices.push(`<div class="notice warn">חסר: ${c.missing_fields.map(esc).join(', ')} – התוצאה חושבה עם אפס במקומם.</div>`);
+    if (c.annualization_factor && c.annualization_factor !== 1) notices.push(`<div class="notice" style="background:var(--info-bg);color:var(--info)">נתוני השנה עד חודש ${rec.input?.data_through_month} – הוכפלו פי <span class="num">${c.annualization_factor.toFixed(2)}</span> לאומדן שנתי (לינארי).</div>`);
+    if (rec.stale) notices.push(`<div class="notice serious">נתון מיושן – נכון ל־${esc(rec.input?.data_as_of || when(rec.updated_at))}. לעדכן לפני שמדברים עם הלקוח.</div>`);
+    if (rec.changes?.length) notices.push(`<div class="notice" style="background:var(--neutral-bg);color:var(--ink-2)">השתנה בחישוב האחרון: ${rec.changes.map(x => `${esc(x.what)}: ${fmtv(x.from)} ← ${fmtv(x.to)}`).join(' · ')}</div>`);
+    el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall)) + notices.join('') + `
+      <div class="cols">
+        <div class="card"><h3>סעיף 81 · תוספת מס 2% &nbsp;${pill(c.dashboard.color_81, strip(c.dashboard.status_81))}</h3>${kv([
+          ['רווחים נצברים לתום ' + c.previous_year, ils(r.retained_for_81a)],
+          ['החלופה המיטיבה', 'חלופה ' + k.chosen_alternative],
+          ['רווחים נצברים חייבים', ils(k.taxable_retained)],
+          ['המגן הקובע', ils(k.governing_shield)],
+          ['— מגן קבוע', ils(sh.fixed_shield)],
+          ['— מגן הוצאות', ils(sh.expenses_shield)],
+          ['— מגן נכסים', ils(sh.assets_shield)],
+          ...(k.transition_reduction ? [['הפחתה לפי הוראות המעבר', ils(k.transition_reduction)]] : []),
+          ['רווחים עודפים', ils(k.excess_profits)],
+          null,
+          ['קיים פטור?', tests.length ? tests.join('; ') : 'לא'],
+          ['תוספת מס לתשלום', ils(k.surtax), true],
+          ['מוגן לפי הוראת מעבר עד', esc(c.dashboard.protected_until)],
+        ])}</div>
+        <div class="card"><h3>סימולטור · לחלק דיבידנד או לשלם 2%?</h3>${kv([
+          [`${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`, ils(m.option_6pct)],
+          ['50% מהרווחים העודפים', m.option_50pct > 0 ? ils(m.option_50pct) : '—'],
+          ...(m.option_20pct_start_day != null ? [['20% מרווחי יום התחילה', ils(m.option_20pct_start_day)]] : []),
+          ['דיבידנד מינימלי לפטור (' + esc(m.cheaper_option) + ')', ils(m.min_dividend), true],
+          ['כבר חולק השנה', ils(m.already_distributed)],
+          ['פער לסגירה עד 31.12', m.action_required ? ils(m.gap_to_close) : 'לא נדרש', true],
+          null,
+          ['מס דיבידנד על הפער', ils(m.dividend_tax_cost)],
+          ['תוספת המס אם לא מחלקים', ils(m.surtax_if_not_distributing)],
+          ...(m.years_to_breakeven ? [['שנים לאיזון', `<span class="num">${m.years_to_breakeven.toFixed(1)}</span>`]] : []),
+          ...(m.estimated_retained_year_end != null ? [[`אומדן עודפים ל־31.12.${c.tax_year}`, ils(m.estimated_retained_year_end)]] : []),
+          ...(m.surtax_if_salary_paid != null && m.surtax_if_salary_paid < k.surtax ? [['תוספת המס אם משלמים את שכר 62א עד 31.12', ils(m.surtax_if_salary_paid), true]] : []),
+        ])}
+        <div class="whatif" id="whatif">
+          <h3 style="margin-top:14px">מה אם…</h3>
+          <div class="row">
+            <label class="field"><span>דיבידנד נוסף לחלוקה</span><input type="number" step="10000" id="wi_div" value="0"></label>
+            <label class="field"><span>שכר לבעל המניות עד 31.12</span><input type="number" step="10000" id="wi_sal" value="0"></label>
+          </div>
+          <div class="toolbar" style="margin-bottom:8px">
+            <button class="quiet" onclick="wiSet(${Math.round(m.gap_to_close)}, 0)">הפער לפטור</button>
+            <button class="quiet" onclick="wiSet(0, ${Math.round(s.attributed_income)})">שכר התיקון</button>
+            <button class="quiet" onclick="wiSet(${Math.round(m.gap_to_close)}, ${Math.round(s.attributed_income)})">שניהם</button>
+            <div class="spacer"></div>
+            <button onclick="runWhatIf()">חשב</button>
+          </div>
+          <div id="wi_out" class="hint">הסימולציה לא נשמרת. ${MOCK ? 'בתצוגת הדפדפן אין מנוע – זמין בתוכנה.' : ''}</div>
+        </div>
+        <div class="rec"><b>המלצה:</b> ${esc(m.recommendation_text || m.recommendation)}</div></div>
+        <div class="card"><h3>סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}</h3>${kv([
+          ['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)],
+          ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)],
+          ['שיעור רווחיות', pct(s.governing_profitability)],
+          ['חצה סף 25%?', yn(s.crossed_25pct)],
+          ['מתחת לסף המחזור?', yn(s.below_revenue_threshold)],
+          ['פטור 750 אלף ₪?', s.exemption_750k_applies ? 'חל' : 'לא חל'],
+          ['הסעיף חל?', yn(s.section_applies)],
+          null,
+          ['שכר לתיקון עד 31.12', ils(s.attributed_income), true],
+          ['עלות מס נוספת מוערכת', ils(s.extra_tax_cost)],
+        ])}</div>
+        ${c.manual_review.length ? `<div class="card"><h3>לבדיקה ידנית</h3><ul class="rev">${c.manual_review.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+        <div class="card"><h3>טיפול &nbsp;${handlingPill(rec.handling)}</h3>
+          <div class="row">
+            <label class="field"><span>סטטוס</span><select id="h_status">${(settings?.handling_statuses || ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל']).map(x => `<option ${rec.handling?.status === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+            <label class="field" style="flex:2"><span>הערה</span><input type="text" id="h_note" value="${esc(rec.handling?.note || '')}" placeholder="מה סוכם עם הלקוח"></label>
+          </div>
+          <div class="toolbar" style="margin:0"><span class="hint">${rec.handling?.at ? 'עודכן ' + when(rec.handling.at) : ''}</span><div class="spacer"></div><button onclick="setHandling('${esc(rec.id)}')">שמירת סטטוס</button></div>
+        </div>
+      </div>`;
+    $('cardLead').textContent = `שנת מס ${c.tax_year} · בסיס לתום ${c.previous_year}${c.is_estimate ? ' · אומדן (תרחיש ב׳)' : ''} · עודכן ${when(rec.updated_at)} · גרסת לוגיקה ${c.logic_version}`;
+  }
+
+  // ── form schema (key = path into ClientInput) ──
+  const Y = new Date().getFullYear();
+  const F = [
+    // ── עיקרי ──
+    {g:'זיהוי', main:1, k:'structure.name', t:'text', l:'שם החברה'},
+    {g:'זיהוי', main:1, k:'structure.company_id', t:'text', l:'מספר ח.פ.'},
+    {g:'זיהוי', main:1, k:'structure.tax_year', t:'int', l:'שנת המס הנבדקת', d:Y},
+    {g:'זיהוי', main:1, k:'structure.last_closed_report_year', t:'int', l:'שנת הדוח הסגור האחרון', h:'אם נמוכה משנה קודמת – תרחיש ב׳, התוצאה מסומנת אומדן', d:Y-2},
+    {g:'זיהוי', main:1, k:'data_as_of', t:'text', l:'נתונים נכון ל־', h:'תאריך הקובץ האחיד / הדוח, למשל 2026-09-30'},
+    {g:'זיהוי', main:1, k:'data_through_month', t:'int', l:'נתוני השנה הנבדקת עד חודש', h:'1–12. אם חסר – המערכת מכפילה לשנה מלאה (לינארי). ריק = שנה מלאה'},
+
+    {g:'בעלות ושליטה', main:1, k:'structure.controlling_owner_name', t:'text', l:'שם בעל השליטה', h:'לקיבוץ חברות של אותו בעל שליטה בתור'},
+    {g:'בעלות ושליטה', main:1, k:'structure.controlling_owners_count', t:'int', l:'מספר בעלי השליטה', h:'בעל שליטה וקרובו נמנים כאחד', d:1},
+    {g:'בעלות ושליטה', main:1, k:'structure.group_companies_count', t:'int', l:'חברות מעטים בשליטת בעל השליטה', h:'כולל חברה זו – לחלוקת סכום ה-750 אלף ₪', d:1},
+    {g:'בעלות ושליטה', main:1, k:'structure.owner_controls_another_company', t:'bool', l:'יש בעל שליטה שהוא בעל שליטה גם בחברה אחרת', h:'"כן" שולל את פטור 750 אלף ₪ בסעיף 62א'},
+    {g:'בעלות ושליטה', main:1, k:'structure.is_few_holders_company', t:'bool', l:'חברת מעטים (סעיף 76)', d:true},
+
+    {g:'רווחים נצברים – לתום השנה הקודמת', main:1, k:'retained.balance_sheet_retained_earnings', t:'num', l:'יתרת העודפים במאזן הסגור האחרון', h:'הבסיס למסלול 81 (החלטת הפיילוט)'},
+    {g:'רווחים נצברים – לתום השנה הקודמת', main:1, k:'distributions.excess_profits_prev_year', t:'num', l:'רווחים עודפים לתום השנה הקודמת', h:'מהחישוב של השנה שעברה; בשנה הראשונה – ידני'},
+
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.expenses_current_year', t:'num', l:'הוצאות מותרות בניכוי – השנה הנבדקת (אומדן שנתי)', h:'ללא רכישת נכסים מיוחדים ופחת/מימון בגינם'},
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.expenses_prev_year', t:'num', l:'הוצאות – שנה קודמת'},
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.expenses_prev2_year', t:'num', l:'הוצאות – שנתיים קודם'},
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.total_assets_cost', t:'num', l:'עלות כלל נכסי החברה', h:'מחיר מקורי, לא נטו מפחת'},
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.special_loans_deposits_cash', t:'num', l:'מזומן, פיקדונות והלוואות שנתנה'},
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.special_securities', t:'num', l:'ניירות ערך'},
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.special_real_estate', t:'num', l:'זכויות במקרקעין'},
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.excl_own_use_real_estate', t:'num', l:'מתוכן: מקרקעין לשימוש עצמי'},
+    {g:'מגנים – לתום השנה הנבדקת', main:1, k:'shields.share_capital_and_premium', t:'num', l:'הון מניות + פרמיה'},
+
+    {g:'חלוקות והוראות מעבר', main:1, k:'distributions.dividends_taxed_current_year', t:'num', l:'דיבידנד ששולם עליו מס – השנה הנבדקת'},
+    {g:'חלוקות והוראות מעבר', main:1, k:'distributions.retained_at_start_day', t:'num', l:'רווחים נצברים ליום התחילה (1.1.2025)'},
+    {g:'חלוקות והוראות מעבר', main:1, k:'distributions.dividend_in_determining_period', t:'num', l:'דיבידנד שחולק בתקופה הקובעת (1.1–30.11.2025)'},
+    {g:'חלוקות והוראות מעבר', main:1, k:'distributions.determining_period_paid_and_taxed', t:'bool', l:'שולם בתקופה והמס עליו שולם עד 31.12.2025'},
+    {g:'חלוקות והוראות מעבר', main:1, k:'distributions.start_day_excess_profits', t:'num', l:'רווחים עודפים ליום התחילה', h:'לתום 2024 – נקודה 1 לאישור אברהם'},
+    {g:'חלוקות והוראות מעבר', main:1, k:'distributions.start_day_dividends_taxed', t:'num', l:'דיבידנדים ששולם עליהם מס מתוך רווחים אלה'},
+
+    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.total_revenue', t:'num', l:'סך הכנסות (אומדן שנתי)', h:'לפי עונתיות השנה הקודמת'},
+    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.other_interest', t:'num', l:'מתוכן: ריבית והפרשי הצמדה'},
+    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.other_rent', t:'num', l:'מתוכן: דמי שכירות'},
+    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.taxable_income_personal_effort', t:'num', l:'הכנסה חייבת מפעילות עתירת יגיעה אישית (אומדן)', h:'אחרי ייחוס הוצאות ל"הכנסה אחרת"'},
+    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.concentration_test_met', t:'bool', l:'70% מהמחזור מגורם אחד ב-22 מתוך 36 חודשים', h:'מבחן הריכוזיות – ייחוס מלא'},
+
+    // ── נוספים ──
+    {g:'מבנה – נוסף', k:'structure.preferred_or_approved_enterprise', t:'bool', l:'חמי"ז / חנ"ז / מפעל מועדף / מוטב / מאושר', h:'"כן" שולל את תחולת 62א'},
+    {g:'מבנה – נוסף', k:'structure.group_companies_waived', t:'int', l:'חברות בקבוצה שהודיעו על ויתור על חלקן ב-750 אלף'},
+    {g:'מבנה – נוסף', k:'structure.partnership_income_share', t:'rate', l:'חלק החברה בהכנסות שותפות (%)'},
+    {g:'מבנה – נוסף', k:'structure.has_material_holder', t:'bool', l:'קיים מחזיק מהותי (30%+)'},
+    {g:'מבנה – נוסף', k:'structure.material_holder_total_profits', t:'num', l:'סה"כ רווחים נצברים בכל חברות המחזיק המהותי'},
+
+    {g:'רווחים נצברים – נוסחת המס (אופציונלי)', k:'retained.cumulative_taxable_income', t:'num', l:'הכנסה חייבת מצטברת מיום ההתאגדות', h:'ריק = לוקחים את יתרת העודפים במאזן'},
+    {g:'רווחים נצברים – נוסחת המס (אופציונלי)', k:'retained.cumulative_exempt_income', t:'num', l:'הכנסות פטורות מצטברות'},
+    {g:'רווחים נצברים – נוסחת המס (אופציונלי)', k:'retained.cumulative_land_appreciation', t:'num', l:'שבח מצטבר'},
+    {g:'רווחים נצברים – נוסחת המס (אופציונלי)', k:'retained.cumulative_tax', t:'num', l:'מס מצטבר'},
+    {g:'רווחים נצברים – נוסחת המס (אופציונלי)', k:'retained.cumulative_dividends', t:'num', l:'דיבידנדים מצטברים'},
+    {g:'רווחים נצברים – נוסחת המס (אופציונלי)', k:'retained.uncredited_loss', t:'num', l:'הפסד שלא קוזז'},
+    {g:'רווחים נצברים – נוסחת המס (אופציונלי)', k:'retained.capitalized_profits', t:'num', l:'רווחים שהוונו'},
+    {g:'רווחים נצברים – נוסחת המס (אופציונלי)', k:'retained.transparent_entity_profits', t:'num', l:'רווחי תאגיד שקוף (נטו ממס)'},
+    {g:'רווחים נצברים – נוסחת המס (אופציונלי)', k:'retained.attributed_to_shareholders', t:'num', l:'רווחים שיוחסו לבעל מניות (3(ט1), 62א, 64, 64א)'},
+
+    {g:'רווחים ממקור פטור (רק מפעל מועדף / תעשייתי / בניין / מוסד כספי)', k:'retained.exempt_preferred_enterprise_income', t:'num', l:'הכנסה מוטבת / מפעל מועדף / טכנולוגי / מאושר'},
+    {g:'רווחים ממקור פטור (רק מפעל מועדף / תעשייתי / בניין / מוסד כספי)', k:'retained.exempt_industrial_sales_income', t:'num', l:'מפעל תעשייתי – הכנסה ממכירות'},
+    {g:'רווחים ממקור פטור (רק מפעל מועדף / תעשייתי / בניין / מוסד כספי)', k:'retained.exempt_building_8a_income', t:'num', l:'הכנסות מבניין לפי 8א(ג)'},
+    {g:'רווחים ממקור פטור (רק מפעל מועדף / תעשייתי / בניין / מוסד כספי)', k:'retained.exempt_financial_institution_income', t:'num', l:'מוסד כספי – הכנסה מפעילותו'},
+    {g:'רווחים ממקור פטור (רק מפעל מועדף / תעשייתי / בניין / מוסד כספי)', k:'retained.exempt_profits_last_7_years', t:'num', l:'רווחים פטורים מ-7 שנות המס האחרונות (חלופה 2)'},
+
+    {g:'מגנים – נוסף', k:'shields.pay_62a_salary_by_year_end', t:'bool', l:'שכר התיקון לפי 62א ישולם עד 31.12', h:'מתווסף להוצאות השנה במגן ההוצאות'},
+    {g:'מגנים – נוסף', k:'shields.special_financial_asset', t:'num', l:'נכס פיננסי (חוק הפיקוח על שירותים פיננסיים)'},
+    {g:'מגנים – נוסף', k:'shields.special_intangible_royalty', t:'num', l:'נכס בלתי מוחשי שעיקר הכנסתו תמלוגים'},
+    {g:'מגנים – נוסף', k:'shields.excl_rental_building', t:'num', l:'בניין להשכרה / לשכירות מוסדית'},
+    {g:'מגנים – נוסף', k:'shields.excl_pledged_cash_financing', t:'num', l:'מזומן משועבד בליווי פיננסי'},
+    {g:'מגנים – נוסף', k:'shields.excl_regulatory_equity_cash', t:'num', l:'מזומן לדרישות הון עצמי לפי דין'},
+    {g:'מגנים – נוסף', k:'shields.related_party_loan', t:'num', l:'יתרת הלוואה מצד קשור'},
+    {g:'מגנים – נוסף', k:'shields.held_company_cost', t:'num', l:'עלות חבר בני אדם מוחזק (10%+)'},
+
+    {g:'חלוקות – נוסף', k:'distributions.losses_current_year', t:'num', l:'הפסדי השנה לפי 28/29/92'},
+    {g:'חלוקות – נוסף', k:'distributions.current_year_profit_estimate', t:'num', l:'אומדן רווח/הפסד השנה (לתצוגת עודפים בלבד)'},
+
+    {g:'סעיף 62א – נוסף', k:'s62a.other_dividend', t:'num', l:'הכנסה אחרת: דיבידנד'},
+    {g:'סעיף 62א – נוסף', k:'s62a.other_asset_sale', t:'num', l:'הכנסה אחרת: תמורה ממכירת נכס'},
+    {g:'סעיף 62א – נוסף', k:'s62a.other_securities_inventory_sale', t:'num', l:'הכנסה אחרת: מכירת ני"ע שהוא מלאי עסקי'},
+    {g:'סעיף 62א – נוסף', k:'s62a.other_real_estate_sale', t:'num', l:'הכנסה אחרת: תמורה ממכירת מקרקעין'},
+    {g:'סעיף 62א – נוסף', k:'s62a.related_company_payments', t:'num', l:'תשלומים לחברה קשורה'},
+    {g:'סעיף 62א – נוסף', k:'s62a.avg_profitability_2023_2025', t:'rate', l:'שיעור רווחיות ממוצע 2023–2025 (%)', h:'לשנת 2025 בלבד'},
+    {g:'סעיף 62א – נוסף', k:'s62a.marginal_tax_rate', t:'rate', l:'מס שולי משוקלל (%)', d:0.5},
+    {g:'סעיף 62א – נוסף', k:'simulator.dividend_tax_rate', t:'rate', l:'שיעור מס דיבידנד (%)', h:'ברירת מחדל 33 (30% + מס יסף). יחיד מתחת לסף יסף – 30. בעל מניות שהוא חברה – חישוב ידני', d:0.33},
+    {g:'סעיף 62א – נוסף', k:'s62a.intercompany_dividend_received', t:'num', l:'דיבידנד בין-חברתי שהתקבל'},
+    {g:'סעיף 62א – נוסף', k:'s62a.holding_rate_in_paying_company', t:'rate', l:'שיעור ההחזקה בחברה המחלקת (%)'},
+    {g:'סעיף 62א – נוסף', k:'s62a.officer_holds_under_25pct', t:'bool', l:'נושא משרה המחזיק פחות מ-25% בחברה מקבלת השירותים'},
+  ];
+  const getp = (o, k) => k.split('.').reduce((x, p) => x == null ? undefined : x[p], o);
+  const setp = (o, k, v) => { const ps = k.split('.'); let x = o; ps.slice(0,-1).forEach(p => x = x[p] = x[p] || {}); x[ps.at(-1)] = v; };
+  const fid = k => 'f_' + k.replace(/\./g, '_');
+
+  function fieldHtml(f, val){
+    const id = fid(f.k);
+    if (f.t === 'bool') return `<label class="check"><input type="checkbox" id="${id}" ${val ? 'checked' : ''}><div><b>${esc(f.l)}</b>${f.h ? `<small>${esc(f.h)}</small>` : ''}</div></label>`;
+    let v = val ?? '';
+    if (f.t === 'rate' && v !== '') v = Math.round(v * 10000) / 100;
+    const attrs = f.t === 'text' ? 'type="text"' : `type="number" ${f.t === 'int' ? 'step="1"' : f.t === 'rate' ? 'step="0.01"' : 'step="1"'}`;
+    return `<label class="field"><span>${esc(f.l)}</span><input ${attrs} id="${id}" value="${esc(v)}" ${f.t === 'text' && !['structure.name','structure.controlling_owner_name'].includes(f.k) ? 'dir="ltr"' : ''}>${f.h ? `<div class="hint">${esc(f.h)}</div>` : ''}</label>`;
+  }
+  function renderForm(inp){
+    const groups = [...new Set(F.map(f => f.g))];
+    const sect = (g, main) => {
+      const fs = F.filter(f => f.g === g && !!f.main === main);
+      if (!fs.length) return '';
+      const bools = fs.filter(f => f.t === 'bool'), nums = fs.filter(f => f.t !== 'bool');
+      return `<h3>${esc(g)}</h3><div class="grid">${nums.map(f => fieldHtml(f, getp(inp, f.k) ?? f.d)).join('')}</div>${bools.map(f => fieldHtml(f, getp(inp, f.k) ?? f.d)).join('')}`;
+    };
+    const main = groups.filter(g => F.some(f => f.g === g && f.main)).map(g => `<div class="card">${sect(g, true)}</div>`).join('');
+    const extra = groups.filter(g => F.some(f => f.g === g && !f.main)).map(g => sect(g, false)).join('');
+    const extraFilled = F.filter(f => !f.main).some(f => { const v = getp(inp, f.k); return v != null && v !== 0 && v !== false && v !== '' && v !== f.d; });
+    $('formBody').innerHTML = main + `<details class="card" ${extraFilled ? 'open' : ''}><summary>נתונים נוספים <small>– רווחים ממקור פטור, נוסחת המס, נכסים מיוחדים נדירים, 62א מורחב</small></summary><div class="inner">${extra}</div></details>`;
+  }
+  function collectForm(){
+    const out = {structure:{}, retained:{}, shields:{}, distributions:{}, s62a:{}, simulator:{}, flags:{}};
+    for (const f of F){
+      const el = $(fid(f.k)); if (!el) continue;
+      let v;
+      if (f.t === 'bool') v = el.checked;
+      else if (f.t === 'text') v = el.value.trim();
+      else if (el.value === '') v = (f.k === 'retained.cumulative_taxable_income' || f.k === 'distributions.current_year_profit_estimate' || f.k === 's62a.holding_rate_in_paying_company' || f.k === 'structure.last_closed_report_year' || f.k === 'data_through_month') ? null : 0;
+      else { v = Number(el.value); if (f.t === 'rate') v = v / 100; if (f.t === 'int') v = Math.round(v); }
+      setp(out, f.k, v);
+    }
+    return out;
+  }
+  function newClient(){ editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}); show('form'); }
+  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}); show('form'); }
+  function cancelForm(){ show(editingId ? 'client' : 'clients'); }
+  async function saveForm(){
+    const inp = collectForm();
+    if (!inp.structure.name){ toast('צריך שם חברה'); $(fid('structure.name')).focus(); return; }
+    const rec = await api('save_client', inp, editingId);
+    if (!rec || rec.error && !rec.id){ toast('לא נשמר: ' + (rec?.error || '')); return; }
+    await reload();
+    selectedId = rec.id; editingId = null;
+    toast(rec.error ? 'נשמר, אך החישוב נכשל: ' + rec.error : 'נשמר וחושב');
+    show('client');
+  }
+
+  // ── filters (החלטה 13) ──
+  document.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button[data-v]').forEach(b => b.onclick = () => { seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); renderQueue(); }));
+
+  // ── handling status (החלטה 14) ──
+  async function setHandling(id){
+    const st = $('h_status').value, note = $('h_note').value.trim();
+    const r = await api('set_handling', id, st, note);
+    if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
+    await reload(); renderClient(); toast('סטטוס הטיפול נשמר');
+  }
+
+  // ── delete (אישור בתוך הדף – אין חלונות קופצים) ──
+  function askDelete(btn, id){
+    const td = btn.parentElement;
+    td.innerHTML = `<span class="confirm"><span class="hint">למחוק?</span><button class="quiet danger" data-act="del" onclick="doDelete('${esc(id)}')">כן, מחק</button><button class="quiet" data-act="edit" onclick="renderClients()">ביטול</button></span>`;
+  }
+  async function doDelete(id){
+    const r = await api('delete_client', id);
+    if (!r || !r.ok){ toast('לא נמחק'); return; }
+    if (selectedId === id) selectedId = null;
+    await reload(); toast('הלקוח נמחק');
+  }
+
+  // ── settings (החלטה 18) ──
+  async function loadSettings(){
+    settings = await api('get_settings'); if (!settings) return;
+    $('st_year').value = settings.default_tax_year; $('st_stale').value = settings.stale_days; $('st_dir').value = settings.data_dir || '';
+    $('st_firm').value = settings.firm_name || ''; $('st_acc').value = settings.accountant_name || '';
+    const f = settings.flags || {};
+    $('fl_50').checked = !!f.deduct_transition_from_50pct_base; $('fl_20').checked = !!f.enable_20pct_current_year_rule;
+    $('fl_rel').checked = !!f.deduction_base_excludes_related_payments; $('fl_thr').value = Math.round((f.profitability_warning_threshold ?? .2) * 100);
+  }
+  async function saveSettings(){
+    const data = { default_tax_year: Number($('st_year').value) || Y, stale_days: Number($('st_stale').value) || 60,
+      firm_name: $('st_firm').value.trim(), accountant_name: $('st_acc').value.trim(),
+      flags: { deduct_transition_from_50pct_base: $('fl_50').checked, enable_20pct_current_year_rule: $('fl_20').checked,
+               deduction_base_excludes_related_payments: $('fl_rel').checked, profitability_warning_threshold: (Number($('fl_thr').value) || 20) / 100 } };
+    const r = await api('save_settings', data);
+    if (!r || r.error){ toast(r?.error || 'שמירה זמינה רק בתוכנה'); return; }
+    toast(`נשמר – חושבו מחדש ${r.recomputed ?? 0} לקוחות`); await loadSettings(); await reload();
+  }
+
+  // ── export (החלטות 19–20) ──
+  async function exportDoc(id, kind, fmt){
+    const r = await api('export_document', id, kind, fmt);
+    if (!r || r.error || !r.path){ toast(r?.error || 'ייצוא זמין רק בתוכנה המותקנת'); return; }
+    toast(r.fallback_html ? 'לא נמצא ממיר PDF – נפתח להדפסה מהדפדפן' : 'הקובץ נוצר ונפתח');
+  }
+
+  // ── what-if (החלטה 9) ──
+  function wiSet(d, sal){ $('wi_div').value = d; $('wi_sal').value = sal; runWhatIf(); }
+  async function runWhatIf(){
+    const rec = records.find(r => r.id === selectedId); if (!rec?.result) return;
+    const d = Number($('wi_div').value) || 0, sal = Number($('wi_sal').value) || 0;
+    const out = $('wi_out');
+    const r = await api('what_if', rec.id, d, sal);
+    if (!r || r.error){ out.innerHTML = `<span style="color:var(--ink-3)">${esc(r?.error || 'הסימולציה זמינה רק בתוכנה המותקנת.')}</span>`; return; }
+    const b = rec.result;
+    const line = (l, from, to) => `<div class="k">${l}</div><div class="v"><span style="color:var(--ink-4)">${from}</span> ← <b>${to}</b></div>`;
+    out.innerHTML = `<div class="kv" style="margin-top:4px">
+      ${line('תוספת מס 81', ils(b.calc81.surtax), ils(r.calc81.surtax))}
+      ${line('פטור 81?', yn(b.calc81.is_exempt), yn(r.calc81.is_exempt))}
+      ${line('רווחיות 62א', pct(b.s62a.governing_profitability), pct(r.s62a.governing_profitability))}
+      ${line('הכנסה מיוחסת 62א', ils(b.s62a.attributed_income), ils(r.s62a.attributed_income))}
+      ${line('מס דיבידנד על התוספת', '—', ils(d * (rec.input?.simulator?.dividend_tax_rate ?? 0.33)))}
+      ${line('סטטוס כולל', pill(b.dashboard.color_overall), pill(r.dashboard.color_overall))}
+    </div>`;
+  }
+
+  // ── boot ──
+  async function reload(){
+    records = (await api('list_clients')) || [];
+    renderQueue(); renderReview(); renderClients();
+  }
+  function boot(){ MOCK = isMock(); loadSettings().then(reload); }
+  window.addEventListener('pywebviewready', boot);   // התוכנה: נטען שוב מהמנוע ברגע שהגשר מוכן
+  boot();                                            // דפדפן / לפני שהגשר מוכן: דמו או ריק
+</script>

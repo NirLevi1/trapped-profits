@@ -1,0 +1,80 @@
+[
+  {
+    "file": "חברה א – חשופה בשני המסלולים.json",
+    "name": "חברה א – חשופה בשני המסלולים",
+    "overall": "אדום",
+    "status_81": "אדום – חשוף לתוספת מס",
+    "status_62a": "אדום – ייחוס הכנסה לבעל המניות",
+    "surtax": 57300.0,
+    "gap_to_close": 429900.0,
+    "salary_fix_62a": 850000.0,
+    "protected_until": "אין",
+    "manual_review": 2,
+    "data_as_of": "2026-09-28"
+  },
+  {
+    "file": "חברה ב – מוגנת בהוראת מעבר.json",
+    "name": "חברה ב – מוגנת בהוראת מעבר",
+    "overall": "אדום",
+    "status_81": "ירוק – מוגן לפי הוראת מעבר עד 2028",
+    "status_62a": "אדום – ייחוס הכנסה לבעל המניות",
+    "surtax": 0.0,
+    "gap_to_close": 0.0,
+    "salary_fix_62a": 850000.0,
+    "protected_until": "2028",
+    "manual_review": 2,
+    "data_as_of": "2026-09-28"
+  },
+  {
+    "file": "חברה ג – חילקה 6 אחוז.json",
+    "name": "חברה ג – חילקה 6 אחוז",
+    "overall": "אדום",
+    "status_81": "ירוק – מוגן",
+    "status_62a": "אדום – ייחוס הכנסה לבעל המניות",
+    "surtax": 0.0,
+    "gap_to_close": 0.0,
+    "salary_fix_62a": 850000.0,
+    "protected_until": "אין",
+    "manual_review": 2,
+    "data_as_of": "2026-09-28"
+  },
+  {
+    "file": "חברה ד – רווחיות גבולית.json",
+    "name": "חברה ד – רווחיות גבולית",
+    "overall": "אדום",
+    "status_81": "אדום – חשוף לתוספת מס",
+    "status_62a": "צהוב – רווחיות מתקרבת לסף 25%",
+    "surtax": 57300.0,
+    "gap_to_close": 429900.0,
+    "salary_fix_62a": 0.0,
+    "protected_until": "אין",
+    "manual_review": 3,
+    "data_as_of": "2026-09-28"
+  },
+  {
+    "file": "חברה ה – לא חברת מעטים.json",
+    "name": "חברה ה – לא חברת מעטים",
+    "overall": "ירוק",
+    "status_81": "ירוק – החוק אינו חל",
+    "status_62a": "ירוק – הסעיף אינו חל",
+    "surtax": 0.0,
+    "gap_to_close": 0.0,
+    "salary_fix_62a": 0.0,
+    "protected_until": "אין",
+    "manual_review": 2,
+    "data_as_of": "2026-09-28"
+  },
+  {
+    "file": "חברה ו – מפעל תעשייתי.json",
+    "name": "חברה ו – מפעל תעשייתי",
+    "overall": "אדום",
+    "status_81": "אדום – חשוף לתוספת מס",
+    "status_62a": "אדום – ייחוס הכנסה לבעל המניות",
+    "surtax": 33300.0,
+    "gap_to_close": 429900.0,
+    "salary_fix_62a": 850000.0,
+    "protected_until": "אין",
+    "manual_review": 4,
+    "data_as_of": "2026-09-28"
+  }
+]
