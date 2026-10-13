@@ -10,7 +10,7 @@
 
 ### התקנה במשרד (ווינדוס) – פעם אחת
 
-1. פייתון 3.10 ומעלה מ-python.org (לסמן "Add python.exe to PATH"); גיט מ-git-scm.com. כרום/אדג' – לייצוא PDF.
+1. פייתון 3.10 ומעלה וגיט. הכי קל מ-cmd: `winget install -e --id Python.Python.3.12` ואז `winget install -e --id Git.Git` (או מהאתרים python.org – "Windows installer (64-bit)", ו-git-scm.com). לסגור ולפתוח cmd אחרי ההתקנה. `run.bat` עובד גם אם "Add to PATH" לא סומן (נופל ל-`py`). כרום/אדג' – לייצוא PDF.
 2. לפתוח cmd ולהדביק:
    ```
    git clone https://github.com/NirLevi1/trapped-profits %USERPROFILE%\trapped-profits && cd %USERPROFILE%\trapped-profits && run.bat
