@@ -447,11 +447,13 @@
   function renderClient(){
     const el = $('clientView'); const rec = records.find(r => r.id === selectedId);
     if (!rec){ el.innerHTML = `<h1>כרטיס לקוח</h1><div class="empty"><b>לא נבחר לקוח.</b>לחיצה על שורה בתור העבודה פותחת את הכרטיס שלה כאן.</div>`; return; }
-    const head = (title, status) => `<div class="toolbar">
+    const head = (title, status) => `<div class="toolbar" style="margin-bottom:6px">
         <div><div class="detail-head"><h1>${esc(title)}</h1>${status}</div>
         <p class="lead" style="margin:0" id="cardLead"></p></div>
         <div class="spacer"></div>
         <button class="quiet" onclick="show('queue')">חזרה לתור</button>
+      </div>
+      <div class="toolbar">
         <button onclick="editClient('${esc(rec.id)}')">עריכת נתונים</button>
         <div class="seg" title="דוח מלא לרואה החשבון"><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">דוח לרו"ח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></div>
         <div class="seg" title="מכתב בשפה פשוטה ללקוח"><button type="button" onclick="exportDoc('${esc(rec.id)}','client','pdf')">מכתב ללקוח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></div>
