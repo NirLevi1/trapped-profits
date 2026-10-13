@@ -4,7 +4,7 @@
   "previous_year": 2025,
   "data_as_of": "2026-09-28",
   "is_estimate": false,
-  "logic_version": "2026.09.28-a",
+  "logic_version": "2026.10.13-a",
   "flags": {
     "start_day_basis_year": 2024,
     "deduct_transition_from_50pct_base": false,

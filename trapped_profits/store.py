@@ -197,10 +197,11 @@ class ClientStore:
             return True
         return False
 
-    def recompute_all(self) -> int:
+    def recompute_all(self, only_outdated: bool = False) -> int:
+        """מחשב מחדש את כל הלקוחות. only_outdated=True – רק מי שחושב בגרסת לוגיקה ישנה (אחרי update.bat)."""
         n = 0
         for rec in self.list():
-            if "input" in rec:
+            if "input" in rec and (not only_outdated or rec.get("logic_version") != LOGIC_VERSION):
                 self.save(rec["input"], rec["id"])
                 n += 1
         return n

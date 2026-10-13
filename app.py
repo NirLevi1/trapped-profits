@@ -37,6 +37,11 @@ def open_path(path: str) -> None:
 class Api:
     def __init__(self) -> None:
         self.store = ClientStore()
+        try:
+            # אחרי עדכון גרסה: לקוחות שחושבו בלוגיקה ישנה מחושבים מחדש בהפעלה, ומה שזז מסומן "השתנה"
+            self.store.recompute_all(only_outdated=True)
+        except Exception:  # noqa: BLE001 – לא מפיל את התוכנה; המשתמש יכול "חישוב מחדש לכולם"
+            pass
 
     # ---- read
     def list_clients(self):

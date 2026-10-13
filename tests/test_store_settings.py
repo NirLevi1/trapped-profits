@@ -67,3 +67,15 @@ def test_export_when_file_locked_gives_hebrew_error(monkeypatch):
     import pytest
     with pytest.raises(RuntimeError, match="פתוח"):
         s.export_document(rec["id"], "accountant", "docx")
+
+
+def test_recompute_only_outdated_logic_version():
+    s, inp = _store()
+    rec = s.save(inp)
+    p = s._path(rec["id"])
+    old = json.loads(p.read_text(encoding="utf-8")); old["logic_version"] = "2000.01.01-a"
+    p.write_text(json.dumps(old, ensure_ascii=False), encoding="utf-8")
+    inp2 = dict(inp); inp2["structure"] = {**inp["structure"], "company_id": "515000099"}
+    s.save(inp2)
+    assert s.recompute_all(only_outdated=True) == 1
+    assert s.recompute_all(only_outdated=True) == 0
