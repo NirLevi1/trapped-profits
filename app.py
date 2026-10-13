@@ -111,7 +111,7 @@ class Api:
 
 def main() -> None:
     api = Api()
-    webview.create_window("פורטרה · רווחים כלואים", ui_path(), js_api=api, width=1240, height=820, min_size=(900, 600))
+    webview.create_window("פורטרה · רווחים כלואים", ui_path(), js_api=api, width=1240, height=820, min_size=(900, 600), maximized=True)
     webview.start()
 
 

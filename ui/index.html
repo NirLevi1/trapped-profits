@@ -41,7 +41,7 @@
   .status-card{margin:0 0 8px;padding:10px 12px;border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--surface);font-size:12px;color:var(--ink-3)}
   .status-card b{display:block;color:var(--ink);font-weight:500;margin-bottom:2px}
 
-  main{flex:1;min-width:0;overflow:auto;padding:28px 36px 40px}
+  main{flex:1;min-width:0;overflow:auto;padding:24px 28px 40px}
   .screen{display:none;max-width:1040px}
   .screen.active{display:block}
   h1{font-size:22px;font-weight:500;margin:0 0 4px;letter-spacing:-.01em}
@@ -102,9 +102,9 @@
 
   /* ── lists ── */
   .tablewrap{overflow-x:auto}
-  table{width:100%;border-collapse:collapse;font-size:13px;min-width:640px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
   th{text-align:start;font-weight:500;color:var(--ink-3);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
-  td{padding:9px 8px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  td{padding:9px 6px;border-bottom:1px solid var(--line-soft);vertical-align:top}
   tbody tr.rowlink{cursor:pointer}
   tr:hover td{background:var(--canvas-2)}
   tbody tr:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
@@ -319,6 +319,9 @@
     neutral: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2.5 6h7"/></svg>'
   };
   const strip = s => s.replace(/^\S+ – /, '');
+  // תווית קצרה לתור (הטבלה צריכה להיכנס במסך של מחשב נייד); הנוסח המלא בכרטיס
+  const SHORT = {'חשוף לתוספת מס':'חשוף', 'ייחוס הכנסה לבעל המניות':'ייחוס הכנסה', 'מבחן ריכוזיות: ייחוס מלא':'ריכוזיות', 'נדרשת חלוקה לשמירת הפטור':'נדרשת חלוקה', 'רווחיות מתקרבת לסף 25%':'מתקרב לסף', 'החוק אינו חל':'אינו חל', 'הסעיף אינו חל':'אינו חל'};
+  const short = s => { const t = strip(s); if (SHORT[t]) return SHORT[t]; const m = t.match(/^מוגן לפי הוראת מעבר עד (\d+)$/); return m ? 'מוגן עד ' + m[1] : t; };
   const fmtv = v => typeof v === 'number' ? ils(v) : esc(v);
   const pill = (color, text) => `<span class="pill ${KIND[color] || ''}">${ICON[KIND[color]] || ICON.neutral} ${esc(text || color)}</span>`;
   let toastTimer = null;
@@ -346,8 +349,8 @@
     return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
       <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(c.data_as_of || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(c.data_as_of)}` : '')}</div></td>
       <td>${pill(c.dashboard.color_overall)}</td>
-      <td>${pill(c.dashboard.color_81, strip(c.dashboard.status_81))}</td>
-      <td>${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}</td>
+      <td>${pill(c.dashboard.color_81, short(c.dashboard.status_81))}</td>
+      <td>${pill(c.dashboard.color_62a, short(c.dashboard.status_62a))}</td>
       <td>${ils(c.calc81.surtax)}</td>
       <td>${c.simulator.action_required ? ils(c.simulator.gap_to_close) : '<span style="color:var(--ink-4)">לא נדרש</span>'}</td>
       <td>${c.s62a.attributed_income ? ils(c.s62a.attributed_income) : '<span style="color:var(--ink-4)">—</span>'}</td>
