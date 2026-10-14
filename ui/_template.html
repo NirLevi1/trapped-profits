@@ -319,7 +319,7 @@
       case 'export_report': return {path: null};
       case 'export_document': return {error: 'ייצוא קבצים זמין רק בתוכנה המותקנת'};
       case 'open_data_folder': return true;
-      case 'import_slots': return {slots: {annual_report:{title:'דוח שנתי סגור (PDF)',desc:'מאזן + רווח והפסד לשנה הקודמת'}, trial_balance:{title:'מאזן בוחן לפי חודשים (ריווחית)',desc:'רווח והפסד של השנה הנבדקת'}, ledger:{title:'כרטסת הכנסות (ריווחית)',desc:'לקוחות גדולים'}}, ocr: true};
+      case 'import_slots': return {slots: {annual_report:{title:'דוח שנתי סגור (PDF)',desc:'מאזן + רווח והפסד לשנה הקודמת'}, trial_balance_prev:{title:'מאזן בוחן – השנה הקודמת (מלא)',desc:'לגלגול',prev:true}, ledger_prev:{title:'כרטסת – השנה הקודמת',desc:'ריכוזיות',prev:true}, trial_balance:{title:'מאזן בוחן לפי חודשים (ריווחית)',desc:'רווח והפסד של השנה הנבדקת'}, ledger:{title:'כרטסת הכנסות (ריווחית)',desc:'לקוחות גדולים'}}, ocr: true};
       case 'import_file': return {error: 'ייבוא קבצים זמין רק בתוכנה המותקנת'};
       case 'approve_fields': { const r = S.find(x => x.id === a); if (r){ Object.values(r.field_meta || {}).forEach(m => { if (m.state === 'file') m.state = 'approved'; }); r.pending_file_fields = []; } return r; }
       case 'apply_import': return {error: 'זמין רק בתוכנה'};
@@ -578,7 +578,8 @@
     el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall)) + notices.join('') + `
       <div class="cols">
         <div class="card"><h3>סעיף 81 · תוספת מס 2% &nbsp;${pill(c.dashboard.color_81, strip(c.dashboard.status_81))}</h3>${kv([
-          ['רווחים נצברים לתום ' + c.previous_year, ils(r.retained_for_81a)],
+          ['רווחים נצברים לתום ' + c.previous_year + (c.is_estimate ? ' <span class="hint" style="display:inline">(אומדן)</span>' : ''), ils(r.retained_for_81a)],
+          ...(r.rollover_note ? [[`<span class="hint">${esc(r.rollover_note)}</span>`, '']] : []),
           ...(k.alternative_relevant ? [[`חלופת הרווחים הפטורים – נבחרה חלופה ${k.chosen_alternative}`, `(1) מקורות פטורים ${ils(r.exempt_alt1)} · (2) 7 שנים ${ils(r.exempt_alt2)}`]] : []),
           ['רווחים נצברים חייבים', ils(k.taxable_retained)],
           ['המגן הקובע', ils(k.governing_shield), true],
@@ -727,6 +728,9 @@
     {g:'מגנים – נוסף', k:'shields.related_party_loan', t:'num', l:'יתרת הלוואה מצד קשור'},
     {g:'מגנים – נוסף', k:'shields.held_company_cost', t:'num', l:'עלות חבר בני אדם מוחזק (10%+)'},
 
+    {g:'תרחיש ב׳ – הדוח הסגור ישן בשנה', k:'retained.prev_year_profit_for_rollover', t:'num', l:'רווח השנה הקודמת לפני מס (מאזן בוחן מלא)', h:'המערכת מגלגלת: עודפי הדוח הסגור + רווח × (1 − מס חברות) − דיבידנד השנה הקודמת. ריק = בלי גלגול'},
+    {g:'תרחיש ב׳ – הדוח הסגור ישן בשנה', k:'distributions.dividends_prev_year', t:'num', l:'דיבידנד שחולק בשנה הקודמת (כולה)', h:'אינו במאזן בוחן – ידני'},
+    {g:'תרחיש ב׳ – הדוח הסגור ישן בשנה', k:'s62a.prev_year_revenue_for_concentration', t:'num', l:'סך הכנסות השנה הקודמת (מהכרטסת)', h:'לריכוזיות על פני שנתיים'},
     {g:'חלוקות – נוסף', k:'distributions.losses_current_year', t:'num', l:'הפסדי השנה לפי 28/29/92'},
     {g:'חלוקות – נוסף', k:'distributions.current_year_profit_estimate', t:'num', l:'אומדן רווח/הפסד השנה (לתצוגת עודפים בלבד)'},
 
@@ -808,14 +812,15 @@
       if (f.t === 'bool') v = el.checked;
       else if (f.t === 'text') v = el.value.trim();
       else if (f.t === 'customers') v = [0,1,2,3,4].map(i => ({name: $(fid(f.k) + '_n' + i).value.trim(), amount: parseNum($(fid(f.k) + '_a' + i).value) || 0})).filter(x => x.name || x.amount);
-      else if (parseNum(el.value) == null) v = (f.k === 'retained.cumulative_taxable_income' || f.k === 'distributions.current_year_profit_estimate' || f.k === 's62a.holding_rate_in_paying_company' || f.k === 'structure.last_closed_report_year' || f.k === 'data_through_month' || f.k === 's62a.owner_salary_current_year') ? null : 0;
+      else if (parseNum(el.value) == null) v = (f.k === 'retained.cumulative_taxable_income' || f.k === 'distributions.current_year_profit_estimate' || f.k === 's62a.holding_rate_in_paying_company' || f.k === 'structure.last_closed_report_year' || f.k === 'data_through_month' || f.k === 's62a.owner_salary_current_year' || f.k === 'retained.prev_year_profit_for_rollover') ? null : 0;
       else { v = parseNum(el.value); if (f.t === 'rate') v = v / 100; if (f.t === 'int') v = Math.round(v); }
       setp(out, f.k, v);
     }
     return out;
   }
   // אברהם 20: שלושה חריצי ייבוא – דוח שנתי (PDF), מאזן בוחן לפי חודשים, כרטסת הכנסות
-  const SLOT_ORDER = ['annual_report', 'trial_balance', 'ledger'];
+  const SLOT_ORDER = ['annual_report', 'trial_balance_prev', 'ledger_prev', 'trial_balance', 'ledger'];
+  let showPrev = false;          // "הדוח הסגור ישן בשנה" – מציג חריצי השנה הקודמת
   let slotMeta = null;
   let pendingCopies = [];          // עותקי קבצים שהועלו בטופס "לקוח חדש" – עוברים לתיקיית הלקוח בשמירה
   let slotMode = 'form';          // 'form' – ממלא את הטופס; 'card' – מעדכן לקוח קיים ומחשב (עדכון רבעוני)
@@ -825,8 +830,11 @@
     slotMeta = slotMeta || (await api('import_slots')) || {slots: {}, ocr: false};
     const el = $(containerId || 'slots'); if (!el) return;
     const hidePdf = slotMode === 'card' && !window._showPdfSlot;
-    el.innerHTML = (hidePdf ? `<div class="hint" style="margin-bottom:4px">עדכון רבעוני – שני קבצים. יצא דוח שנתי חדש? <a href="#" onclick="window._showPdfSlot=true;renderSlots('card','cardSlotsBody');return false">גם דוח שנתי</a></div>` : '') +
-      SLOT_ORDER.filter(k => slotMeta.slots[k] && !(hidePdf && k === 'annual_report')).map(k => { const m = slotMeta.slots[k]; return `<div class="slot" id="slot_${k}">
+    const toggle = `<div class="hint" style="margin-bottom:6px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><span>הדוח הסגור האחרון:</span>
+        <label style="display:flex;gap:4px;align-items:center"><input type="radio" name="closedKind" ${!showPrev ? 'checked' : ''} onchange="showPrev=false;renderSlots(slotMode, '${containerId || 'slots'}')"> לשנה הקודמת (רגיל)</label>
+        <label style="display:flex;gap:4px;align-items:center"><input type="radio" name="closedKind" ${showPrev ? 'checked' : ''} onchange="showPrev=true;renderSlots(slotMode, '${containerId || 'slots'}')"> ישן בשנה – השנה הקודמת עדיין פתוחה (תרחיש ב׳: מעלים גם מאזן בוחן מלא של השנה הקודמת, המערכת מגלגלת)</label></div>`;
+    el.innerHTML = (hidePdf ? `<div class="hint" style="margin-bottom:4px">עדכון רבעוני – שני קבצים. יצא דוח שנתי חדש? <a href="#" onclick="window._showPdfSlot=true;renderSlots('card','cardSlotsBody');return false">גם דוח שנתי</a></div>` : toggle) +
+      SLOT_ORDER.filter(k => slotMeta.slots[k] && !(hidePdf && k === 'annual_report') && (showPrev || !slotMeta.slots[k].prev)).map(k => { const m = slotMeta.slots[k]; return `<div class="slot" id="slot_${k}">
         <div><b>${esc(m.title)}</b><div class="hint">${esc(m.desc)}${k === 'annual_report' && !slotMeta.ocr ? ' <span style="color:var(--warn)">זיהוי תווים לא מותקן – PDF סרוק לא ייקרא (דיגיטלי כן).</span>' : ''}</div></div>
         <button onclick="importSlot('${k}')" id="btn_${k}">בחירת קובץ…</button>
         <div class="st ${slotStatus[k]?.cls || ''}" id="st_${k}">${slotStatus[k]?.html || ''}</div></div>`; }).join('') || '<div class="hint">ייבוא זמין רק בתוכנה המותקנת.</div>';
@@ -873,14 +881,15 @@
     }
     if (r.saved_copy) pendingCopies.push(r.saved_copy);
     const n = fillFields(r.fields, r.sources, slotMeta.slots[slot]?.title);
+    if (slot === 'annual_report' && r.year && ty && r.year <= ty - 2 && !showPrev){ showPrev = true; await renderSlots(slotMode, 'slots'); const st3 = $('st_annual_report'); if (st3){ st3.className = 'st ok'; st3.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו<div class="notes">הדוח ישן בשנה – נפתחו חריצי השנה הקודמת (תרחיש ב׳)</div>`; } toast('הדוח ישן בשנה – להעלות גם מאזן בוחן מלא של השנה הקודמת'); return; }
     st.className = 'st ok'; st.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר (יועבר לתיקיית הלקוח בשמירה)</div>` : '');
     toast(`${n} שדות מולאו – מסומנים בצהוב, לאישור`);
   }
   let slotsFor = null;
   async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ window._showPdfSlot = false; Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
   async function approveAllCard(id){ const r = await api('approve_fields', id, null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('השדות מהקובץ אושרו'); }
-  function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); pendingCopies = []; editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
-  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
+  function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); pendingCopies = []; showPrev = false; editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
+  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; showPrev = !!(rec.input?.structure?.last_closed_report_year && rec.input.structure.last_closed_report_year < rec.input.structure.tax_year - 1); $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
   function cancelForm(){ show(editingId ? 'client' : 'clients'); }
   async function saveForm(){
     const inp = collectForm();

@@ -64,7 +64,7 @@ def test_parse_digital_pdf():
 
 
 def test_slot_routing_rejects_wrong_kind():
-    assert set(SLOTS) == {"annual_report", "trial_balance", "ledger"}
+    assert set(SLOTS) == {"annual_report", "trial_balance", "ledger", "trial_balance_prev", "ledger_prev"}
     bad = Path(tempfile.mkdtemp()) / "x.csv"
     bad.write_text("שלום", encoding="utf-16")
     with pytest.raises(ValueError):

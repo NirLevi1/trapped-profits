@@ -97,9 +97,13 @@ HUMAN_ONLY_FIELDS = {
 }
 
 
-def _missing_human(meta: dict) -> list[str]:
-    """שדות שרק אדם יודע ועדיין לא נגעו בהם (אין מצב ידני/מאושר)."""
-    return [label for path, label in HUMAN_ONLY_FIELDS.items()
+def _missing_human(meta: dict, inp: dict | None = None) -> list[str]:
+    """שדות שרק אדם יודע ועדיין לא נגעו בהם (אין מצב ידני/מאושר). בתרחיש ב׳ גם דיבידנד השנה הקודמת."""
+    fields = dict(HUMAN_ONLY_FIELDS)
+    st = (inp or {}).get("structure") or {}
+    if st.get("last_closed_report_year") and st.get("tax_year") and st["last_closed_report_year"] < st["tax_year"] - 1:
+        fields["distributions.dividends_prev_year"] = "דיבידנד שחולק בשנה הקודמת (לגלגול)"
+    return [label for path, label in fields.items()
             if (meta.get(path) or {}).get("state") not in ("manual", "approved")]
 
 
@@ -213,7 +217,7 @@ class ClientStore:
             "history": (prev or {}).get("history") or [],
             "field_meta": _merge_meta((prev or {}).get("field_meta"), field_meta),
         }
-        rec["missing_human"] = _missing_human(rec["field_meta"])
+        rec["missing_human"] = _missing_human(rec["field_meta"], rec["input"])
         rec["pending_file_fields"] = [k for k, v in rec["field_meta"].items() if v.get("state") == "file"]
         try:
             rec["result"] = compute(ci).to_dict()
@@ -266,7 +270,7 @@ class ClientStore:
                 v.update(state="approved", at=now)
                 n += 1
         rec["field_meta"] = meta
-        rec["missing_human"] = _missing_human(meta)
+        rec["missing_human"] = _missing_human(meta, rec.get("input"))
         rec["pending_file_fields"] = [k for k, v in meta.items() if v.get("state") == "file"]
         self._log(rec, "אישור", f"אושרו {n} שדות מהקובץ")
         self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")

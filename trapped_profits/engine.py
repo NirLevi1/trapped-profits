@@ -28,7 +28,8 @@ class RetainedResult:
     exempt_alt2: float                # B33
     taxable_retained_alt1: float      # B37
     taxable_retained_alt2: float      # B38
-    manual_review_reasons: list[str] = field(default_factory=list)
+    manual_review_reasons: list[str]
+    rollover_note: str = ""           # תרחיש ב׳: איך גולגלו העודפים = field(default_factory=list)
 
 
 @dataclass
@@ -77,6 +78,7 @@ class Section62AResult:
     # אברהם 14.10 (12): ריכוזיות – חלקו של הלקוח הגדול ביותר מסך ההכנסות (0 = אין נתון)
     concentration_share: float = 0.0
     concentration_top_name: str = ""
+    concentration_share_prev_year: float = 0.0   # אותו לקוח בכרטסת השנה הקודמת (0 = אין נתון)
     # מה קורה אם מבחן הריכוזיות מתקיים (22 מתוך 36 חודשים): ייחוס מלא – לא רק מעל 25%, גם עם פטור 750 אלף
     attributed_if_concentration: float = 0.0
     extra_tax_if_concentration: float = 0.0
@@ -176,12 +178,35 @@ class ClientResult:
 # ---------------------------------------------------------------------------
 # לשונית «רווחים_נצברים» – חלק א-ב (בסיס). חלקים ג-ה אחרי המגנים.
 # ---------------------------------------------------------------------------
+def _rolled_retained(ci: ClientInput) -> float:
+    """תרחיש ב׳: הדוח הסגור ישן בשנה → עודפים לתום השנה הקודמת = עודפי הדוח + רווח השנה הקודמת × (1 − מס חברות)
+    − דיבידנד השנה הקודמת. בלי רווח לגלגול – העודפים כמו שהוזנו (אומדן ידני של אברהם)."""
+    r = ci.retained
+    p = r.prev_year_profit_for_rollover
+    if ci.structure.is_scenario_b and p is not None:
+        after_tax = p * (1 - ci.s62a.corporate_tax_rate) if p > 0 else p
+        return r.balance_sheet_retained_earnings + after_tax - ci.distributions.dividends_prev_year
+    return r.balance_sheet_retained_earnings
+
+
+def _rollover_note(ci: ClientInput) -> str:
+    r = ci.retained
+    p = r.prev_year_profit_for_rollover
+    if not (ci.structure.is_scenario_b and p is not None):
+        return ""
+    t = ci.s62a.corporate_tax_rate
+    after_tax = p * (1 - t) if p > 0 else p
+    return (f"גלגול (תרחיש ב׳): עודפי הדוח הסגור {ci.structure.last_closed_report_year} {r.balance_sheet_retained_earnings:,.0f} "
+            f"+ רווח {ci.structure.previous_year} {p:,.0f} × (1 − {t:.0%}) = {after_tax:,.0f} − דיבידנד {ci.structure.previous_year} "
+            f"{ci.distributions.dividends_prev_year:,.0f} = {_rolled_retained(ci):,.0f}")
+
+
 def _retained_base(ci: ClientInput) -> tuple[float, float, bool, float, float]:
     r = ci.retained
     formula = (r.cumulative_taxable_income or 0.0) + r.cumulative_exempt_income \
         + r.cumulative_land_appreciation - r.cumulative_tax - r.cumulative_dividends \
         - r.uncredited_loss                                                   # B11
-    cap = r.balance_sheet_retained_earnings + r.capitalized_profits \
+    cap = _rolled_retained(ci) + r.capitalized_profits \
         + r.transparent_entity_profits                                        # B17
     used_bs = not r.cumulative_taxable_income                                 # B19: IF(OR(B5="",B5=0),…)
     retained = cap if used_bs else min(formula, cap)                          # B19
@@ -214,6 +239,7 @@ def _retained_full(ci: ClientInput, special_assets_net: float) -> RetainedResult
         taxable_retained_alt1=max(0.0, for_81a - alt1),                       # B37
         taxable_retained_alt2=max(0.0, for_81a - alt2),                       # B38
         manual_review_reasons=reasons,
+        rollover_note=_rollover_note(ci),
     )
 
 
@@ -270,6 +296,13 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
             breakdown.append({"name": "אחרים", "amount": rest, "share": rest / base_rev})
     conc_share = breakdown[0]["share"] if customers and base_rev > 0 else 0.0
     conc_name = customers[0][0] if customers else ""
+    # שנה קודמת (כרטסת קודמת) – אותו לקוח גדול גם שם?
+    prev = [(str(c.get("name") or ""), float(c.get("amount") or 0)) for c in (s.top_customers_prev_year or []) if float(c.get("amount") or 0) > 0]
+    prev_share = 0.0
+    if prev and conc_name:
+        tot_prev = max(s.prev_year_revenue_for_concentration, sum(a for _, a in prev))
+        same = next((a for n, a in prev if n == conc_name), 0.0)
+        prev_share = same / tot_prev if tot_prev > 0 else 0.0
     full = s.taxable_income_personal_effort if st.applies_62a else 0.0
     if full > 0 and s.owner_salary_current_year is not None:
         sal = max(0.0, s.owner_salary_current_year)
@@ -300,6 +333,7 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
         owner_salary=s.owner_salary_current_year,
         concentration_share=conc_share,
         concentration_top_name=conc_name,
+        concentration_share_prev_year=prev_share,
         attributed_if_concentration=full,
         extra_tax_if_concentration=full_cost,
         customers_breakdown=breakdown,
@@ -597,7 +631,7 @@ def _manual_review(ci: ClientInput, ret: RetainedResult, s62: Section62AResult, 
     if ret.exempt_sources_total > 0 and sh.special_assets_net > 0:
         out.append("חלופה (1) לרווחים פטורים: עלות הנכסים המיוחדים נלקחת לתום השנה הנבדקת (פישוט) – לאמת")
     if ci.is_estimate or ci.structure.is_scenario_b:
-        out.append("תרחיש ב׳ – נתוני הבסיס הם אומדן גלגול, לא דוח סגור")
+        out.append("תרחיש ב׳ – נתוני הבסיס הם אומדן גלגול, לא דוח סגור" + ("; " + ret.rollover_note if ret.rollover_note else "; להזין רווח השנה הקודמת (מאזן בוחן) לגלגול אוטומטי"))
     if s62.concentration_share >= 0.70 and not ci.s62a.concentration_test_met:
         out.append(f"ריכוזיות: {s62.concentration_top_name} – {s62.concentration_share:.0%} מההכנסות השנה. "
                    "אם זה נמשך 22 מתוך 36 חודשים – מבחן הריכוזיות מתקיים (ייחוס מלא)")

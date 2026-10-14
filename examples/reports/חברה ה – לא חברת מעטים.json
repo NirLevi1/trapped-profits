@@ -29,7 +29,8 @@
     "taxable_retained_alt2": 7165000.0,
     "manual_review_reasons": [
       "רווחים נצברים לפי הנוסחה המיסויית נמוכים מיתרת העודפים במאזן – לאמת את נתוני המס המצטברים"
-    ]
+    ],
+    "rollover_note": ""
   },
   "s62a": {
     "other_income_total": 300000.0,
@@ -51,6 +52,7 @@
     "owner_salary": null,
     "concentration_share": 0.0,
     "concentration_top_name": "",
+    "concentration_share_prev_year": 0.0,
     "attributed_if_concentration": 0.0,
     "extra_tax_if_concentration": 0.0,
     "customers_breakdown": []

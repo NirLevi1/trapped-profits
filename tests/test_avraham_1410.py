@@ -140,3 +140,34 @@ def test_field_meta_states_and_apply_import():
     # מצב לא חוקי לא נשמר
     rec = s.save(rec["input"], rec["id"], field_meta={"s62a.total_revenue": {"state": "bogus"}})
     assert rec["field_meta"]["s62a.total_revenue"]["state"] == "file"
+
+
+# ── תרחיש ב׳ עם גלגול אוטומטי (דוח סגור 2024, מאזן בוחן 2025 מלא, שנת מס 2026) ──
+def test_scenario_b_rollover_from_prev_year_trial_balance():
+    d = _inp()
+    d["structure"].update(tax_year=2026, last_closed_report_year=2024)
+    d["retained"]["balance_sheet_retained_earnings"] = 4_296_517      # עודפי הדוח הסגור 2024
+    d["retained"]["prev_year_profit_for_rollover"] = 1_601_899        # רווח 2025 לפני מס (מאזן בוחן)
+    d["distributions"]["dividends_prev_year"] = 500_000
+    r = compute(ClientInput.from_dict(d))
+    assert r.is_estimate
+    expected = 4_296_517 + 1_601_899 * 0.77 - 500_000
+    assert abs(r.retained.accounting_cap - expected) < 1 and "גלגול" in r.retained.rollover_note
+    # בלי רווח לגלגול – העודפים כמו שהוזנו
+    d["retained"]["prev_year_profit_for_rollover"] = None
+    r2 = compute(ClientInput.from_dict(d))
+    assert abs(r2.retained.accounting_cap - 4_296_517) < 1 and r2.retained.rollover_note == ""
+    # לא תרחיש ב׳ – הגלגול לא פעיל גם אם הוזן רווח
+    d["structure"]["last_closed_report_year"] = 2025
+    d["retained"]["prev_year_profit_for_rollover"] = 1_601_899
+    assert abs(compute(ClientInput.from_dict(d)).retained.accounting_cap - 4_296_517) < 1
+
+
+def test_prev_year_concentration_uses_prev_total():
+    d = _inp()
+    d["s62a"]["total_revenue"] = 1_000_000
+    d["s62a"]["top_customers"] = [{"name": "א", "amount": 800_000}]
+    d["s62a"]["top_customers_prev_year"] = [{"name": "א", "amount": 300_000}, {"name": "ב", "amount": 100_000}]
+    d["s62a"]["prev_year_revenue_for_concentration"] = 2_000_000
+    r = compute(ClientInput.from_dict(d))
+    assert abs(r.s62a.concentration_share - 0.8) < 1e-9 and abs(r.s62a.concentration_share_prev_year - 0.15) < 1e-9

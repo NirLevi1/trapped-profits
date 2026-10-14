@@ -95,6 +95,9 @@ class RetainedEarningsInput:
     transparent_entity_profits: float = 0.0            # B16
 
     attributed_to_shareholders: float = 0.0            # B20 – רווחים שיוחסו לבעל מניות (3(ט1), 62א, 64, 64א)
+    # תרחיש ב׳ (הדוח הסגור ישן בשנה): רווח השנה הקודמת לפני מס מהמאזן בוחן – המנוע מגלגל:
+    # עודפים לתום השנה הקודמת ≈ עודפי הדוח הסגור + רווח × (1 − מס חברות) − דיבידנד השנה הקודמת. ריק = בלי גלגול.
+    prev_year_profit_for_rollover: Optional[float] = None
 
     # ג. רווחים ממקור פטור – חלופה (1). רלוונטי רק לארבעת המקורות; לכל השאר 0
     exempt_preferred_enterprise_income: float = 0.0    # B24
@@ -158,6 +161,8 @@ class DistributionsInput:
 
     # נקודה 5 – אומדן עודפים עדכני (תצוגה בלבד). אופציונלי
     current_year_profit_estimate: Optional[float] = None
+    # תרחיש ב׳: דיבידנד שחולק בשנה הקודמת (כולה) – לגלגול העודפים. אינו במאזן בוחן – ידני
+    dividends_prev_year: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +190,8 @@ class Section62AInput:
     # אברהם 14.10 (12): הלקוחות הגדולים – לבדיקת ריכוזיות (70% מגורם אחד). [{"name": "...", "amount": 0}]
     # ידני עד שיגיע מקובץ.
     top_customers: list = field(default_factory=list)
+    top_customers_prev_year: list = field(default_factory=list)   # כרטסת השנה הקודמת – ריכוזיות על פני שנתיים
+    prev_year_revenue_for_concentration: float = 0.0           # סך הכרטסת של השנה הקודמת (המכנה)
 
     # ה. מבחנים משלימים (סימון ידני)
     concentration_test_met: bool = False               # B37 – 70% מגורם אחד ב-22 מתוך 36 חודשים

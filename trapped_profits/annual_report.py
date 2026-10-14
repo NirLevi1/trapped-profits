@@ -25,6 +25,17 @@ from pathlib import Path
 from typing import Any
 
 _HEB = re.compile(r"[\u05d0-\u05ea]")
+_FINALS = str.maketrans("ךםןףץ", "כמנפצ")
+
+
+def _n(t: str) -> str:
+    """נורמליזציה להשוואה: אותיות סופיות → רגילות (מאזן/מאזנים, שנצבר/שנצברו)."""
+    return t.translate(_FINALS)
+
+
+def _has(text: str, *keys: str) -> bool:
+    t = _n(text)
+    return any(_n(k) in t for k in keys)
 _NUMTOK = re.compile(r"^\(?-?\d{1,3}(?:,\d{3})*(?:\.\d+)?\)?$|^\(?-?\d+(?:\.\d+)?\)?$")
 _YEAR = re.compile(r"^(19|20)\d{2}$")
 
@@ -86,13 +97,26 @@ _COMMON = ("הוצאות", "הכנסות", "מאזן", "רווח", "הון", "מ
 
 def _fix_reversed(ws: list[Word]) -> list[Word]:
     """יש מחוללי PDF ששומרים אותיות עבריות בסדר הפוך (ויזואלי). אם רוב המילים המוכרות מופיעות הפוכות – הופכים."""
-    straight = sum(1 for w in ws for k in _COMMON if k in w.text)
-    flipped = sum(1 for w in ws for k in _COMMON if k[::-1] in w.text)
+    straight = sum(1 for w in ws for k in _COMMON if _n(k) in _n(w.text))
+    flipped = sum(1 for w in ws for k in _COMMON if _n(k)[::-1] in _n(w.text))
     if flipped > straight:
         # גם סדר המילים הפוך (ויזואלי = שמאל→ימין), לכן משקפים את ה-x של המילים העבריות כדי שהתווית תיקרא נכון
         W = max((w.x1 for w in ws), default=0.0)
         return [Word(W - w.x1, w.y0, W - w.x0, w.y1, w.text[::-1]) if _HEB.search(w.text) else w for w in ws]
     return ws
+
+
+def _text_layer_ok(ws: list[Word]) -> bool:
+    """שכבת טקסט טובה = יש שורות עם תווית עברית מוכרת ומספר מעוצב (1,234). סורקים שמוסיפים שכבת זיהוי גרועה
+    נותנים תוויות שבורות ומספרים בלי פסיקים – ואז עדיף הזיהוי שלנו."""
+    if sum(1 for w in ws if _HEB.search(w.text)) < 5:
+        return False
+    nums = [w for w in ws if _NUMTOK.match(w.text)]
+    if len(nums) < 4:
+        return True                     # עמוד טקסטואלי (חוות דעת, באורים) – אין מה לשפר
+    good = sum(1 for w in nums if "," in w.text)
+    labels = sum(1 for w in ws if _HEB.search(w.text) and len(w.text) >= 3 and _has(w.text, *_COMMON))
+    return good >= max(2, len(nums) // 4) and labels >= 2
 
 
 def page_words(pdf: str | Path) -> list[list[Word]]:
@@ -102,9 +126,9 @@ def page_words(pdf: str | Path) -> list[list[Word]]:
     tess = None
     tmp = None
     for i, page in enumerate(doc):
-        ws = [Word(w[0], w[1], w[2], w[3], w[4]) for w in page.get_text("words")]
-        if sum(1 for w in ws if _HEB.search(w.text)) >= 5:
-            pages.append(_fix_reversed(ws))
+        ws = _fix_reversed([Word(w[0], w[1], w[2], w[3], w[4]) for w in page.get_text("words")])
+        if _text_layer_ok(ws) or not (tess or ocr_available()):
+            pages.append(ws)
             continue
         # סרוק → זיהוי תווים
         tess = tess or ocr_available()
@@ -116,7 +140,7 @@ def page_words(pdf: str | Path) -> list[list[Word]]:
         page.get_pixmap(dpi=220).save(str(png))
         heb = [w for w in _tsv_words(tess, png, "heb") if _HEB.search(w.text)]
         txt = " ".join(w.text for w in heb)
-        if not any(k in txt for k in ("מאזן", "רווח והפסד", "בדצמבר", "הון מניות")):
+        if not _has(txt, "מאזן", "והפסד", "בדצמבר", "הון מניות"):
             pages.append(heb)                       # עמוד לא רלוונטי – בלי זיהוי מספרים
             continue
         eng = [w for w in _tsv_words(tess, png, "eng") if _NUMTOK.match(w.text)]
@@ -170,6 +194,7 @@ def _numbers(line: list[Word]) -> list[tuple[float, float]]:
 # פענוח
 # ---------------------------------------------------------------------------
 _RETAINED = ("שנצבר", "עודפים", "יתרת רווח", "רווחים שנצברו", "עודפים שנצברו")
+_RETAINED_SKIP = ("לתחילת", "תחילת השנה", "עוברת")      # שורות רווח והפסד שאינן היתרה במאזן
 _EXPENSE = ("הוצאות הנהלה", "הוצאות מכירה", "עלות המכירות", "עלות המכר", "הוצאות מימון", "הוצאות שיווק", "עלות ההכנסות", "הוצאות תפעול", "הוצאות אחרות")
 _SKIP = ("סה\"כ", "סהכ", "רווח", "לאחר", "לפני")
 
@@ -190,7 +215,7 @@ class _Page:
         """הערך בעמודת השנה בשורה הראשונה שהתווית שלה מכילה אחת מהמילים."""
         for l in self.lines:
             lab = _label(l)
-            if any(k in lab for k in label_keys):
+            if _has(lab, *label_keys) and not (label_keys is _RETAINED and _has(lab, *_RETAINED_SKIP)):
                 nums = _numbers(l)
                 if not nums:
                     continue
@@ -208,7 +233,7 @@ class _Page:
         total, used = 0.0, []
         for l in self.lines:
             lab = _label(l)
-            if any(k in lab for k in keys) and not any(s in lab for s in _SKIP):
+            if _has(lab, *keys) and not _has(lab, *_SKIP):
                 nums = _numbers(l)
                 if nums:
                     v = self._pick(nums, year)
@@ -233,7 +258,7 @@ def parse_annual_report(pdf: str | Path) -> dict[str, Any]:
     year = None
     for pg in P:
         m = re.search(r"(20\d{2})", " ".join(w.text for l in pg.lines for w in l if _YEAR.match(w.text)) or "")
-        if "בדצמבר" in pg.text and m:
+        if _has(pg.text, "בדצמבר") and m:
             ys = [int(w.text) for l in pg.lines for w in l if _YEAR.match(w.text)]
             year = max(ys) if ys else None
             break
@@ -259,7 +284,8 @@ def parse_annual_report(pdf: str | Path) -> dict[str, Any]:
     prev_year = year - 1 if year else 0
 
     # מאזן
-    bs = next((pg for pg in P if "מאזן" in pg.text and any(k in pg.text for k in _RETAINED)), None)
+    bs = next((pg for pg in P if _has(pg.text, "מאזן") and _has(pg.text, "נכסים", "התחייבויות", "הון מניות")
+               and _has(pg.text, *_RETAINED)), None)
     if bs:
         for y in (year, prev_year):
             if not y or (y != year and len(bs.year_cols) < 2):
@@ -282,7 +308,7 @@ def parse_annual_report(pdf: str | Path) -> dict[str, Any]:
         notes.append("לא זוהה עמוד מאזן")
 
     # רווח והפסד
-    pl = next((pg for pg in P if "רווח והפסד" in pg.text and "הוצאות" in pg.text), None)
+    pl = next((pg for pg in P if _has(pg.text, "והפסד") and _has(pg.text, "הוצאות") and not _has(pg.text[:200], "מאזן")), None)
     if pl:
         for y in (year, prev_year):
             if not y or (y != year and len(pl.year_cols) < 2):

@@ -156,7 +156,9 @@ def parse_ledger(path: str | Path) -> dict[str, Any]:
         raise ValueError("לא נמצאה כותרת הכרטסת (חשבון נגדי / זכות)")
     hdr = rows[header_idx]
     i_credit, i_debit, i_contra = hdr.index("זכות"), hdr.index("חובה"), hdr.index("חשבון נגדי")
+    i_date = hdr.index("תאריך ערך") if "תאריך ערך" in hdr else None
     by_customer: dict[str, float] = defaultdict(float)
+    years: dict[int, int] = defaultdict(int)
     n = 0
     for r in rows[header_idx + 1:]:
         if len(r) <= i_contra:
@@ -169,13 +171,19 @@ def parse_ledger(path: str | Path) -> dict[str, Any]:
             continue
         by_customer[name] += (credit or 0.0) - (debit or 0.0)
         n += 1
+        if i_date is not None and len(r) > i_date:
+            m = re.search(r"/(\d{2,4})$", r[i_date].strip())
+            if m:
+                y = int(m.group(1))
+                years[y + 2000 if y < 100 else y] += 1
     if not n:
         raise ValueError("לא נמצאו תנועות בכרטסת")
     total = sum(by_customer.values())
     top = sorted(by_customer.items(), key=lambda x: -x[1])[:5]
     customers = [{"name": k, "amount": round(v)} for k, v in top if v > 0]
     share = (top[0][1] / total) if total > 0 and top else 0.0
-    return {"kind": "ledger", "fields": {"s62a.top_customers": customers},
+    year = max(years, key=years.get) if years else None
+    return {"kind": "ledger", "year": year, "fields": {"s62a.top_customers": customers},
             "notes": [f"{n} תנועות, {len(by_customer)} לקוחות, סה\"כ {total:,.0f} ₪; הגדול ביותר {top[0][0]} – {share:.0%}" if top else ""],
             "summary": {"total": total, "customers": len(by_customer), "top_share": share}}
 
@@ -211,6 +219,11 @@ SLOTS = {
                       "desc": "ריווחית → דוחות → מאזן בוחן יתרות לפי חודשים → ייצוא. רווח והפסד של השנה הנבדקת."},
     "ledger": {"title": "כרטסת הכנסות (ריווחית)", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
                "desc": "ריווחית → כרטסת של כרטיס ההכנסות → ייצוא. לקוחות גדולים לריכוזיות."},
+    # תרחיש ב׳ – הדוח הסגור ישן בשנה: השנה הקודמת מגיעה ממאזן בוחן מלא (וכרטסת לריכוזיות על פני שנתיים)
+    "trial_balance_prev": {"title": "מאזן בוחן לפי חודשים – השנה הקודמת (מלא)", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
+                           "desc": "רק כשאין דוח סגור לשנה הקודמת: רווח השנה הקודמת לגלגול העודפים, והוצאות השנה הקודמת למגן.", "prev": True},
+    "ledger_prev": {"title": "כרטסת הכנסות – השנה הקודמת (אופציונלי)", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
+                    "desc": "ריכוזיות: האם אותו לקוח גדול גם בשנה הקודמת (המבחן הוא 22 מתוך 36 חודשים).", "prev": True},
 }
 
 
@@ -233,10 +246,26 @@ def import_slot(slot: str, path: str | Path, tax_year: int | None = None) -> dic
             r["fields"], r["sources"], r["notes"] = f, src, notes
     else:
         kind = detect(p)
-        if kind != slot:
+        base = slot.replace("_prev", "")
+        if kind != base:
             names = {"trial_balance": "מאזן בוחן לפי חודשים", "ledger": "כרטסת", "unknown": "קובץ לא מזוהה"}
             raise ValueError(f"זה נראה כמו {names.get(kind, kind)} – לא {SLOTS[slot]['title']}")
-        r = parse_trial_balance(p) if slot == "trial_balance" else parse_ledger(p)
+        r = parse_trial_balance(p) if base == "trial_balance" else parse_ledger(p)
+        want = (int(tax_year) - 1 if slot.endswith("_prev") else int(tax_year)) if tax_year else None
+        if want and r.get("year") and r["year"] != want:
+            other = "השנה הקודמת" if r["year"] == (want - 1) else ("השנה הנבדקת" if r["year"] == want + 1 else str(r["year"]))
+            raise ValueError(f"הקובץ הוא לשנת {r['year']} והחריץ הזה מצפה ל-{want} – אולי זה שייך לחריץ של {other}?")
+        if slot == "trial_balance_prev":
+            f = r["fields"]
+            r["fields"] = {"shields.expenses_prev_year": f.get("shields.expenses_current_year", 0) + r.get("hints", {}).get("depreciation", 0),
+                           "retained.prev_year_profit_for_rollover": f.get("distributions.current_year_profit_estimate", 0)}
+            r["sources"] = {"shields.expenses_prev_year": f"מאזן בוחן {r.get('year')}: סך הוצאות (כולל פחת)",
+                            "retained.prev_year_profit_for_rollover": f"מאזן בוחן {r.get('year')}: רווח לפני מס – המנוע מגלגל: עודפי הדוח + רווח × (1 − 23%) − דיבידנד השנה הקודמת (ידני)"}
+            r["notes"] = [n for n in r["notes"] if "הכנסות עד" not in n] + [f"גלגול: דיבידנד {r.get('year')} אינו במאזן בוחן – להזין ידנית אם חולק"]
+        elif slot == "ledger_prev":
+            r["fields"] = {"s62a.top_customers_prev_year": r["fields"]["s62a.top_customers"],
+                           "s62a.prev_year_revenue_for_concentration": round(r["summary"]["total"])}
+            r["sources"] = {"s62a.top_customers_prev_year": f"כרטסת {r.get('year')}"}
     r["file"] = p.name
     r["slot"] = slot
     r.setdefault("sources", {})
