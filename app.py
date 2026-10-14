@@ -93,6 +93,18 @@ class Api:
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 
+    def revert_field(self, cid: str, path: str):
+        try:
+            return self.store.revert_field(cid, path)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
+    def revert_today(self, cid: str):
+        try:
+            return self.store.revert_today(cid)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
     def apply_import(self, cid: str, fields: dict, sources: dict | None = None, label: str = "קובץ"):
         try:
             return self.store.apply_import(cid, fields, sources, label)

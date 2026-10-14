@@ -98,3 +98,33 @@ def test_delete_archives_everything():
     assert (arch[0] / f"{rec['id']}.json").exists() and (arch[0] / "files" / "2026-Q4" / "x.csv").exists()
     assert any((arch[0] / "reports").glob("*.pdf"))
     assert s.delete(rec["id"]) is False
+
+
+def test_field_records_and_revert():
+    s = ClientStore(Path(tempfile.mkdtemp()) / "clients")
+    inp = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+    rec = s.save(inp)
+    cid = rec["id"]
+    orig = inp["retained"]["balance_sheet_retained_earnings"]
+    # עריכה ידנית → רשומה עם ערך קודם, מי ומתי
+    rec = s.update_field(cid, "retained.balance_sheet_retained_earnings", orig + 1000)
+    m = rec["field_meta"]["retained.balance_sheet_retained_earnings"]
+    assert m["state"] == "manual" and m["by"] == "המשרד" and m["prev"][-1]["value"] == orig
+    # שמירה חוזרת של הטופס עם אותו מצב – לא רשומה חדשה
+    rec2 = s.save(rec["input"], cid, field_meta=rec["field_meta"])
+    assert rec2["field_meta"]["retained.balance_sheet_retained_earnings"]["at"] == m["at"]
+    assert len(rec2["field_meta"]["retained.balance_sheet_retained_earnings"]["prev"]) == 1
+    # שינוי בטופס בלי מצב מפורש = ידני, והקודם נשמר
+    inp2 = json.loads(json.dumps(rec2["input"]))
+    inp2["retained"]["balance_sheet_retained_earnings"] = orig + 2000
+    rec3 = s.save(inp2, cid, field_meta=rec2["field_meta"])
+    assert len(rec3["field_meta"]["retained.balance_sheet_retained_earnings"]["prev"]) == 2
+    # ביטול שדה → חזרה ל-orig+1000, ואז ביטול היום → חזרה ל-orig
+    rec4 = s.revert_field(cid, "retained.balance_sheet_retained_earnings")
+    assert rec4["input"]["retained"]["balance_sheet_retained_earnings"] == orig + 1000
+    assert rec4["history"][-1]["kind"] == "ביטול"
+    rec5 = s.revert_today(cid)
+    assert rec5["input"]["retained"]["balance_sheet_retained_earnings"] == orig
+    import pytest
+    with pytest.raises(ValueError):
+        s.revert_field(cid, "retained.balance_sheet_retained_earnings")

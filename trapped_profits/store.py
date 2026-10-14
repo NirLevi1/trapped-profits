@@ -83,7 +83,47 @@ def _diff(prev: dict | None, cur: dict) -> list[dict]:
 
 
 # אברהם 14.10 (3): מצב לכל שדה – מהקובץ (לאישור) / אושר / ידני; ושדות שרק אדם יודע
-FIELD_STATES = ("file", "approved", "manual")
+FIELD_STATES = ("file", "approved", "manual", "carried", "estimate")
+# carried = הועבר ממעבר שנה (ערך מהשנה הקודמת שאינו בקבצים); estimate = אומדן של המערכת (לבדיקת אברהם)
+FIELD_SKIP = ("flags", "data_as_of")                 # לא נרשמת להם היסטוריית ערכים
+
+
+def _flatten(d: dict, prefix: str = "") -> dict:
+    """{"a": {"b": 1}} → {"a.b": 1}; רשימות (לקוחות גדולים) נשארות ערך אחד."""
+    out = {}
+    for k, v in (d or {}).items():
+        key = f"{prefix}{k}"
+        if isinstance(v, dict):
+            out.update(_flatten(v, key + "."))
+        else:
+            out[key] = v
+    return out
+
+
+def _record_changes(prev_inp: dict | None, new_inp: dict, meta: dict, by: str) -> dict:
+    """אברהם (סבב 2, 9+13): כל ערך שנשמר הוא רשומה – ערך קודם, מקור, מי ומתי. שינוי בלי מצב מפורש = ידני."""
+    now = datetime.now().isoformat(timespec="seconds")
+    old, new = _flatten(prev_inp or {}), _flatten(new_inp)
+    for path, val in new.items():
+        if path.split(".")[0] in FIELD_SKIP:
+            continue
+        m = meta.get(path)
+        changed = prev_inp is not None and path in old and old[path] != val
+        if m is not None and m.get("_new") and not m.get("by"):
+            m["by"] = by                                    # רשומה חדשה מהשמירה הזו
+        if not changed:
+            continue
+        if m is None:
+            m = meta[path] = {"state": "manual", "source": "טופס", "at": now, "by": by}
+        elif not m.get("_new"):                             # הערך השתנה בלי מצב חדש – עריכה ידנית
+            m.update(state="manual", source="טופס", at=now, by=by)
+        hist = m.setdefault("prev", [])
+        hist.append({"value": old[path], "state": m.get("_old_state"), "at": m.get("_old_at"), "source": m.get("_old_source")})
+        del hist[:-20]
+    for m in meta.values():
+        for k in ("_old_state", "_old_at", "_old_source", "_new"):
+            m.pop(k, None)
+    return meta
 HUMAN_ONLY_FIELDS = {
     "structure.company_id": "מספר ח.פ.",
     "structure.controlling_owner_name": "שם בעל השליטה",
@@ -108,11 +148,20 @@ def _missing_human(meta: dict, inp: dict | None = None) -> list[str]:
 
 
 def _merge_meta(prev: dict | None, new: dict | None) -> dict:
-    out = dict(prev or {})
+    out = {k: dict(v) for k, v in (prev or {}).items()}
+    now = datetime.now().isoformat(timespec="seconds")
     for k, v in (new or {}).items():
         if not isinstance(v, dict) or v.get("state") not in FIELD_STATES:
             continue
-        out[k] = {"state": v["state"], "source": str(v.get("source") or ""), "at": v.get("at") or datetime.now().isoformat(timespec="seconds")}
+        old = out.get(k) or {}
+        if old and old.get("state") == v["state"] and old.get("source") == str(v.get("source") or "") and not v.get("force"):
+            continue                                         # הטופס שולח גם את המצב הקיים – לא רשומה חדשה
+        out[k] = {"state": v["state"], "source": str(v.get("source") or ""), "at": now, "by": v.get("by"),
+                  "prev": old.get("prev") or [], "_new": True,
+                  "_old_state": old.get("state"), "_old_at": old.get("at"), "_old_source": old.get("source")}
+    for k, m in out.items():                                 # שדות שלא נגעו בהם – שומרים מי היה לפני
+        if "_old_state" not in m:
+            m.update(_old_state=m.get("state"), _old_at=m.get("at"), _old_source=m.get("source"))
     return out
 
 
@@ -216,7 +265,9 @@ class ClientStore:
             "letter_note": (prev or {}).get("letter_note", ""),      # אברהם 14.10 (18) – טקסט חופשי למכתב
             "history": (prev or {}).get("history") or [],
             "field_meta": _merge_meta((prev or {}).get("field_meta"), field_meta),
+            "years": (prev or {}).get("years") or {},            # תמונות של שנים שנסגרו (מעבר שנה)
         }
+        rec["field_meta"] = _record_changes((prev or {}).get("input"), rec["input"], rec["field_meta"], self._by())
         rec["missing_human"] = _missing_human(rec["field_meta"], rec["input"])
         rec["pending_file_fields"] = [k for k, v in rec["field_meta"].items() if v.get("state") == "file"]
         try:
@@ -227,6 +278,63 @@ class ClientStore:
         rec["previous_logic_version"] = (prev or {}).get("logic_version")
         self._log(rec, "חישוב", _summary(rec), changes=rec["changes"])
         self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+        return rec
+
+    def _by(self) -> str:
+        return (self.settings.load().get("accountant_name") or "").strip() or "המשרד"
+
+    def _write(self, cid: str, rec: dict) -> dict:
+        self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+        return rec
+
+    @staticmethod
+    def _get_path(inp: dict, path: str):
+        cur = inp
+        for pth in path.split("."):
+            if not isinstance(cur, dict) or pth not in cur:
+                return None
+            cur = cur[pth]
+        return cur
+
+    @staticmethod
+    def _set_path(inp: dict, path: str, value: Any) -> None:
+        parts = path.split(".")
+        target = inp
+        for pth in parts[:-1]:
+            target = target.setdefault(pth, {})
+        target[parts[-1]] = value
+
+    def revert_field(self, cid: str, path: str) -> dict[str, Any]:
+        """אברהם (סבב 2, 16): ביטול – חזרה לערך הקודם של השדה (מהקובץ / ידני קודם)."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        m = (rec.get("field_meta") or {}).get(path) or {}
+        if not m.get("prev"):
+            raise ValueError("אין ערך קודם לשדה הזה")
+        last = m["prev"].pop()
+        self._set_path(rec["input"], path, last["value"])
+        state = last.get("state") if last.get("state") in FIELD_STATES else "manual"
+        src = f"בוטל {m.get('at', '')[:10]} – חזרה ל: {last.get('source') or 'ערך קודם'}"
+        meta = {path: {"state": state, "source": src, "force": True}}
+        new = self.save(rec["input"], cid, field_meta=meta)
+        new["field_meta"][path]["prev"] = m["prev"]          # הביטול עצמו לא נרשם כשלב נוסף
+        self._log(new, "ביטול", f"{path}: חזרה ל-{last['value']}")
+        return self._write(cid, new)
+
+    def revert_today(self, cid: str) -> dict[str, Any]:
+        """אברהם (סבב 2, 16): ביטול כל השינויים הידניים מהיום."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        today = datetime.now().date().isoformat()
+        paths = [k for k, v in (rec.get("field_meta") or {}).items()
+                 if v.get("prev") and str(v.get("at", "")).startswith(today) and v.get("state") in ("manual", "estimate")]
+        for p in paths:
+            rec = self.revert_field(cid, p)
+        if paths:
+            self._log(rec, "ביטול", f"בוטלו {len(paths)} שינויים מהיום")
+            self._write(cid, rec)
         return rec
 
     @staticmethod
