@@ -81,6 +81,19 @@ class Api:
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 
+    def set_letter_note(self, cid: str, note: str = ""):
+        try:
+            return self.store.set_letter_note(cid, note) or {"error": "לקוח לא נמצא"}
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
+    def update_field(self, cid: str, path: str, value=None):
+        """עריכת שדה בודד (עודפים במאזן מהתור, דיבידנד שחולק מהסימולטור, שכר בעלים) – שומר ומחשב."""
+        try:
+            return self.store.update_field(cid, path, value)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
     def what_if(self, cid: str, extra_dividend: float = 0.0, salary: float = 0.0):
         """סימולציה בכרטיס הלקוח – לא נשמרת."""
         from trapped_profits.engine import what_if

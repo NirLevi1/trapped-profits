@@ -1,7 +1,8 @@
 """אחסון לקוחות: קובץ JSON לכל לקוח בתיקיית data/clients ליד התוכנה.
 
 כל קובץ: {"id", "input", "result", "updated_at", "logic_version"}.
-שמירה = חישוב מיידי. היסטוריית שינויים – משימה פתוחה (כרגע מצב נוכחי + חותמת זמן).
+שמירה = חישוב מיידי. אברהם 14.10 (16, 19): כל חישוב, שינוי סטטוס והערה נרשמים ב-"history" של הלקוח
+(מה בדקנו, מה יצא, מה המלצנו) – לתצוגה לפי רבעונים ושנים.
 """
 
 from __future__ import annotations
@@ -46,6 +47,14 @@ def _normalize_date(s: str) -> str:
         except ValueError:
             continue
     return s
+
+
+def _summary(rec: dict) -> str:
+    r = rec.get("result")
+    if not r:
+        return "החישוב נכשל: " + str(rec.get("error") or "")
+    return (f"{r['dashboard']['status_overall']} · תוספת מס {r['calc81']['surtax']:,.0f} ₪ · "
+            f"שכר לתיקון {r['s62a']['attributed_income']:,.0f} ₪")
 
 
 def _is_stale(rec: dict, stale_days: int) -> bool:
@@ -170,6 +179,8 @@ class ClientStore:
             "created_at": (prev or {}).get("created_at") or datetime.now().isoformat(timespec="seconds"),
             "logic_version": LOGIC_VERSION,
             "handling": (prev or {}).get("handling") or {"status": HANDLING_STATUSES[0], "note": "", "at": None},
+            "letter_note": (prev or {}).get("letter_note", ""),      # אברהם 14.10 (18) – טקסט חופשי למכתב
+            "history": (prev or {}).get("history") or [],
         }
         try:
             rec["result"] = compute(ci).to_dict()
@@ -177,8 +188,52 @@ class ClientStore:
             rec["error"] = str(e)
         rec["changes"] = _diff(prev, rec)                    # החלטה 6 – מה זז לעומת החישוב הקודם
         rec["previous_logic_version"] = (prev or {}).get("logic_version")
+        self._log(rec, "חישוב", _summary(rec), changes=rec["changes"])
         self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
         return rec
+
+    @staticmethod
+    def _log(rec: dict, kind: str, text: str, **extra: Any) -> None:
+        """רשומת היסטוריה אחת: מתי, מה, ומה היה המצב באותו רגע."""
+        r = rec.get("result") or {}
+        entry = {"at": datetime.now().isoformat(timespec="seconds"), "kind": kind, "text": text,
+                 "tax_year": (rec.get("input") or {}).get("structure", {}).get("tax_year"),
+                 "snapshot": {
+                     "color": r.get("dashboard", {}).get("color_overall"),
+                     "status": r.get("dashboard", {}).get("status_overall"),
+                     "surtax": r.get("calc81", {}).get("surtax"),
+                     "gap": r.get("simulator", {}).get("gap_to_close"),
+                     "attributed": r.get("s62a", {}).get("attributed_income"),
+                     "retained": (rec.get("input") or {}).get("retained", {}).get("balance_sheet_retained_earnings"),
+                     "recommendation": r.get("simulator", {}).get("recommendation_text"),
+                 } if r else None, **extra}
+        hist = rec.setdefault("history", [])
+        hist.append(entry)
+        del hist[:-300]
+
+    def set_letter_note(self, cid: str, note: str) -> dict[str, Any] | None:
+        rec = self.get(cid)
+        if not rec:
+            return None
+        rec["letter_note"] = note
+        self._log(rec, "הערה למכתב", note)
+        self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+        return rec
+
+    def update_field(self, cid: str, path: str, value: Any) -> dict[str, Any]:
+        """אברהם 14.10 (3, 15): עריכת שדה בודד מהתור/מהכרטיס – שומר ומחשב מחדש."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        inp = rec["input"]
+        parts = path.split(".")
+        target = inp
+        for pth in parts[:-1]:
+            target = target.setdefault(pth, {})
+        if parts[-1] not in target and path not in ("data_as_of", "data_through_month"):
+            raise ValueError(f"שדה לא מוכר: {path}")
+        target[parts[-1]] = value
+        return self.save(inp, cid)
 
     def set_handling(self, cid: str, status: str, note: str = "") -> dict[str, Any] | None:
         rec = self.get(cid)
@@ -187,6 +242,7 @@ class ClientStore:
         if status not in HANDLING_STATUSES:
             raise ValueError("סטטוס לא מוכר")
         rec["handling"] = {"status": status, "note": note, "at": datetime.now().isoformat(timespec="seconds")}
+        self._log(rec, "טיפול", f"{status}" + (f" – {note}" if note else ""))
         self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
         return rec
 
@@ -214,7 +270,8 @@ class ClientStore:
         st = self.settings.load()
         try:
             return export(compute(ClientInput.from_dict(rec["input"])), kind, fmt, self.root.parent / "reports",
-                          handling=rec.get("handling"), firm_name=st.get("firm_name", ""), accountant_name=st.get("accountant_name", ""))
+                          handling=rec.get("handling"), firm_name=st.get("firm_name", ""), accountant_name=st.get("accountant_name", ""),
+                          letter_note=rec.get("letter_note", ""), history=rec.get("history") or [])
         except PermissionError as e:
             raise RuntimeError("הקובץ הקודם פתוח (בוורד/בדפדפן) – לסגור אותו ולייצא שוב") from e
 

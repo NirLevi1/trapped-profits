@@ -60,7 +60,7 @@ DISCLAIMER = ("כלי ניטור וסינון ראשוני בלבד – אינו
 # ---------------------------------------------------------------------------
 # דוח לרו"ח
 # ---------------------------------------------------------------------------
-def build_accountant_doc(r: ClientResult, handling: dict | None = None) -> Doc:
+def build_accountant_doc(r: ClientResult, handling: dict | None = None, history: list | None = None) -> Doc:
     d, c, s, m, sh, tr = r.dashboard, r.calc81, r.s62a, r.simulator, r.shields, r.transition
     b: list[Block] = []
     meta = [f"שנת מס {r.tax_year}", f"בסיס לתום {r.previous_year}"]
@@ -86,24 +86,30 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None) -> Doc:
     b.append(Block("h2", "מסלול 81 – תוספת מס 2%"))
     rows = [
         (f"רווחים נצברים לתום {r.previous_year}", _ils(r.retained.retained_for_81a), False),
-        ("החלופה המיטיבה", f"חלופה {c.chosen_alternative}", False),
+    ]
+    if c.alternative_relevant:   # אברהם 14.10 (1): רק כשיש רווחים ממקור פטור
+        rows.append(("חלופת הרווחים הפטורים (81ג(ג))", f"חלופה {c.chosen_alternative} – "
+                     f"(1) מקורות פטורים {_ils(r.retained.exempt_alt1)}, (2) 7 שנים {_ils(r.retained.exempt_alt2)}", False))
+    gov = {"fixed": sh.fixed_shield, "exp": sh.expenses_shield, "assets": sh.assets_shield}
+    mark = lambda v: " ◀ הקובע" if abs(v - c.governing_shield) < 0.5 else ""   # noqa: E731 – אברהם 14.10 (2)
+    rows += [
         ("רווחים נצברים חייבים", _ils(c.taxable_retained), False),
         ("המגן הקובע", _ils(c.governing_shield), False),
-        ("— מגן קבוע", _ils(sh.fixed_shield), False),
-        ("— מגן הוצאות", _ils(sh.expenses_shield), False),
-        ("— מגן נכסים", _ils(sh.assets_shield), False),
+        ("— מגן קבוע" + mark(gov["fixed"]), _ils(sh.fixed_shield), bool(mark(gov["fixed"]))),
+        ("— מגן הוצאות" + mark(gov["exp"]), _ils(sh.expenses_shield), bool(mark(gov["exp"]))),
+        ("— מגן נכסים" + mark(gov["assets"]), _ils(sh.assets_shield), bool(mark(gov["assets"]))),
     ]
     if c.transition_reduction:
         rows.append(("הפחתה לפי הוראות המעבר", _ils(c.transition_reduction), False))
     rows += [
         ("רווחים עודפים", _ils(c.excess_profits), False),
-        ("קיים פטור?", "כן" if c.is_exempt else "לא", False),
+        ("מצב", c.status_label, False),          # אברהם 14.10 (6)
         ("תוספת מס לתשלום", _ils(c.surtax), True),
-        ("מוגן לפי הוראת מעבר עד", d.protected_until, False),
     ]
     b.append(Block("kv", rows=rows))
 
-    b.append(Block("h2", "סימולטור – לחלק דיבידנד או לשלם 2%?"))
+    if m.action_required:                       # אברהם 14.10 (7): מוגן/פטור – אין סימולטור
+        b.append(Block("h2", "סימולטור – לחלק דיבידנד או לשלם 2%?"))
     rows = [
         (f"{c.required_distribution_rate:.0%} מהרווחים הנצברים", _ils(m.option_6pct), False),
         ("50% מהרווחים העודפים", _ils(m.option_50pct) if m.option_50pct > 0 else "—", False),
@@ -121,7 +127,8 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None) -> Doc:
         rows.append(("שנים לאיזון", f"{m.years_to_breakeven:.1f}", False))
     if m.surtax_if_salary_paid is not None and m.surtax_if_salary_paid < c.surtax:
         rows.append(("תוספת המס אם משלמים את שכר 62א עד 31.12", _ils(m.surtax_if_salary_paid), True))
-    b.append(Block("kv", rows=rows))
+    if m.action_required:
+        b.append(Block("kv", rows=rows))
 
     b.append(Block("h2", "מסלול 62א – רווחיות עודפת"))
     b.append(Block("kv", rows=[
@@ -130,11 +137,20 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None) -> Doc:
         ("שיעור רווחיות", _pct(s.governing_profitability), False),
         ("חצה סף 25%?", "כן" if s.crossed_25pct else "לא", False),
         ("מתחת לסף המחזור?", "כן" if s.below_revenue_threshold else "לא", False),
-        ("פטור 750 אלף ₪?", "חל" if s.exemption_750k_applies else "לא חל", False),
-        ("הסעיף חל?", "כן" if s.section_applies else "לא", False),
+        ("זכאית לפטור 750 אלף ₪?", "כן" if s.exemption_750k_applies else "לא", False),   # אברהם 14.10 (11)
+        ("62א חל?", "כן" if s.section_applies else "לא", False),
         ("שכר לתיקון עד 31.12", _ils(s.attributed_income), True),
+        ("שכר בעלים ששולם השנה", _ils(s.owner_salary) if s.owner_salary is not None else "לא הוזן", False),
         ("עלות מס נוספת מוערכת", _ils(s.extra_tax_cost), False),
+        ("אופן החישוב", s.extra_tax_cost_method, False),
     ]))
+    if s.customers_breakdown:                   # אברהם 14.10 (12)
+        b.append(Block("h2", "ריכוזיות – חלוקת ההכנסות לפי לקוח"))
+        b.append(Block("kv", rows=[(x["name"], f"{_ils(x['amount'])} ({x['share']:.0%})", x["share"] >= 0.55)
+                                   for x in s.customers_breakdown]))
+    if r.next_year_notes:                        # אברהם 14.10 (22)
+        b.append(Block("h2", f"תכנון {r.tax_year + 1}"))
+        b.append(Block("ul", items=list(r.next_year_notes)))
 
     if r.manual_review:
         b.append(Block("h2", "לבדיקה ידנית"))
@@ -143,6 +159,9 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None) -> Doc:
         b.append(Block("h2", "טיפול"))
         b.append(Block("kv", rows=[("סטטוס", handling["status"], False)] +
                        ([("הערה", handling["note"], False)] if handling.get("note") else [])))
+    if history:                                  # אברהם 14.10 (16, 19)
+        b.append(Block("h2", "היסטוריה"))
+        b.append(Block("ul", items=[f"{h['at'][:10]} · {h['kind']} · {h.get('text', '')}" for h in history[-12:][::-1]]))
 
     return Doc(title=f"{r.name} – רווחים כלואים", subtitle=" · ".join(meta), blocks=b, footer=DISCLAIMER)
 
@@ -150,7 +169,7 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None) -> Doc:
 # ---------------------------------------------------------------------------
 # מכתב ללקוח
 # ---------------------------------------------------------------------------
-def build_client_doc(r: ClientResult, firm_name: str = "", accountant_name: str = "") -> Doc:
+def build_client_doc(r: ClientResult, firm_name: str = "", accountant_name: str = "", letter_note: str = "") -> Doc:
     d, c, s, m, tr = r.dashboard, r.calc81, r.s62a, r.simulator, r.transition
     b: list[Block] = []
     today = date.today().strftime("%d.%m.%Y")
@@ -214,6 +233,9 @@ def build_client_doc(r: ClientResult, firm_name: str = "", accountant_name: str 
         b.append(Block("p", "נשמח לתאם שיחה כדי להחליט יחד על הצעד המתאים."))
     else:
         b.append(Block("callout", "לא נדרשת פעולה השנה. נמשיך לעקוב.", tone="good"))
+    if letter_note.strip():                      # אברהם 14.10 (18): ההערה מהשיחה
+        b.append(Block("h2", "בהמשך לשיחתנו"))
+        b.append(Block("p", letter_note.strip()))
     b.append(Block("p", f"בברכה,\n{accountant_name or 'רואה החשבון המטפל'}" + (f"\n{firm_name}" if firm_name else "")))
 
     return Doc(title=f"מצב החברה לעניין רווחים כלואים – {r.tax_year}", subtitle=f"{r.name} · {today}", blocks=b,
@@ -407,8 +429,9 @@ def html_to_pdf(html_path: Path, pdf_path: Path, doc: "Doc | None" = None) -> Pa
 # נקודת כניסה
 # ---------------------------------------------------------------------------
 def export(r: ClientResult, kind: str, fmt: str, out_dir: Path, handling: dict | None = None,
+           letter_note: str = "", history: list | None = None,
            firm_name: str = "", accountant_name: str = "") -> Path | None:
-    doc = build_client_doc(r, firm_name, accountant_name) if kind == "client" else build_accountant_doc(r, handling)
+    doc = build_client_doc(r, firm_name, accountant_name, letter_note) if kind == "client" else build_accountant_doc(r, handling, history)
     out_dir.mkdir(parents=True, exist_ok=True)
     safe = "".join(ch for ch in r.name if ch not in '\\/:*?"<>|').strip() or "client"
     stem = f"{safe} – {'מכתב ללקוח' if kind == 'client' else 'דוח לרואה חשבון'} {r.tax_year}"

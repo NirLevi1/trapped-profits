@@ -71,6 +71,13 @@ class Section62AResult:
     extra_tax_cost: float             # B34
     partnership_under_10pct: bool     # B39
     intercompany_dividend_attributed: float  # B42
+    # אברהם 14.10 (10): איך חושבה עלות המס הנוספת
+    extra_tax_cost_method: str = ""   # "מדרגות מס על שכר X" / "מס שולי משוקלל N%"
+    owner_salary: float | None = None
+    # אברהם 14.10 (12): ריכוזיות – חלקו של הלקוח הגדול ביותר מסך ההכנסות (0 = אין נתון)
+    concentration_share: float = 0.0
+    concentration_top_name: str = ""
+    customers_breakdown: list = field(default_factory=list)   # [{"name","amount","share"}] + "אחרים"
 
 
 @dataclass
@@ -91,6 +98,11 @@ class Calc81Result:
     exempt_transition_2025: bool      # B21
     is_exempt: bool                   # B23
     surtax: float                     # B27
+    # אברהם 14.10 (6): מצב אחד במילים – "פטור – <מבחן>" / "מוגן בהוראת מעבר עד שנה" / "חייב" / ...
+    status_label: str = ""
+    exempt_reason: str = ""
+    # אברהם 14.10 (1): החלופה מוצגת רק כשיש רווחים ממקור פטור
+    alternative_relevant: bool = False
 
 
 @dataclass
@@ -152,6 +164,7 @@ class ClientResult:
     manual_review: list[str]
     missing_fields: list[str] = field(default_factory=list)   # החלטה 5 – שדות קריטיים שנשארו ריקים
     annualization_factor: float = 1.0                         # החלטה 4 – 12 ÷ חודשים (1.0 = שנה מלאה)
+    next_year_notes: list[str] = field(default_factory=list)  # אברהם 14.10 (22) – תכנון לשנה הבאה
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -232,7 +245,26 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
         attributed = max(0.0, s.taxable_income_personal_effort - deduction)
     else:
         attributed = 0.0
-    extra_cost = max(0.0, attributed * (s.marginal_tax_rate - s.corporate_tax_rate))  # B34
+    # B34 – אברהם 14.10 (10): עם שכר בעלים – לפי מדרגות מס; בלעדיו – מס שולי משוקלל (כמו באקסל)
+    if s.owner_salary_current_year is not None and attributed > 0:
+        sal = max(0.0, s.owner_salary_current_year)
+        extra_cost = max(0.0, _individual_tax(sal + attributed) - _individual_tax(sal) - s.corporate_tax_rate * attributed)
+        method = f"מדרגות מס על שכר {sal:,.0f} ₪ + הכנסה מיוחסת, בניכוי מס חברות {s.corporate_tax_rate:.0%}"
+    else:
+        extra_cost = max(0.0, attributed * (s.marginal_tax_rate - s.corporate_tax_rate))
+        method = f"מס שולי משוקלל {s.marginal_tax_rate:.0%} פחות מס חברות {s.corporate_tax_rate:.0%} (לא הוזן שכר בעלים)"
+    # אברהם 14.10 (12): ריכוזיות לפי הלקוחות הגדולים
+    customers = [(str(c.get("name") or "ללא שם"), float(c.get("amount") or 0)) for c in (s.top_customers or [])
+                 if float(c.get("amount") or 0) > 0]
+    customers.sort(key=lambda x: -x[1])
+    base_rev = max(s.total_revenue, sum(a for _, a in customers))
+    breakdown = [{"name": n, "amount": a, "share": a / base_rev} for n, a in customers] if base_rev > 0 else []
+    if breakdown:
+        rest = base_rev - sum(a for _, a in customers)
+        if rest > 0.5:
+            breakdown.append({"name": "אחרים", "amount": rest, "share": rest / base_rev})
+    conc_share = breakdown[0]["share"] if customers and base_rev > 0 else 0.0
+    conc_name = customers[0][0] if customers else ""
     partnership_under = 0 < st.partnership_income_share < 0.10                  # B39
     rate = s.holding_rate_in_paying_company                                     # B42
     interco = 0.55 * s.intercompany_dividend_received \
@@ -253,7 +285,28 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
         extra_tax_cost=extra_cost,
         partnership_under_10pct=partnership_under,
         intercompany_dividend_attributed=interco,
+        extra_tax_cost_method=method,
+        owner_salary=s.owner_salary_current_year,
+        concentration_share=conc_share,
+        concentration_top_name=conc_name,
+        customers_breakdown=breakdown,
     )
+
+
+# מדרגות מס הכנסה ליחיד, שנתי, 2025 (מוקפאות עד 2027 לפי חוק ההסדרים). ללא ביטוח לאומי ונקודות זיכוי –
+# לאברהם: האם לכלול? (שאלה פתוחה). מעל 721,560 – 47% + מס יסף 3%.
+TAX_BRACKETS_2025 = [(84_120, 0.10), (120_720, 0.14), (193_800, 0.20), (269_280, 0.31),
+                     (560_280, 0.35), (721_560, 0.47), (float("inf"), 0.50)]
+
+
+def _individual_tax(income: float) -> float:
+    tax, lower = 0.0, 0.0
+    for upper, rate in TAX_BRACKETS_2025:
+        if income <= lower:
+            break
+        tax += (min(income, upper) - lower) * rate
+        lower = upper
+    return tax
 
 
 # ---------------------------------------------------------------------------
@@ -348,7 +401,32 @@ def _calc81(ci: ClientInput, ret: RetainedResult, sh: ShieldsResult, tr: Transit
         and tr.determining_period_rate >= 0.05                                         # B21
     is_exempt = ex_losses or ex_50 or ex_6 or ex_tr25                                  # B23
     surtax = 0.0 if (not st.applies_81 or is_exempt) else sim.surtax_rate * base       # B27
+    # אברהם 14.10 (6): תווית מצב אחת
+    reasons = []
+    if ex_losses:
+        reasons.append("הפסדי השנה מעל 10% מהרווחים הנצברים")
+    if ex_50:
+        reasons.append("חולקו 50% מהרווחים העודפים")
+    if ex_6:
+        reasons.append(f"חולקו {rate:.0%} מהרווחים הנצברים")
+    if ex_tr25:
+        reasons.append("חלוקה בתקופה הקובעת 2025")
+    exempt_reason = "; ".join(reasons)
+    if not st.applies_81:
+        label = "החוק אינו חל"
+    elif is_exempt:
+        label = "פטור – " + exempt_reason
+    elif tr.protected_in_tax_year and excess <= 0:
+        label = f"מוגן בהוראת מעבר עד {tr.protected_until_year}"
+    elif excess <= 0:
+        label = "אין רווחים עודפים – המגן מכסה"
+    elif base <= 0:
+        label = "אין בסיס לתוספת מס אחרי הדיבידנד שחולק"
+    else:
+        label = "חייב בתוספת מס"
     return Calc81Result(
+        status_label=label, exempt_reason=exempt_reason,
+        alternative_relevant=ret.exempt_sources_total > 0 or ret.exempt_alt2 > 0,
         transition_reduction=reduction,
         excess_alt1=alt1,
         excess_alt2=alt2,
@@ -461,8 +539,12 @@ def _dashboard(ci: ClientInput, s62: Section62AResult, tr: TransitionResult,
         status62 = "אדום – מבחן ריכוזיות: ייחוס מלא"
     elif s62.section_applies and s62.attributed_income > 0.5:
         status62 = "אדום – ייחוס הכנסה לבעל המניות"
+    elif s62.concentration_share >= 0.70:
+        status62 = f"צהוב – לקוח אחד {s62.concentration_share:.0%} מההכנסות – לבדוק מבחן ריכוזיות (22 מתוך 36 חודשים)"
     elif s62.governing_profitability > f.profitability_warning_threshold:
         status62 = "צהוב – רווחיות מתקרבת לסף 25%"
+    elif s62.concentration_share >= 0.55:
+        status62 = f"צהוב – לקוח אחד {s62.concentration_share:.0%} מההכנסות – מתקרב ל-70%"
     else:
         status62 = "ירוק – מתחת לסף"
     c81c, c62c = status81.split(" ")[0], status62.split(" ")[0]
@@ -503,6 +585,42 @@ def _manual_review(ci: ClientInput, ret: RetainedResult, s62: Section62AResult, 
         out.append("חלופה (1) לרווחים פטורים: עלות הנכסים המיוחדים נלקחת לתום השנה הנבדקת (פישוט) – לאמת")
     if ci.is_estimate or ci.structure.is_scenario_b:
         out.append("תרחיש ב׳ – נתוני הבסיס הם אומדן גלגול, לא דוח סגור")
+    if s62.concentration_share >= 0.70 and not ci.s62a.concentration_test_met:
+        out.append(f"ריכוזיות: {s62.concentration_top_name} – {s62.concentration_share:.0%} מההכנסות השנה. "
+                   "אם זה נמשך 22 מתוך 36 חודשים – מבחן הריכוזיות מתקיים (ייחוס מלא)")
+    if ci.structure.applies_62a and s62.attributed_income > 0 and ci.s62a.owner_salary_current_year is None:
+        out.append("לא הוזן שכר בעלים – עלות המס הנוספת לפי מס שולי משוקלל; להזין שכר לחישוב לפי מדרגות")
+    return out
+
+
+def _next_year(ci: ClientInput, ret: RetainedResult, s62: Section62AResult, c81: Calc81Result,
+               tr: TransitionResult, sim: SimulatorResult) -> list[str]:
+    """אברהם 14.10 (22): מה כדאי לתכנן לשנה הבאה על בסיס השנה."""
+    st, d = ci.structure, ci.distributions
+    ny = st.tax_year + 1
+    out: list[str] = []
+    if not st.applies_81 and not st.applies_62a:
+        return out
+    if st.applies_81:
+        if tr.protected_in_tax_year and tr.protected_until_year < ny:
+            out.append(f"הגנת הוראת המעבר פוקעת בסוף {tr.protected_until_year} – ב-{ny} החברה נחשפת לתוספת המס. "
+                       f"לתכנן חלוקה או הגדלת מגן ההוצאות מראש.")
+        elif tr.protected_in_tax_year:
+            out.append(f"מוגנת גם ב-{ny} (עד {tr.protected_until_year}).")
+        # אומדן: הרווחים העודפים גדלים ברווח השנה אחרי מס, קטנים בדיבידנדים
+        p = d.current_year_profit_estimate
+        growth = (p * (1 - ci.s62a.corporate_tax_rate) if p and p > 0 else 0.0) - d.dividends_taxed_current_year
+        proj = max(0.0, c81.excess_profits + growth)
+        if not (tr.protected_in_tax_year and tr.protected_until_year >= ny) and proj > 0:
+            out.append(f"ללא חלוקה ב-{ny} – רווחים עודפים צפויים של כ-{_ils(proj)} ותוספת מס של כ-{_ils(0.02 * proj)} "
+                       f"(אומדן: הרווחים העודפים של השנה {'+ רווח השנה אחרי מס ' if growth > 0 else ''}– הדיבידנדים שחולקו).")
+            out.append(f"חלוקה שוטפת של {c81.required_distribution_rate if st.tax_year >= 2025 else 0.06:.0%} מהרווחים הנצברים "
+                       f"מדי שנה שומרת על הפטור ומונעת הצטברות (השנה: {_ils(sim.option_6pct)}).")
+    if st.applies_62a and s62.attributed_income > 0:
+        out.append(f"שכר בעלים שוטף של כ-{_ils(s62.attributed_income / 12)} לחודש ב-{ny} מוריד את הרווחיות מתחת ל-25% לאורך השנה "
+                   f"במקום תיקון בדצמבר (ומגדיל את מגן ההוצאות של 81).")
+    elif st.applies_62a and s62.governing_profitability > ci.flags.profitability_warning_threshold:
+        out.append(f"רווחיות {s62.governing_profitability:.0%} – לעקוב רבעונית ב-{ny}; מעל 25% נדרש תיקון שכר.")
     return out
 
 
@@ -538,7 +656,8 @@ def _annualize(ci: ClientInput) -> tuple[ClientInput, float]:
                 other_securities_inventory_sale=ci.s62a.other_securities_inventory_sale * f,
                 other_real_estate_sale=ci.s62a.other_real_estate_sale * f,
                 taxable_income_personal_effort=ci.s62a.taxable_income_personal_effort * f,
-                related_company_payments=ci.s62a.related_company_payments * f)
+                related_company_payments=ci.s62a.related_company_payments * f,
+                top_customers=[{**c, "amount": float(c.get("amount") or 0) * f} for c in (ci.s62a.top_customers or [])])
     sh = replace(ci.shields, expenses_current_year=ci.shields.expenses_current_year * f)
     # דיבידנדים, הפסדים ויתרות מאזן – ערכים בפועל, לא מוכפלים
     return replace(ci, s62a=s, shields=sh), f
@@ -650,4 +769,5 @@ def compute(ci: ClientInput) -> ClientResult:
         manual_review=_manual_review(ci, ret, s62, sh),
         missing_fields=missing,
         annualization_factor=factor,
+        next_year_notes=_next_year(ci, ret, s62, c81, tr, sim),
     )

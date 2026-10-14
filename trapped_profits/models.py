@@ -179,6 +179,12 @@ class Section62AInput:
 
     marginal_tax_rate: float = 0.50                    # B32
     corporate_tax_rate: float = 0.23                   # B33
+    # אברהם 14.10 (10): שכר בעלים ששולם בשנת המס. אם מוזן – עלות המס הנוספת מחושבת לפי מדרגות מס
+    # (מס על שכר+הכנסה מיוחסת פחות מס על השכר בלבד); ריק → נופלים למס שולי משוקלל.
+    owner_salary_current_year: Optional[float] = None
+    # אברהם 14.10 (12): הלקוחות הגדולים – לבדיקת ריכוזיות (70% מגורם אחד). [{"name": "...", "amount": 0}]
+    # ידני עד שיגיע מקובץ.
+    top_customers: list = field(default_factory=list)
 
     # ה. מבחנים משלימים (סימון ידני)
     concentration_test_met: bool = False               # B37 – 70% מגורם אחד ב-22 מתוך 36 חודשים

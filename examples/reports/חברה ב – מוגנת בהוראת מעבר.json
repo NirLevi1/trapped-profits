@@ -4,7 +4,7 @@
   "previous_year": 2025,
   "data_as_of": "2026-09-28",
   "is_estimate": false,
-  "logic_version": "2026.10.13-a",
+  "logic_version": "2026.10.14-a",
   "flags": {
     "start_day_basis_year": 2024,
     "deduct_transition_from_50pct_base": false,
@@ -46,7 +46,12 @@
     "attributed_income": 850000.0,
     "extra_tax_cost": 229500.00000000003,
     "partnership_under_10pct": false,
-    "intercompany_dividend_attributed": 0.0
+    "intercompany_dividend_attributed": 0.0,
+    "extra_tax_cost_method": "מס שולי משוקלל 50% פחות מס חברות 23% (לא הוזן שכר בעלים)",
+    "owner_salary": null,
+    "concentration_share": 0.0,
+    "concentration_top_name": "",
+    "customers_breakdown": []
   },
   "shields": {
     "fixed_shield": 375000.0,
@@ -83,7 +88,10 @@
     "exempt_6pct": false,
     "exempt_transition_2025": false,
     "is_exempt": false,
-    "surtax": 0.0
+    "surtax": 0.0,
+    "status_label": "מוגן בהוראת מעבר עד 2028",
+    "exempt_reason": "",
+    "alternative_relevant": false
   },
   "simulator": {
     "option_6pct": 429900.0,
@@ -115,8 +123,13 @@
   "manual_review": [
     "רווחים נצברים לפי הנוסחה המיסויית נמוכים מיתרת העודפים במאזן – לאמת את נתוני המס המצטברים",
     "חברה עם ני\"ע או החזקות – העודפים החשבונאיים עלולים לנפח את הבסיס",
-    "הכנסות מריבית או שכירות – לוודא ייחוס הוצאות ל\"הכנסה אחרת\" (62א(ג1))"
+    "הכנסות מריבית או שכירות – לוודא ייחוס הוצאות ל\"הכנסה אחרת\" (62א(ג1))",
+    "לא הוזן שכר בעלים – עלות המס הנוספת לפי מס שולי משוקלל; להזין שכר לחישוב לפי מדרגות"
   ],
   "missing_fields": [],
-  "annualization_factor": 1.0
+  "annualization_factor": 1.0,
+  "next_year_notes": [
+    "מוגנת גם ב-2027 (עד 2028).",
+    "שכר בעלים שוטף של כ-70,833 ₪ לחודש ב-2027 מוריד את הרווחיות מתחת ל-25% לאורך השנה במקום תיקון בדצמבר (ומגדיל את מגן ההוצאות של 81)."
+  ]
 }

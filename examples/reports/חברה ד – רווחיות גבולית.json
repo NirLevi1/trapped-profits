@@ -4,7 +4,7 @@
   "previous_year": 2025,
   "data_as_of": "2026-09-28",
   "is_estimate": false,
-  "logic_version": "2026.10.13-a",
+  "logic_version": "2026.10.14-a",
   "flags": {
     "start_day_basis_year": 2024,
     "deduct_transition_from_50pct_base": false,
@@ -46,7 +46,12 @@
     "attributed_income": 0.0,
     "extra_tax_cost": 0.0,
     "partnership_under_10pct": false,
-    "intercompany_dividend_attributed": 0.0
+    "intercompany_dividend_attributed": 0.0,
+    "extra_tax_cost_method": "מס שולי משוקלל 50% פחות מס חברות 23% (לא הוזן שכר בעלים)",
+    "owner_salary": null,
+    "concentration_share": 0.0,
+    "concentration_top_name": "",
+    "customers_breakdown": []
   },
   "shields": {
     "fixed_shield": 375000.0,
@@ -83,7 +88,10 @@
     "exempt_6pct": false,
     "exempt_transition_2025": false,
     "is_exempt": false,
-    "surtax": 57300.0
+    "surtax": 57300.0,
+    "status_label": "חייב בתוספת מס",
+    "exempt_reason": "",
+    "alternative_relevant": false
   },
   "simulator": {
     "option_6pct": 429900.0,
@@ -119,5 +127,10 @@
     "רווחיות בטווח 20%–30% – קרובה לסף 25%; לאמת מול הסימולטור של רשות המסים"
   ],
   "missing_fields": [],
-  "annualization_factor": 1.0
+  "annualization_factor": 1.0,
+  "next_year_notes": [
+    "ללא חלוקה ב-2027 – רווחים עודפים צפויים של כ-2,865,000 ₪ ותוספת מס של כ-57,300 ₪ (אומדן: הרווחים העודפים של השנה – הדיבידנדים שחולקו).",
+    "חלוקה שוטפת של 6% מהרווחים הנצברים מדי שנה שומרת על הפטור ומונעת הצטברות (השנה: 429,900 ₪).",
+    "רווחיות 23% – לעקוב רבעונית ב-2027; מעל 25% נדרש תיקון שכר."
+  ]
 }
