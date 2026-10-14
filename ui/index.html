@@ -270,7 +270,7 @@
       <button class="primary" onclick="saveForm()">שמירה וחישוב</button>
     </div>
     <div class="card">
-      <h3 style="margin-top:0">ייבוא מקבצים <small class="hint" style="display:inline">– שלושה קבצים, כל אחד בנפרד. שדה שמולא מסומן בצהוב; ריחוף עליו מראה מאיזו שורה נקרא. מה שלא נמצא נשאר ריק.</small></h3>
+      <h3 style="margin-top:0">ייבוא מקבצים <small class="hint" style="display:inline">– שדה שמולא מסומן בצהוב; ריחוף עליו מראה מאיזו שורה נקרא. מה שלא נמצא נשאר ריק.</small></h3>
       <div class="slots" id="slots"></div>
     </div>
     <div id="formBody"></div>
@@ -799,6 +799,7 @@
     const extraFilled = F.filter(f => !f.main).some(f => { const v = getp(inp, f.k); return v != null && v !== 0 && v !== false && v !== '' && v !== f.d; });
     $('formBody').innerHTML = main + `<details class="card" ${extraFilled ? 'open' : ''}><summary>נתונים נוספים <small>– רווחים ממקור פטור, נוסחת המס, נכסים מיוחדים נדירים, 62א מורחב</small></summary><div class="inner">${extra}</div></details>`;
     bindManual();
+    const tyEl = $(fid('structure.tax_year')); if (tyEl) tyEl.addEventListener('change', () => renderSlots('form', 'slots'));
   }
   function collectForm(){
     const out = {structure:{}, retained:{}, shields:{}, distributions:{}, s62a:{}, simulator:{}, flags:{}};
@@ -826,12 +827,15 @@
     slotMeta = slotMeta || (await api('import_slots')) || {slots: {}, ocr: false};
     const el = $(containerId || 'slots'); if (!el) return;
     const hidePdf = slotMode === 'card' && !window._showPdfSlot;
+    const tyNow = slotMode === 'card' ? (records.find(x => x.id === selectedId)?.input?.structure?.tax_year) : parseNum($(fid('structure.tax_year'))?.value);
+    const ty = Number(tyNow) || settings?.default_tax_year || Y;
+    const slotYear = k => k === 'annual_report' ? (showPrev ? ty - 2 : ty - 1) : (slotMeta.slots[k]?.prev ? ty - 1 : ty);
     const toggle = `<div class="hint" style="margin-bottom:6px;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><span>הדוח הסגור האחרון:</span>
-        <label style="display:flex;gap:4px;align-items:center"><input type="radio" name="closedKind" ${!showPrev ? 'checked' : ''} onchange="showPrev=false;renderSlots(slotMode, '${containerId || 'slots'}')"> לשנה הקודמת (רגיל)</label>
-        <label style="display:flex;gap:4px;align-items:center"><input type="radio" name="closedKind" ${showPrev ? 'checked' : ''} onchange="showPrev=true;renderSlots(slotMode, '${containerId || 'slots'}')"> ישן בשנה – השנה הקודמת עדיין פתוחה (תרחיש ב׳: מעלים גם מאזן בוחן מלא של השנה הקודמת, המערכת מגלגלת)</label></div>`;
+        <label style="display:flex;gap:4px;align-items:center"><input type="radio" name="closedKind" ${!showPrev ? 'checked' : ''} onchange="showPrev=false;renderSlots(slotMode, '${containerId || 'slots'}')"> הדוח של ${ty - 1} סגור (רגיל)</label>
+        <label style="display:flex;gap:4px;align-items:center"><input type="radio" name="closedKind" ${showPrev ? 'checked' : ''} onchange="showPrev=true;renderSlots(slotMode, '${containerId || 'slots'}')"> הדוח הסגור האחרון הוא של ${ty - 2} – ${ty - 1} עדיין פתוחה (תרחיש ב׳: מעלים גם מאזן בוחן מלא של ${ty - 1}, המערכת מגלגלת)</label></div>`;
     el.innerHTML = (hidePdf ? `<div class="hint" style="margin-bottom:4px">עדכון רבעוני – שני קבצים. יצא דוח שנתי חדש? <a href="#" onclick="window._showPdfSlot=true;renderSlots('card','cardSlotsBody');return false">גם דוח שנתי</a></div>` : toggle) +
       SLOT_ORDER.filter(k => slotMeta.slots[k] && !(hidePdf && k === 'annual_report') && (showPrev || !slotMeta.slots[k].prev)).map(k => { const m = slotMeta.slots[k]; return `<div class="slot" id="slot_${k}">
-        <div><b>${esc(m.title)}</b><div class="hint">${esc(m.desc)}${k === 'annual_report' && !slotMeta.ocr ? ' <span style="color:var(--warn)">זיהוי תווים לא מותקן – PDF סרוק לא ייקרא (דיגיטלי כן).</span>' : ''}</div></div>
+        <div><b>${esc(m.title)} <span style="color:var(--info)">${slotYear(k)}</span></b><div class="hint">${esc(m.desc)}${k === 'annual_report' && !slotMeta.ocr ? ' <span style="color:var(--warn)">זיהוי תווים לא מותקן – PDF סרוק לא ייקרא (דיגיטלי כן).</span>' : ''}</div></div>
         <button onclick="importSlot('${k}')" id="btn_${k}">בחירת קובץ…</button>
         <div class="st ${slotStatus[k]?.cls || ''}" id="st_${k}">${slotStatus[k]?.html || ''}</div></div>`; }).join('') || '<div class="hint">ייבוא זמין רק בתוכנה המותקנת.</div>';
   }
@@ -877,8 +881,9 @@
     }
     if (r.saved_copy) pendingCopies.push(r.saved_copy);
     const n = fillFields(r.fields, r.sources, slotMeta.slots[slot]?.title);
-    if (slot === 'annual_report' && r.year && ty && r.year <= ty - 2 && !showPrev){ showPrev = true; await renderSlots(slotMode, 'slots'); const st3 = $('st_annual_report'); if (st3){ st3.className = 'st ok'; st3.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו<div class="notes">הדוח ישן בשנה – נפתחו חריצי השנה הקודמת (תרחיש ב׳)</div>`; } toast('הדוח ישן בשנה – להעלות גם מאזן בוחן מלא של השנה הקודמת'); return; }
-    st.className = 'st ok'; st.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר (יועבר לתיקיית הלקוח בשמירה)</div>` : '');
+    if (slot === 'annual_report' && r.year && ty && r.year <= ty - 2 && !showPrev){ showPrev = true; slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${n} שדות מולאו<div class="notes">הדוח ישן בשנה – נפתחו חריצי השנה הקודמת (תרחיש ב׳)</div>`}; await renderSlots(slotMode, 'slots'); toast('הדוח ישן בשנה – להעלות גם מאזן בוחן מלא של השנה הקודמת'); return; }
+    slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר (יועבר לתיקיית הלקוח בשמירה)</div>` : '')};
+    st.className = 'st ok'; st.innerHTML = slotStatus[slot].html;
     toast(`${n} שדות מולאו – מסומנים בצהוב, לאישור`);
   }
   let slotsFor = null;
