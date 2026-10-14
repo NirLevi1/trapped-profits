@@ -82,7 +82,8 @@ def test_recompute_only_outdated_logic_version():
 
 
 def test_delete_archives_everything():
-    s, inp = _store()
+    s = ClientStore(Path(tempfile.mkdtemp()) / "clients")
+    inp = json.loads(EXAMPLE.read_text(encoding="utf-8"))
     rec = s.save(inp)
     name = s.safe_name(inp["structure"]["name"])
     data = s.root.parent
