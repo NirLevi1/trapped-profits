@@ -318,11 +318,16 @@ class ClientStore:
             raise ValueError("אין ערך קודם לשדה הזה")
         last = m["prev"].pop()
         self._set_path(rec["input"], path, last["value"])
-        state = last.get("state") if last.get("state") in FIELD_STATES else "manual"
-        src = f"בוטל {m.get('at', '')[:10]} – חזרה ל: {last.get('source') or 'ערך קודם'}"
-        meta = {path: {"state": state, "source": src, "force": True}}
-        new = self.save(rec["input"], cid, field_meta=meta)
-        new["field_meta"][path]["prev"] = m["prev"]          # הביטול עצמו לא נרשם כשלב נוסף
+        if last.get("state") in FIELD_STATES:
+            src = f"בוטל {m.get('at', '')[:10]} – חזרה ל: {last.get('source') or 'ערך קודם'}"
+            meta = {path: {"state": last["state"], "source": src, "force": True}}
+        else:                                                # לא היה מצב קודם (שדה שמעולם לא הוזן) – חוזר ל"חסר"
+            meta = None
+            rec["field_meta"].pop(path, None)
+            self._write(cid, rec)
+        new = self.save(rec["input"], cid, field_meta=meta, reset_paths=() if meta else (path,))
+        if path in new["field_meta"]:
+            new["field_meta"][path]["prev"] = m["prev"]      # הביטול עצמו לא נרשם כשלב נוסף
         self._log(new, "ביטול", f"{path}: חזרה ל-{last['value']}")
         return self._write(cid, new)
 

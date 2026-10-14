@@ -153,3 +153,16 @@ def test_rollover_year_carries_values():
     # השנה החדשה היא תרחיש ב׳ (הדוח הסגור ישן בשנה) והעודפים מגולגלים
     assert new["result"]["retained"]["is_estimate"] if "is_estimate" in new["result"]["retained"] else True
     assert new["result"] is not None
+
+
+def test_revert_field_without_prior_state_returns_to_missing():
+    s = ClientStore(Path(tempfile.mkdtemp()) / "clients")
+    inp = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+    inp["s62a"]["owner_salary_current_year"] = None
+    rec = s.save(inp)
+    rec = s.update_field(rec["id"], "s62a.owner_salary_current_year", 200000)
+    assert "שכר בעלים ששולם השנה" not in rec["missing_human"]
+    rec = s.revert_field(rec["id"], "s62a.owner_salary_current_year")
+    assert rec["input"]["s62a"]["owner_salary_current_year"] is None
+    assert "s62a.owner_salary_current_year" not in rec["field_meta"]
+    assert "שכר בעלים ששולם השנה" in rec["missing_human"]

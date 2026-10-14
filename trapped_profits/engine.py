@@ -634,7 +634,7 @@ def _dashboard(ci: ClientInput, s62: Section62AResult, tr: TransitionResult,
     elif s62.section_applies and s62.attributed_income > 0.5:
         status62 = "אדום – ייחוס הכנסה לבעל המניות"
     elif s62.concentration_share >= 0.70:
-        status62 = f"צהוב – לקוח אחד {s62.concentration_share:.0%} מההכנסות – לבדוק מבחן ריכוזיות (22 מתוך 36 חודשים)"
+        status62 = f"צהוב – לקוח אחד {s62.concentration_share:.0%} מההכנסות – לבדוק ריכוזיות על 36 חודשים"
     elif s62.governing_profitability > f.profitability_warning_threshold:
         status62 = "צהוב – רווחיות מתקרבת לסף 25%"
     elif s62.concentration_share >= 0.55:

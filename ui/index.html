@@ -712,7 +712,7 @@
     {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.taxable_income_personal_effort', t:'num', l:'הכנסה חייבת מפעילות עתירת יגיעה אישית', h:'אחרי ייחוס הוצאות ל"הכנסה אחרת". שנה מלאה, או עד החודש שהוזן'},
     {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.owner_salary_current_year', t:'num', l:'שכר בעלים ששולם בשנת המס', h:'ריק = עלות המס לפי מס שולי משוקלל; מוזן = לפי מדרגות מס'},
     {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.top_customers', t:'customers', l:'הלקוחות הגדולים (לבדיקת ריכוזיות 70% – עוגה בכרטיס)', h:'ידני עד שיגיע מקובץ. השאר מחושב כ"אחרים" מול סך ההכנסות'},
-    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.concentration_test_met', t:'bool', l:'70% מהמחזור מגורם אחד ב-22 מתוך 36 חודשים', h:'מבחן הריכוזיות – ייחוס מלא'},
+    {g:'סעיף 62א – השנה הנבדקת', main:1, k:'s62a.concentration_test_met', t:'bool', l:'70% מהמחזור מגורם אחד על סך 36 חודשים (סימון ידני)', h:'מבחן הריכוזיות – ייחוס מלא. עם שלוש כרטסות המערכת מכריעה לבד'},
 
     // ── נוספים ──
     {g:'מבנה – נוסף', k:'structure.preferred_or_approved_enterprise', t:'bool', l:'חמי"ז / חנ"ז / מפעל מועדף / מוטב / מאושר', h:'"כן" שולל את תחולת 62א'},
@@ -943,7 +943,7 @@
   async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ window._showPdfSlot = false; Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
   async function approveAllCard(id){ const r = await api('approve_fields', id, null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('השדות מהקובץ אושרו'); }
   function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); pendingCopies = []; showPrev = false; editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
-  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; showPrev = !!(rec.input?.structure?.last_closed_report_year && rec.input.structure.last_closed_report_year < rec.input.structure.tax_year - 1); $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
+  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; if (slotsFor !== id){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = id; } editingId = id; showPrev = !!(rec.input?.structure?.last_closed_report_year && rec.input.structure.last_closed_report_year < rec.input.structure.tax_year - 1); $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
   function cancelForm(){ show(editingId ? 'client' : 'clients'); }
   async function saveForm(){
     const inp = collectForm();
