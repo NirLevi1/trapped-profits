@@ -103,9 +103,11 @@
 
   /* ── lists ── */
   .tablewrap{overflow-x:auto}
+  .pathbox{display:flex;gap:8px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:6px 8px 6px 10px;background:var(--canvas-2)} .pathbox span{flex:1;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--ink-2);direction:ltr;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   table{width:100%;border-collapse:collapse;font-size:13px}
-  th{text-align:start;font-weight:500;color:var(--ink-3);font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{text-align:start;font-weight:500;color:var(--ink-3);font-size:12px;padding:6px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
   td{padding:9px 6px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  th.num{text-align:right}
   tbody tr.rowlink{cursor:pointer}
   tr:hover td{background:var(--canvas-2)}
   tbody tr:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
@@ -202,7 +204,7 @@
   <!-- ── Queue ── -->
   <section class="screen active" id="s-queue">
     <div class="toolbar">
-      <div><h1>רווחים כלואים</h1><p class="lead" style="margin:0">עם מי צריך לדבר לפני 31.12 — לפי סיכון, בשני המסלולים: תוספת מס 2% (סעיף 81) ורווחיות עודפת (סעיף 62א).</p></div>
+      <h1>תור עבודה</h1>
       <div class="spacer"></div>
       <span class="stale" id="asof"></span>
       <button onclick="newClient()">לקוח חדש</button>
@@ -222,7 +224,7 @@
   <!-- ── Clients ── -->
   <section class="screen" id="s-clients">
     <div class="toolbar">
-      <div><h1>לקוחות</h1><p class="lead" style="margin:0">נתוני הבסיס של כל לקוח. שמירה מחשבת מיד ומעדכנת את התור.</p></div>
+      <h1>לקוחות</h1>
       <div class="spacer"></div>
       <div class="seg" id="cView"><button type="button" class="on" data-v="list">רשימה</button><button type="button" data-v="q">לפי רבעונים</button></div>
       <button onclick="api('recompute_all').then(r=>{toast('חושבו מחדש '+(r?.n??0)+' לקוחות');reload();})">חישוב מחדש לכולם</button>
@@ -233,8 +235,7 @@
 
   <!-- ── Settings ── -->
   <section class="screen" id="s-settings">
-    <h1>הגדרות</h1>
-    <p class="lead">פרמטרים כלליים והדגלים של הנקודות הפתוחות. שינוי דגל מחשב מחדש את כל הלקוחות.</p>
+    <div class="toolbar"><h1>הגדרות</h1></div>
     <h2>כללי</h2>
     <div class="card">
       <div class="row">
@@ -245,7 +246,10 @@
         <label class="field"><span>שם המשרד (לחתימת המכתב ללקוח)</span><input type="text" id="st_firm"></label>
         <label class="field"><span>שם רואה החשבון המטפל</span><input type="text" id="st_acc"></label>
       </div>
-      <div class="field"><span>תיקיית הנתונים</span><div style="display:flex;gap:10px;align-items:center"><code id="st_dir" dir="ltr" style="font-size:12px;color:var(--ink-2)"></code><button type="button" class="quiet" onclick="api('open_data_folder')">פתיחה</button></div></div>
+      <div class="field"><span>תיקיית הנתונים</span>
+        <div class="pathbox"><span id="st_dir" dir="ltr"></span><button type="button" class="quiet" onclick="api('open_data_folder')">פתיחה</button><button type="button" class="quiet" onclick="chooseDataFolder()">שינוי…</button></div>
+        <div class="hint">הלקוחות, הקבצים שהועלו והדוחות. אפשר להפנות לתיקייה משותפת במשרד; הקבצים הקיימים לא עוברים לבד.</div>
+      </div>
     </div>
     <h2>נקודות פתוחות לאישור אברהם (דגלים)</h2>
     <div class="card">
@@ -310,7 +314,7 @@
       case 'update_field': { const r = S.find(x => x.id === a); if (!r) return {error:'לא נמצא'}; const ps = b.split('.'); let o = r.input; ps.slice(0,-1).forEach(k => o = o[k] = o[k] || {}); o[ps.at(-1)] = arguments[3]; return r; }
       case 'set_letter_note': { const r = S.find(x => x.id === a); if (r) r.letter_note = b; return r; }
       case 'set_handling': { const r = S.find(x => x.id === a); if (r) r.handling = {status: b, note: arguments[3] || '', at: new Date().toISOString().slice(0,19)}; return r; }
-      case 'get_settings': return window.__settings ||= {default_tax_year: 2026, stale_days: 60, data_dir: 'data/clients (תצוגה)', handling_statuses: ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל'], flags: {deduct_transition_from_50pct_base:false, enable_20pct_current_year_rule:true, deduction_base_excludes_related_payments:false, profitability_warning_threshold:.2}};
+      case 'get_settings': return window.__settings ||= {default_tax_year: 2026, stale_days: 60, data_dir: '/Users/niro/Projects/trapped-profits/data', app_version: '1.0', handling_statuses: ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל'], flags: {deduct_transition_from_50pct_base:false, enable_20pct_current_year_rule:true, deduction_base_excludes_related_payments:false, profitability_warning_threshold:.2}};
       case 'save_settings': Object.assign(window.__settings, a, {flags: {...window.__settings.flags, ...a.flags}}); return {ok: true, recomputed: 0};
       case 'export_report': return {path: null};
       case 'export_document': return {error: 'ייצוא קבצים זמין רק בתוכנה המותקנת'};
@@ -424,7 +428,7 @@
 
   // ── queue ──
   const sortRisk = rs => [...rs].sort((a,b) => (ORDER[a.dashboard.color_overall]-ORDER[b.dashboard.color_overall]) || (b.calc81.surtax-a.calc81.surtax) || (b.s62a.attributed_income-a.s62a.attributed_income));
-  const HEAD = `<th>לקוח</th><th>כולל</th><th>סעיף 81</th><th>סעיף 62א</th><th>תוספת מס</th><th>פער לחלוקה</th><th>שכר לתיקון</th><th>עודפים במאזן</th><th>טיפול</th>`;
+  const HEAD = `<th>לקוח</th><th>כולל</th><th>סעיף 81</th><th>סעיף 62א</th><th class="num">תוספת מס</th><th class="num">פער לחלוקה</th><th class="num">שכר לתיקון</th><th class="num">עודפים במאזן</th><th>טיפול</th>`;
   const handlingPill = h => { const st = h?.status || 'טרם טופל'; const k = st.startsWith('הוחלט') || st === 'טופל' ? 'good' : st === 'בשיחה' ? 'info' : ''; return `<span class="pill ${k}">${esc(st)}</span>`; };
   function row(c){
     return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
@@ -432,9 +436,9 @@
       <td>${pill(c.dashboard.color_overall)}</td>
       <td>${pill(c.dashboard.color_81, short(c.dashboard.status_81))}</td>
       <td>${pill(c.dashboard.color_62a, short(c.dashboard.status_62a))}</td>
-      <td>${ils(c.calc81.surtax)}</td>
-      <td>${c.simulator.action_required ? ils(c.simulator.gap_to_close) : '<span style="color:var(--ink-4)">לא נדרש</span>'}</td>
-      <td>${c.s62a.attributed_income ? ils(c.s62a.attributed_income) : '<span style="color:var(--ink-4)">—</span>'}</td>
+      <td class="num">${ils(c.calc81.surtax)}</td>
+      <td class="num">${c.simulator.action_required ? ils(c.simulator.gap_to_close) : '<span style="color:var(--ink-4)">לא נדרש</span>'}</td>
+      <td class="num">${c.s62a.attributed_income ? ils(c.s62a.attributed_income) : '<span style="color:var(--ink-4)">—</span>'}</td>
       <td class="num edit" title="לחיצה לעריכה" onclick="editCell(event, '${esc(c._id)}', 'retained.balance_sheet_retained_earnings', ${Math.round(c._retained || 0)})">${ils(c._retained)}</td>
       <td>${handlingPill(c._handling)}</td>
     </tr>`;
@@ -482,7 +486,7 @@
     const dates = [...new Set(rs.map(c => c.data_as_of).filter(Boolean))].sort();
     $('asof').textContent = !dates.length ? '' : dates.length === 1 ? `נכון ל־${fmtDate(dates[0])}` : `נתונים מ־${fmtDate(dates[0])} עד ${fmtDate(dates.at(-1))}`;
     const lv = rs[0]?.logic_version || records[0]?.logic_version || '';
-    $('statusCard').innerHTML = `<b>${records.length} לקוחות · שנת מס ${rs[0]?.tax_year ?? settings?.default_tax_year ?? Y}</b>${lv ? `גרסת לוגיקה <span class="num">${esc(lv)}</span>` : 'עדיין אין חישובים'}${MOCK ? '<br>תצוגת דפדפן – החישוב רץ רק בתוכנה' : ''}`;
+    $('statusCard').innerHTML = `<b>${records.length} לקוחות · שנת מס ${rs[0]?.tax_year ?? settings?.default_tax_year ?? Y}</b><span title="${lv ? 'גרסת לוגיקה ' + esc(lv) : ''}">גרסה ${esc(settings?.app_version || '1.0')}</span>${MOCK ? '<br>תצוגת דפדפן – החישוב רץ רק בתוכנה' : ''}`;
   }
   function renderReview(){
     const items = sortRisk(results()).filter(c => c.manual_review.length);
@@ -809,6 +813,10 @@
     const r = await api('rollover_year', id); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); renderClient(); return; }
     await reload(); renderClient(); toast(`מעבר שנה בוצע – עכשיו שנת מס ${r.input?.structure?.tax_year}`);
   }
+  async function chooseDataFolder(){
+    const r = await api('choose_data_folder'); if (!r || r.cancelled) return; if (r.error){ toast(r.error); return; }
+    settings = await api('get_settings'); $('st_dir').textContent = r.data_dir; await reload(); toast(`תיקיית הנתונים: ${r.data_dir} (${r.clients} לקוחות)`);
+  }
   async function revertToday(id){
     const r = await api('revert_today', id); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
     await reload(); if (editingId === id) editClient(id); else renderClient(); toast('השינויים מהיום בוטלו');
@@ -991,7 +999,7 @@
   // ── settings (החלטה 18) ──
   async function loadSettings(){
     settings = await api('get_settings'); if (!settings) return;
-    $('st_year').value = settings.default_tax_year; $('st_stale').value = settings.stale_days; $('st_dir').textContent = settings.data_dir || '';
+    $('st_year').value = settings.default_tax_year; $('st_stale').value = settings.stale_days; $('st_dir').textContent = settings.data_dir || ''; $('st_dir').title = settings.data_dir || '';
     $('st_firm').value = settings.firm_name || ''; $('st_acc').value = settings.accountant_name || '';
     const f = settings.flags || {};
     $('fl_50').checked = !!f.deduct_transition_from_50pct_base; $('fl_20').checked = !!f.enable_20pct_current_year_rule;

@@ -8,3 +8,4 @@ build/
 *.spec
 examples/real/
 tesseract/
+data_dir.txt

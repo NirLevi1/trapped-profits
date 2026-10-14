@@ -12,7 +12,36 @@ from pathlib import Path
 
 import webview
 
-from trapped_profits.store import ClientStore, app_dir
+from trapped_profits import APP_VERSION
+from trapped_profits.store import ClientStore, app_dir, data_root, set_data_root
+
+
+def icon_path(ext: str) -> str:
+    base = Path(getattr(sys, "_MEIPASS", None) or app_dir())
+    return str(base / "assets" / f"icon.{ext}")
+
+
+def set_app_icon(window=None) -> None:
+    """אייקון ה-F של פורטרה: בדוק (מק) / בשורת המשימות (ווינדוס). נוחות בלבד – כישלון לא מפיל."""
+    try:
+        if sys.platform == "darwin":
+            from AppKit import NSApplication, NSImage  # type: ignore[import-not-found]  # pyobjc – מגיע עם pywebview במק
+            img = NSImage.alloc().initWithContentsOfFile_(icon_path("png"))
+            if img:
+                NSApplication.sharedApplication().setApplicationIconImage_(img)
+        elif sys.platform.startswith("win"):
+            import ctypes
+            hwnd = ctypes.windll.user32.FindWindowW(None, WINDOW_TITLE)
+            if hwnd:
+                for which, size in ((0, 16), (1, 32)):          # ICON_SMALL, ICON_BIG
+                    hicon = ctypes.windll.user32.LoadImageW(None, icon_path("ico"), 1, size, size, 0x10)  # IMAGE_ICON, LR_LOADFROMFILE
+                    if hicon:
+                        ctypes.windll.user32.SendMessageW(hwnd, 0x80, which, hicon)     # WM_SETICON
+    except Exception:  # noqa: BLE001
+        pass
+
+
+WINDOW_TITLE = "פורטרה · רווחים כלואים"
 
 
 def ui_path() -> str:
@@ -71,7 +100,7 @@ class Api:
 
     def get_settings(self):
         from trapped_profits.store import HANDLING_STATUSES
-        return {**self.store.settings.load(), "handling_statuses": HANDLING_STATUSES, "data_dir": str(self.store.root)}
+        return {**self.store.settings.load(), "handling_statuses": HANDLING_STATUSES, "data_dir": str(self.store.root.parent), "app_version": APP_VERSION}
 
     def save_settings(self, data: dict):
         try:
@@ -217,10 +246,25 @@ class Api:
         open_path(str(self.store.root.parent))      # data/ – לקוחות, קבצים שהועלו, דוחות
         return True
 
+    def choose_data_folder(self):
+        """הגדרות: בחירת תיקיית נתונים אחרת (למשל כונן משותף במשרד). נכנסת לתוקף מיד; הקבצים הקיימים לא מועברים."""
+        try:
+            win = webview.windows[0]
+            paths = win.create_file_dialog(webview.FOLDER_DIALOG, directory=str(self.store.root.parent))
+        except Exception as e:  # noqa: BLE001
+            return {"error": f"לא נפתח חלון בחירת תיקייה: {e}"}
+        if not paths:
+            return {"cancelled": True}
+        new = Path(paths[0])
+        set_data_root(new)
+        self.store = ClientStore(new / "clients")
+        return {"data_dir": str(new), "clients": len(self.store.list())}
+
 
 def main() -> None:
     api = Api()
-    webview.create_window("פורטרה · רווחים כלואים", ui_path(), js_api=api, width=1240, height=820, min_size=(900, 600), maximized=True)
+    window = webview.create_window(WINDOW_TITLE, ui_path(), js_api=api, width=1240, height=820, min_size=(900, 600), maximized=True)
+    window.events.shown += lambda: set_app_icon(window)
     webview.start()
 
 

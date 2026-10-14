@@ -166,3 +166,13 @@ def test_revert_field_without_prior_state_returns_to_missing():
     assert rec["input"]["s62a"]["owner_salary_current_year"] is None
     assert "s62a.owner_salary_current_year" not in rec["field_meta"]
     assert "שכר בעלים ששולם השנה" in rec["missing_human"]
+
+
+def test_data_root_pointer(monkeypatch, tmp_path):
+    from trapped_profits import store as st
+    monkeypatch.setattr(st, "app_dir", lambda: tmp_path)
+    assert st.data_root() == tmp_path / "data"
+    other = tmp_path / "shared"
+    st.set_data_root(other)
+    assert st.data_root() == other
+    assert ClientStore().root == other / "clients"

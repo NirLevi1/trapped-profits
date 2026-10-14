@@ -1,0 +1,4 @@
+#!/bin/bash
+# מפעיל את התוכנה מתיקיית הפרויקט (ה-.app יושב בתוכה). אין חלון טרמינל; הלוג ב-setup.log
+cd "$(dirname "$0")/../../.." || exit 1
+exec /bin/bash ./run.command

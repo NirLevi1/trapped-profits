@@ -27,6 +27,20 @@ def app_dir() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def data_root() -> Path:
+    """תיקיית הנתונים: ברירת מחדל <תוכנה>/data; אפשר להפנות לתיקייה אחרת דרך הקובץ data_dir.txt (הגדרות → תיקיית הנתונים)."""
+    ptr = app_dir() / "data_dir.txt"
+    if ptr.exists():
+        p = Path(ptr.read_text(encoding="utf-8").strip())
+        if p.is_absolute():
+            return p
+    return app_dir() / "data"
+
+
+def set_data_root(path: Path) -> None:
+    (app_dir() / "data_dir.txt").write_text(str(path), encoding="utf-8")
+
+
 _KEYS = {
     "סטטוס כולל": ("dashboard", "status_overall"),
     "תוספת מס": ("calc81", "surtax"),
@@ -212,7 +226,7 @@ class Settings:
 
 class ClientStore:
     def __init__(self, root: Path | None = None):
-        self.root = Path(root) if root else app_dir() / "data" / "clients"
+        self.root = Path(root) if root else data_root() / "clients"
         self.root.mkdir(parents=True, exist_ok=True)
         self.settings = Settings(self.root / "_settings.json")   # בתוך תיקיית הנתונים; קבצי _ אינם לקוחות
 
