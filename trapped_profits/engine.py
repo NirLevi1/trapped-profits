@@ -621,6 +621,7 @@ def _next_year(ci: ClientInput, ret: RetainedResult, s62: Section62AResult, c81:
         elif headroom > 0 and c81.excess_profits <= 0:
             out.append(f"המגן הקובע ({_ils(c81.governing_shield)}) גדול מהרווחים הנצברים ב-{_ils(headroom)} – "
                        f"גם אחרי רווח {ny} אין חשיפה צפויה כל עוד ההוצאות נשארות ברמה דומה.")
+        if c81.excess_profits > 0:
             out.append(f"חלוקה שוטפת של {c81.required_distribution_rate:.0%} מהרווחים הנצברים "
                        f"מדי שנה שומרת על הפטור ומונעת הצטברות (השנה: {_ils(sim.option_6pct)}).")
     if st.applies_62a and s62.attributed_income > 0:
