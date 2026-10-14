@@ -122,6 +122,19 @@ class Api:
             open_path(str(p))
         return {"path": str(p) if p else None}
 
+    def import_rivhit(self):
+        """אברהם 20 / משימה 5: בחירת קובצי ריווחית (מאזן בוחן לפי חודשים, כרטסת הכנסות) → שדות לטופס."""
+        from trapped_profits.importers import import_files
+        try:
+            win = webview.windows[0]
+            paths = win.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True,
+                                           file_types=("קובצי ריווחית (*.csv;*.CSV;*.txt)", "כל הקבצים (*.*)"))
+        except Exception as e:  # noqa: BLE001
+            return {"error": f"לא נפתח חלון בחירת קבצים: {e}"}
+        if not paths:
+            return {"cancelled": True}
+        return import_files(list(paths))
+
     def open_data_folder(self):
         open_path(str(self.store.root))
         return True

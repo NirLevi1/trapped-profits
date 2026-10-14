@@ -119,6 +119,7 @@
   td.edit input{width:130px;padding:3px 6px;font:inherit;direction:ltr;text-align:right}
   .kv .v input{width:104px;padding:3px 6px;font:inherit;direction:ltr;text-align:right;border:1px solid var(--line);border-radius:6px}
   .kv .gov{color:var(--good);font-weight:600}
+  input.from-file,.from-file input{background:#fbf3d9;border-color:var(--warn)}
   .pie{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:8px}
   .pie svg{width:120px;height:120px;flex:none}
   .pie .leg{font-size:12.5px;display:grid;gap:3px}
@@ -272,9 +273,9 @@
       <button class="primary" onclick="saveForm()">שמירה וחישוב</button>
     </div>
     <div class="card" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-      <div style="flex:1;min-width:220px"><b style="font-weight:500">ייבוא מקובץ</b><div class="hint">דוח שנתי סגור (פי־די־אף / אקסל) או מבנה אחיד – המערכת תמלא את השדות ותסמן "מהקובץ, לאישור". בקרוב.</div></div>
-      <button disabled title="ייבוא מדוח שנתי – בפיתוח">ייבוא מדוח שנתי</button>
-      <button disabled title="ייבוא ממבנה אחיד – בפיתוח">ייבוא ממבנה אחיד</button>
+      <div style="flex:1;min-width:220px"><b style="font-weight:500">ייבוא מריווחית</b><div class="hint">בוחרים את שני הקבצים יחד: "מאזן בוחן יתרות לפי חודשים" (רווח והפסד של השנה) ו"כרטסת" של כרטיס ההכנסות (לקוחות). השדות שמולאו מסומנים בצהוב – לאישור. הדוח השנתי הסגור (מאזן) – הקלדה ידנית בפיילוט.</div><div class="hint" id="importNotes" style="margin-top:6px"></div></div>
+      <button class="primary" onclick="importRivhit()">ייבוא מריווחית…</button>
+      <button disabled title="הדוח הסגור סרוק – להקליד: עודפים, הוצאות 2025/2024, מזומן, הון מניות, דיבידנד 2025">מהדוח השנתי (ידני)</button>
     </div>
     <div id="formBody"></div>
     <div class="toolbar"><div class="spacer"></div><button onclick="cancelForm()">ביטול</button><button class="primary" onclick="saveForm()">שמירה וחישוב</button></div>
@@ -317,6 +318,7 @@
       case 'export_report': return {path: null};
       case 'export_document': return {error: 'ייצוא קבצים זמין רק בתוכנה המותקנת'};
       case 'open_data_folder': return true;
+      case 'import_rivhit': return {error: 'ייבוא קבצים זמין רק בתוכנה המותקנת'};
     }
   };
   /*MOCK_END*/
@@ -769,6 +771,30 @@
       setp(out, f.k, v);
     }
     return out;
+  }
+  // אברהם 20: ייבוא מריווחית → מילוי הטופס וסימון השדות
+  async function importRivhit(){
+    const r = await api('import_rivhit');
+    if (!r){ toast('ייבוא זמין רק בתוכנה המותקנת'); return; }
+    if (r.cancelled) return;
+    if (r.error){ toast(r.error, 6000); return; }
+    let n = 0;
+    for (const [k, v] of Object.entries(r.fields || {})){
+      const f = F.find(x => x.k === k); if (!f) continue;
+      if (f.t === 'customers'){
+        [0,1,2,3,4].forEach(i => { const nEl = $(fid(k) + '_n' + i), aEl = $(fid(k) + '_a' + i); if (!nEl) return; nEl.value = v[i]?.name || ''; aEl.value = v[i] ? fmtNum(v[i].amount) : ''; nEl.classList.toggle('from-file', !!v[i]); aEl.classList.toggle('from-file', !!v[i]); });
+        n++; continue;
+      }
+      const el = $(fid(k)); if (!el) continue;
+      if (f.t === 'bool') el.checked = !!v;
+      else if (f.t === 'num') el.value = fmtNum(v);
+      else if (f.t === 'rate') el.value = Math.round(v * 10000) / 100;
+      else el.value = v ?? '';
+      el.classList.add('from-file'); n++;
+    }
+    const notes = [...(r.notes || []), ...(r.errors || []).map(e => '⚠ ' + e)];
+    $('importNotes').innerHTML = notes.map(esc).join('<br>');
+    toast(`${n} שדות מולאו מהקובץ – מסומנים בצהוב, לאישור`);
   }
   function newClient(){ editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}); show('form'); }
   function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}); show('form'); }
