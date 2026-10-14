@@ -612,11 +612,16 @@ def _next_year(ci: ClientInput, ret: RetainedResult, s62: Section62AResult, c81:
         # אומדן: הרווחים העודפים גדלים ברווח השנה אחרי מס, קטנים בדיבידנדים
         p = d.current_year_profit_estimate
         growth = (p * (1 - ci.s62a.corporate_tax_rate) if p and p > 0 else 0.0) - d.dividends_taxed_current_year
-        proj = max(0.0, c81.excess_profits + growth)
+        # הרווחים הנצברים גדלים ברווח השנה אחרי מס; המגן (קבוע/הוצאות/נכסים) נשאר בערך אותו דבר
+        proj = max(0.0, c81.taxable_retained + growth - c81.governing_shield - c81.transition_reduction)
+        headroom = max(0.0, c81.governing_shield + c81.transition_reduction - c81.taxable_retained)
         if not (tr.protected_in_tax_year and tr.protected_until_year >= ny) and proj > 0:
             out.append(f"ללא חלוקה ב-{ny} – רווחים עודפים צפויים של כ-{_ils(proj)} ותוספת מס של כ-{_ils(0.02 * proj)} "
-                       f"(אומדן: הרווחים העודפים של השנה {'+ רווח השנה אחרי מס ' if growth > 0 else ''}– הדיבידנדים שחולקו).")
-            out.append(f"חלוקה שוטפת של {c81.required_distribution_rate if st.tax_year >= 2025 else 0.06:.0%} מהרווחים הנצברים "
+                       f"(אומדן: רווחים נצברים {'+ רווח השנה אחרי מס ' if growth > 0 else ''}– דיבידנדים, פחות המגן הקובע של השנה).")
+        elif headroom > 0 and c81.excess_profits <= 0:
+            out.append(f"המגן הקובע ({_ils(c81.governing_shield)}) גדול מהרווחים הנצברים ב-{_ils(headroom)} – "
+                       f"גם אחרי רווח {ny} אין חשיפה צפויה כל עוד ההוצאות נשארות ברמה דומה.")
+            out.append(f"חלוקה שוטפת של {c81.required_distribution_rate:.0%} מהרווחים הנצברים "
                        f"מדי שנה שומרת על הפטור ומונעת הצטברות (השנה: {_ils(sim.option_6pct)}).")
     if st.applies_62a and s62.attributed_income > 0:
         out.append(f"שכר בעלים שוטף של כ-{_ils(s62.attributed_income / 12)} לחודש ב-{ny} מוריד את הרווחיות מתחת ל-25% לאורך השנה "
@@ -661,8 +666,11 @@ def _annualize(ci: ClientInput) -> tuple[ClientInput, float]:
                 related_company_payments=ci.s62a.related_company_payments * f,
                 top_customers=[{**c, "amount": float(c.get("amount") or 0) * f} for c in (ci.s62a.top_customers or [])])
     sh = replace(ci.shields, expenses_current_year=ci.shields.expenses_current_year * f)
+    d = ci.distributions
+    if d.current_year_profit_estimate is not None:              # אומדן הרווח – תזרים, מוכפל גם הוא
+        d = replace(d, current_year_profit_estimate=d.current_year_profit_estimate * f)
     # דיבידנדים, הפסדים ויתרות מאזן – ערכים בפועל, לא מוכפלים
-    return replace(ci, s62a=s, shields=sh), f
+    return replace(ci, s62a=s, shields=sh, distributions=d), f
 
 
 def _ils(x: float) -> str:

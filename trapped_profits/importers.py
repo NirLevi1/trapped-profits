@@ -134,11 +134,11 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
     fields = {
         "structure.tax_year": year,
         "data_through_month": last_rev_month or None,
-        "s62a.total_revenue": round(revenue, 2),
-        "s62a.other_interest": round(fin_income, 2),
-        "s62a.taxable_income_personal_effort": round(max(0.0, profit), 2),
-        "shields.expenses_current_year": round(expenses - hints.get("depreciation", 0.0), 2),
-        "distributions.current_year_profit_estimate": round(profit, 2),
+        "s62a.total_revenue": round(revenue),
+        "s62a.other_interest": round(fin_income),
+        "s62a.taxable_income_personal_effort": round(max(0.0, profit)),
+        "shields.expenses_current_year": round(expenses - hints.get("depreciation", 0.0)),
+        "distributions.current_year_profit_estimate": round(profit),
     }
     return {"kind": "trial_balance", "year": year, "fields": {k: v for k, v in fields.items() if v is not None},
             "hints": dict(hints), "notes": notes,
@@ -173,7 +173,7 @@ def parse_ledger(path: str | Path) -> dict[str, Any]:
         raise ValueError("לא נמצאו תנועות בכרטסת")
     total = sum(by_customer.values())
     top = sorted(by_customer.items(), key=lambda x: -x[1])[:5]
-    customers = [{"name": k, "amount": round(v, 2)} for k, v in top if v > 0]
+    customers = [{"name": k, "amount": round(v)} for k, v in top if v > 0]
     share = (top[0][1] / total) if total > 0 and top else 0.0
     return {"kind": "ledger", "fields": {"s62a.top_customers": customers},
             "notes": [f"{n} תנועות, {len(by_customer)} לקוחות, סה\"כ {total:,.0f} ₪; הגדול ביותר {top[0][0]} – {share:.0%}" if top else ""],
