@@ -149,7 +149,8 @@
   /* ── detail ── */
   .detail-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
   .detail-head h1{margin:0}
-  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+  @media (max-width:1100px){.cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .cols .card{margin:0}
   .kv{display:grid;grid-template-columns:minmax(150px,1fr) auto;gap:6px 14px;font-size:13px}
   .kv .k{color:var(--ink-2)} .kv .v{text-align:end}
@@ -162,6 +163,13 @@
   .notice{padding:9px 12px;border-radius:6px;font-size:13px;margin-bottom:14px}
   .notice.warn{background:var(--warn-bg);color:var(--warn)}
   .notice.serious{background:var(--serious-bg);color:var(--serious)}
+  .notice.info{background:var(--info-bg);color:var(--info)} .notice.neutral{background:var(--neutral-bg);color:var(--ink-2)}
+  .flags{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+  .flag{border:1px solid transparent;border-radius:999px;padding:3px 10px;font-size:12px;line-height:18px;cursor:pointer;font-family:inherit}
+  .flag.serious{background:var(--serious-bg);color:var(--serious)} .flag.warn{background:var(--warn-bg);color:var(--warn)} .flag.info{background:var(--info-bg);color:var(--info)} .flag.neutral{background:var(--neutral-bg);color:var(--ink-2)}
+  .flag.on{border-color:currentColor} .flag::before{content:'▸ ';opacity:.7} .flag.on::before{content:'▾ '}
+  .menu{position:relative} .menu .pop{display:none;position:absolute;top:calc(100% + 4px);inset-inline-start:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.08);padding:10px 12px;z-index:6;min-width:260px} .menu.open .pop{display:block}
+  .pop table{font-size:13px} .pop td{padding:4px 8px;border:0;white-space:nowrap} .pop td:first-child{color:var(--ink-2);padding-inline-end:16px}
   .toast{position:fixed;inset-inline-start:24px;bottom:20px;background:var(--ink);color:var(--canvas);padding:10px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
   .toast.show{opacity:1}
   .confirm{display:inline-flex;gap:6px;align-items:center}
@@ -556,10 +564,12 @@
         <button class="quiet" onclick="show('queue')">חזרה לתור</button>
       </div>
       <div class="toolbar">
-        <button onclick="editClient('${esc(rec.id)}')">עריכת נתונים</button>
-        <button onclick="toggleCardSlots()" title="עדכון רבעוני: קובץ חדש דורס רק את השדות שבו ומחשב מחדש">עדכון מקבצים</button>
-        <div class="seg" title="דוח מלא לרואה החשבון"><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">דוח לרו"ח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></div>
-        <div class="seg" title="מכתב בשפה פשוטה ללקוח"><button type="button" onclick="exportDoc('${esc(rec.id)}','client','pdf')">מכתב ללקוח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></div>
+        <button onclick="editClient('${esc(rec.id)}')" title="עריכת הנתונים ועדכון מקבצים">עריכה</button>
+        <div class="menu" id="exportMenu"><button type="button" onclick="$('exportMenu').classList.toggle('open')">ייצוא ▾</button>
+          <div class="pop"><table>
+            <tr><td>דוח לרואה החשבון</td><td><button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">PDF</button> <button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></td></tr>
+            <tr><td>מכתב ללקוח</td><td><button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','client','pdf')">PDF</button> <button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></td></tr>
+          </table></div></div>
       </div>`;
     const c = rec.result;
     if (!c){
@@ -572,25 +582,30 @@
     if (k.exempt_50pct) tests.push('דיבידנד ≥ 50% מהרווחים העודפים');
     if (k.exempt_6pct) tests.push(`דיבידנד ≥ ${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`);
     if (k.exempt_transition_2025) tests.push('הוראת מעבר 2025');
-    const notices = [];
-    notices.push(`<div class="card" id="cardSlots" style="display:none;margin-bottom:12px"><h3 style="margin-top:0">עדכון מקבצים <small class="hint" style="display:inline">– קובץ חדש דורס רק את השדות שבו, מחשב מחדש ונרשם בהיסטוריה</small></h3><div class="slots" id="cardSlotsBody"></div></div>`);
-    { const ro = (rec.history || []).filter(h => h.kind === 'מעבר שנה' && h.checklist?.length).at(-1);
-      if (ro && ro.tax_year === rec.input?.structure?.tax_year) notices.push(`<details class="notice" style="background:var(--info-bg);color:var(--info)"><summary style="cursor:pointer"><b>מעבר שנה בוצע ${when(ro.at)}</b> – מה הועבר ומה לבדוק (${ro.checklist.length})</summary><ul style="margin:6px 0 0;padding-inline-start:18px">${ro.checklist.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="hint" style="margin-top:4px">הערכים שהועברו מסומנים "הועבר ממעבר שנה" בטופס, עם מקורם. תמונת השנה שנסגרה שמורה בהיסטוריה.</div></details>`); }
-    { const n = changedToday(rec); if (n) notices.push(`<div class="notice" style="display:flex;gap:10px;align-items:center;background:var(--neutral-bg)"><span>${n} שדות שונו ידנית היום.</span><div class="spacer"></div><button class="quiet" onclick="revertToday('${esc(rec.id)}')">↶ בטל את כל השינויים מהיום</button></div>`); }
-    if (rec.pending_file_fields?.length) notices.push(`<div class="notice warn" style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
-    if (rec.missing_human?.length) notices.push(`<div class="notice serious">חסר – רק אברהם יודע: ${rec.missing_human.map(esc).join(', ')}.</div>`);
-    if (c.missing_fields?.length) notices.push(`<div class="notice warn">חסר: ${c.missing_fields.map(esc).join(', ')} – התוצאה חושבה עם אפס במקומם.</div>`);
-    if (c.estimate_notes?.length) notices.push(`<div class="notice warn"><b>אומדנים שהמערכת הוסיפה – לבדיקת אברהם:</b><ul style="margin:4px 0 0;padding-inline-start:18px">${c.estimate_notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`);
+    // אברהם (ממשק 3): ההתראות בטוגלים – שורת צ'יפים עם מונים, לחיצה פותחת את הפירוט
+    const flags = [];
+    const addFlag = (key, tone, label, html) => flags.push({key, tone, label, html});
+    { const items = [...(rec.missing_human || []).map(x => ({t: 'serious', x: x + ' – רק אברהם יודע'})), ...(c.missing_fields || []).map(x => ({t: 'warn', x: x + ' – חושב עם אפס'}))];
+      if (items.length) addFlag('missing', 'serious', `חסרים ${items.length}`, `<ul style="margin:0;padding-inline-start:18px">${items.map(i => `<li style="color:var(--${i.t})">${esc(i.x)}</li>`).join('')}</ul><div class="hint" style="margin-top:6px"><button class="quiet" onclick="editClient('${esc(rec.id)}')">להשלים בעריכה</button></div>`); }
+    if (rec.pending_file_fields?.length) addFlag('pending', 'warn', `לאישור ${rec.pending_file_fields.length}`, `<div style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
+    if (c.estimate_notes?.length) addFlag('est', 'warn', `אומדנים ${c.estimate_notes.length}`, `<b>אומדנים שהמערכת הוסיפה – לבדיקת אברהם:</b><ul style="margin:4px 0 0;padding-inline-start:18px">${c.estimate_notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`);
     if (c.annualization_factor && c.annualization_factor !== 1){
       const a = c.actuals || {}, mth = a.through_month;
       const row = (l, from, to) => `<tr><td>${l}</td><td class="num">${ils(from)}</td><td class="num"><b>${ils(to)}</b></td></tr>`;
-      notices.push(`<div class="notice" style="background:var(--info-bg);color:var(--info)"><b>מה בפועל ומה אומדן</b> – הנתונים עד חודש ${mth}; החישוב על האומדן השנתי (× ${c.annualization_factor.toFixed(2)}${c.estimate_notes?.length ? ' + האומדנים שלמעלה' : ''}).
+      addFlag('annual', 'info', `אומדן שנתי (עד ${mth}/${c.tax_year})`, `<b>מה בפועל ומה אומדן</b> – הנתונים עד חודש ${mth}; החישוב על האומדן השנתי (× ${c.annualization_factor.toFixed(2)}${c.estimate_notes?.length ? ' + האומדנים' : ''}).
         <table class="mini" style="margin-top:4px"><tr><th></th><th>בפועל עד ${mth}/${c.tax_year}</th><th>אומדן שנתי ${c.tax_year}</th></tr>
-        ${row('הכנסות', a.revenue, s.personal_effort_income + s.other_income_total)}${row('הכנסה חייבת', a.taxable_income, s.taxable_income_personal_effort)}${row('הוצאות למגן', a.expenses, sh.expenses_current_adjusted - (sh.salary_added_to_expenses || 0))}</table></div>`);
+        ${row('הכנסות', a.revenue, s.personal_effort_income + s.other_income_total)}${row('הכנסה חייבת', a.taxable_income, s.taxable_income_personal_effort)}${row('הוצאות למגן', a.expenses, sh.expenses_current_adjusted - (sh.salary_added_to_expenses || 0))}</table>`);
     }
+    if (rec.stale) addFlag('stale', 'serious', 'מיושן', `נתון מיושן – נכון ל־${esc(fmtDate(rec.input?.data_as_of) || when(rec.updated_at))}. לעדכן לפני שמדברים עם הלקוח.`);
+    { const n = changedToday(rec); if (n) addFlag('today', 'neutral', `שונו היום ${n}`, `<div style="display:flex;gap:10px;align-items:center"><span>${n} שדות שונו ידנית היום.</span><div class="spacer"></div><button class="quiet" onclick="revertToday('${esc(rec.id)}')">↶ בטל את כל השינויים מהיום</button></div>`); }
+    { const ro = (rec.history || []).filter(h => h.kind === 'מעבר שנה' && h.checklist?.length).at(-1);
+      if (ro && ro.tax_year === rec.input?.structure?.tax_year) addFlag('roll', 'info', 'מעבר שנה', `<b>מעבר שנה בוצע ${when(ro.at)}</b> – מה הועבר ומה לבדוק:<ul style="margin:6px 0 0;padding-inline-start:18px">${ro.checklist.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="hint" style="margin-top:4px">הערכים שהועברו מסומנים "הועבר ממעבר שנה" בטופס, עם מקורם.</div>`); }
+    if (rec.changes?.length) addFlag('changes', 'neutral', 'השתנה בחישוב', rec.changes.map(x => `${esc(x.what)}: ${fmtv(x.from)} ← ${fmtv(x.to)}`).join(' · '));
+    const notices = [];
+    notices.push(`<div class="card" id="cardSlots" style="display:none;margin-bottom:12px"><h3 style="margin-top:0">עדכון מקבצים</h3><div class="slots" id="cardSlotsBody"></div></div>`);
+    if (flags.length) notices.push(`<div class="flags">${flags.map(f => `<button type="button" class="flag ${f.tone} ${openFlags.has(f.key) ? 'on' : ''}" onclick="toggleFlag('${f.key}')">${esc(f.label)}</button>`).join('')}</div>` +
+      flags.filter(f => openFlags.has(f.key)).map(f => `<div class="notice ${f.tone}">${f.html}</div>`).join(''));
     if (c.years_used) notices.push(`<div class="hint" style="margin:2px 0 8px">שנים בחישוב: עודפים – ${esc(c.years_used.retained)} · ממוצע הוצאות – ${esc(c.years_used.expenses_avg)} · השנה הנבדקת – ${esc(c.years_used.current_year)} · ריכוזיות – ${esc(c.years_used.concentration)}</div>`);
-    if (rec.stale) notices.push(`<div class="notice serious">נתון מיושן – נכון ל־${esc(fmtDate(rec.input?.data_as_of) || when(rec.updated_at))}. לעדכן לפני שמדברים עם הלקוח.</div>`);
-    if (rec.changes?.length) notices.push(`<div class="notice" style="background:var(--neutral-bg);color:var(--ink-2)">השתנה בחישוב האחרון: ${rec.changes.map(x => `${esc(x.what)}: ${fmtv(x.from)} ← ${fmtv(x.to)}`).join(' · ')}</div>`);
     el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall)) + notices.join('') + `
       <div class="cols">
         <div class="card"><h3>סעיף 81 · תוספת מס 2% &nbsp;${pill(c.dashboard.color_81, strip(c.dashboard.status_81))}</h3>${kv([
@@ -1016,7 +1031,11 @@
   }
 
   // ── export (החלטות 19–20) ──
+  const openFlags = new Set();
+  function toggleFlag(k){ if (openFlags.has(k)) openFlags.delete(k); else openFlags.add(k); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
+  document.addEventListener('click', e => { const m = $('exportMenu'); if (m && !m.contains(e.target)) m.classList.remove('open'); });
   async function exportDoc(id, kind, fmt){
+    $('exportMenu')?.classList.remove('open');
     const r = await api('export_document', id, kind, fmt);
     if (!r || r.error || !r.path){ toast(r?.error || 'ייצוא זמין רק בתוכנה המותקנת'); return; }
     toast(r.fallback_html ? 'לא נמצא ממיר PDF – נפתח להדפסה מהדפדפן' : 'הקובץ נוצר ונפתח');
