@@ -319,6 +319,7 @@
       case 'import_file': return {error: 'ייבוא קבצים זמין רק בתוכנה המותקנת'};
       case 'revert_field': { const r = S.find(x => x.id === a); const m = r?.field_meta?.[b]; if (!m?.prev?.length) return {error:'אין ערך קודם לשדה הזה'}; const last = m.prev.pop(); const ps = b.split('.'); let x = r.input; ps.slice(0,-1).forEach(q => x = x[q]); x[ps.at(-1)] = last.value; m.state = last.state || 'manual'; return r; }
       case 'revert_today': return S.find(x => x.id === a);
+      case 'rollover_year': { const r = S.find(x => x.id === a); if (!r) return null; const ty = r.input.structure.tax_year; r.input.structure.tax_year = ty + 1; (r.history = r.history || []).push({at:new Date().toISOString(), kind:'מעבר שנה', tax_year: ty + 1, text:'הדגמה', checklist:[`דיבידנד ${ty} הועבר לשנה קודמת`, `להעלות מאזן בוחן וכרטסת ${ty + 1}`]}); return r; }
       case 'approve_fields': { const r = S.find(x => x.id === a); if (r){ Object.values(r.field_meta || {}).forEach(m => { if (m.state === 'file') m.state = 'approved'; }); r.pending_file_fields = []; } return r; }
       case 'apply_import': return {error: 'זמין רק בתוכנה'};
       case 'field_info': return {human_only: null};
@@ -551,6 +552,7 @@
       <div class="toolbar">
         <button onclick="editClient('${esc(rec.id)}')">עריכת נתונים</button>
         <button onclick="toggleCardSlots()" title="עדכון רבעוני: קובץ חדש דורס רק את השדות שבו ומחשב מחדש">עדכון מקבצים</button>
+        <button class="quiet" id="rollBtn" onclick="askRollover('${esc(rec.id)}', ${Number(rec.input?.structure?.tax_year) || 0})" title="סגירת שנת המס ופתיחת הבאה: הדיבידנד, ההוצאות והכרטסת של השנה הופכים ל'שנה קודמת' ונשמרים; העודפים מגולגלים כאומדן">מעבר לשנת ${(Number(rec.input?.structure?.tax_year) || 0) + 1}</button>
         <div class="seg" title="דוח מלא לרואה החשבון"><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">דוח לרו"ח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></div>
         <div class="seg" title="מכתב בשפה פשוטה ללקוח"><button type="button" onclick="exportDoc('${esc(rec.id)}','client','pdf')">מכתב ללקוח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></div>
       </div>`;
@@ -567,6 +569,8 @@
     if (k.exempt_transition_2025) tests.push('הוראת מעבר 2025');
     const notices = [];
     notices.push(`<div class="card" id="cardSlots" style="display:none;margin-bottom:12px"><h3 style="margin-top:0">עדכון מקבצים <small class="hint" style="display:inline">– קובץ חדש דורס רק את השדות שבו, מחשב מחדש ונרשם בהיסטוריה</small></h3><div class="slots" id="cardSlotsBody"></div></div>`);
+    { const ro = (rec.history || []).filter(h => h.kind === 'מעבר שנה' && h.checklist?.length).at(-1);
+      if (ro && ro.tax_year === rec.input?.structure?.tax_year) notices.push(`<details class="notice" style="background:var(--info-bg);color:var(--info)"><summary style="cursor:pointer"><b>מעבר שנה בוצע ${when(ro.at)}</b> – מה הועבר ומה לבדוק (${ro.checklist.length})</summary><ul style="margin:6px 0 0;padding-inline-start:18px">${ro.checklist.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="hint" style="margin-top:4px">הערכים שהועברו מסומנים "הועבר ממעבר שנה" בטופס, עם מקורם. תמונת השנה שנסגרה שמורה בהיסטוריה.</div></details>`); }
     { const n = changedToday(rec); if (n) notices.push(`<div class="notice" style="display:flex;gap:10px;align-items:center;background:var(--neutral-bg)"><span>${n} שדות שונו ידנית היום.</span><div class="spacer"></div><button class="quiet" onclick="revertToday('${esc(rec.id)}')">↶ בטל את כל השינויים מהיום</button></div>`); }
     if (rec.pending_file_fields?.length) notices.push(`<div class="notice warn" style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
     if (rec.missing_human?.length) notices.push(`<div class="notice serious">חסר – רק אברהם יודע: ${rec.missing_human.map(esc).join(', ')}.</div>`);
@@ -589,7 +593,7 @@
           ['מצב', esc(k.status_label || (tests.length ? 'פטור – ' + tests.join('; ') : ''))],
           ['תוספת מס לתשלום', ils(k.surtax), true],
         ])}</div>
-        ${m.action_required ? `<div class="card"><h3>סימולטור · לחלק דיבידנד או לשלם 2%?</h3>${kv([
+        <div class="card"><h3>סימולטור · לחלק דיבידנד או לשלם 2%?</h3>${m.action_required ? '' : `<div class="hint" style="margin:-4px 0 8px">${esc(k.status_label)} – אין תוספת מס השנה. הסימולטור נשאר פתוח: אפשר לתקן את "כבר חולק השנה" או לבדוק "מה אם".</div>`}${kv([
           [`${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`, ils(m.option_6pct)],
           ['50% מהרווחים העודפים', m.option_50pct > 0 ? ils(m.option_50pct) : '—'],
           ...(m.option_20pct_start_day != null ? [['20% מרווחי יום התחילה', ils(m.option_20pct_start_day)]] : []),
@@ -618,7 +622,7 @@
           </div>
           <div id="wi_out" class="hint">הסימולציה לא נשמרת. ${MOCK ? 'בתצוגת הדפדפן אין מנוע – זמין בתוכנה.' : ''}</div>
         </div>
-        <div class="rec"><b>המלצה:</b> ${esc(m.recommendation_text || m.recommendation)}</div></div>` : `<div class="card"><h3>סימולטור</h3><div class="hint">${esc(k.status_label)} – אין תוספת מס השנה, אין מה לסמלץ.</div><div class="rec" style="margin-top:10px"><b>המלצה:</b> ${esc(m.recommendation_text || m.recommendation)}</div></div>`}
+        <div class="rec"><b>המלצה:</b> ${esc(m.recommendation_text || m.recommendation)}</div></div>
         <div class="card"><h3>סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}</h3>${kv([
           ['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)],
           ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)],
@@ -775,6 +779,14 @@
     if (!editingId) return;
     const r = await api('revert_field', editingId, k); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
     await reload(); editClient(editingId); toast('השדה הוחזר לערך הקודם');
+  }
+  function askRollover(id, ty){
+    const b = $('rollBtn'); if (!b) return;
+    b.outerHTML = `<span class="hint" id="rollBtn" style="display:inline-flex;gap:6px;align-items:center">לסגור את ${ty} ולפתוח את ${ty + 1}? הדיבידנד, ההוצאות והכרטסת של ${ty} יישמרו כ"שנה קודמת". <button onclick="doRollover('${esc(id)}')">כן, מעבר שנה</button><button class="quiet" onclick="renderClient()">ביטול</button></span>`;
+  }
+  async function doRollover(id){
+    const r = await api('rollover_year', id); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); renderClient(); return; }
+    await reload(); renderClient(); toast(`מעבר שנה בוצע – עכשיו שנת מס ${r.input?.structure?.tax_year}`);
   }
   async function revertToday(id){
     const r = await api('revert_today', id); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }

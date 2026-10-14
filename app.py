@@ -93,6 +93,12 @@ class Api:
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 
+    def rollover_year(self, cid: str):
+        try:
+            return self.store.rollover_year(cid)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
     def revert_field(self, cid: str, path: str):
         try:
             return self.store.revert_field(cid, path)

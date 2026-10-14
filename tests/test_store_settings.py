@@ -128,3 +128,28 @@ def test_field_records_and_revert():
     import pytest
     with pytest.raises(ValueError):
         s.revert_field(cid, "retained.balance_sheet_retained_earnings")
+
+
+def test_rollover_year_carries_values():
+    s = ClientStore(Path(tempfile.mkdtemp()) / "clients")
+    inp = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+    inp["structure"]["last_closed_report_year"] = 2025
+    inp["distributions"]["dividends_taxed_current_year"] = 150000
+    inp["data_through_month"] = 6
+    rec = s.save(inp)
+    cid, ty = rec["id"], inp["structure"]["tax_year"]
+    exp_cur = inp["shields"]["expenses_current_year"]
+    new = s.rollover_year(cid)
+    i = new["input"]
+    assert i["structure"]["tax_year"] == ty + 1
+    assert i["distributions"]["dividends_prev_year"] == 150000 and i["distributions"]["dividends_taxed_current_year"] == 0
+    assert i["shields"]["expenses_prev_year"] == round(exp_cur * 2) and i["shields"]["expenses_current_year"] == 0
+    assert i["data_through_month"] is None
+    assert new["field_meta"]["distributions.dividends_prev_year"]["state"] == "carried"
+    assert "מעבר שנה" in new["field_meta"]["distributions.dividends_prev_year"]["source"]
+    assert str(ty) in new["years"] and new["years"][str(ty)]["input"]["distributions"]["dividends_taxed_current_year"] == 150000
+    assert new["history"][-1]["kind"] == "מעבר שנה" and new["rollover_checklist"]
+    assert "דיבידנד ששולם עליו מס השנה" in new["missing_human"]
+    # השנה החדשה היא תרחיש ב׳ (הדוח הסגור ישן בשנה) והעודפים מגולגלים
+    assert new["result"]["retained"]["is_estimate"] if "is_estimate" in new["result"]["retained"] else True
+    assert new["result"] is not None

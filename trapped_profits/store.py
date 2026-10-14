@@ -100,12 +100,15 @@ def _flatten(d: dict, prefix: str = "") -> dict:
     return out
 
 
-def _record_changes(prev_inp: dict | None, new_inp: dict, meta: dict, by: str) -> dict:
+def _record_changes(prev_inp: dict | None, new_inp: dict, meta: dict, by: str, reset: tuple = ()) -> dict:
     """אברהם (סבב 2, 9+13): כל ערך שנשמר הוא רשומה – ערך קודם, מקור, מי ומתי. שינוי בלי מצב מפורש = ידני."""
     now = datetime.now().isoformat(timespec="seconds")
     old, new = _flatten(prev_inp or {}), _flatten(new_inp)
     for path, val in new.items():
         if path.split(".")[0] in FIELD_SKIP:
+            continue
+        if any(path == r or path.startswith(r + ".") for r in reset):   # אופס במעבר שנה – לא עריכה ידנית
+            meta.pop(path, None)
             continue
         m = meta.get(path)
         changed = prev_inp is not None and path in old and old[path] != val
@@ -243,7 +246,7 @@ class ClientStore:
         return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
     # ---- write
-    def save(self, inp: dict[str, Any], cid: str | None = None, field_meta: dict | None = None) -> dict[str, Any]:
+    def save(self, inp: dict[str, Any], cid: str | None = None, field_meta: dict | None = None, reset_paths: tuple = ()) -> dict[str, Any]:
         inp = dict(inp)
         inp["flags"] = {**(inp.get("flags") or {}), **self.settings.load()["flags"]}   # הדגלים מההגדרות גוברים
         inp["data_as_of"] = _normalize_date(inp.get("data_as_of") or "")
@@ -267,7 +270,7 @@ class ClientStore:
             "field_meta": _merge_meta((prev or {}).get("field_meta"), field_meta),
             "years": (prev or {}).get("years") or {},            # תמונות של שנים שנסגרו (מעבר שנה)
         }
-        rec["field_meta"] = _record_changes((prev or {}).get("input"), rec["input"], rec["field_meta"], self._by())
+        rec["field_meta"] = _record_changes((prev or {}).get("input"), rec["input"], rec["field_meta"], self._by(), reset_paths)
         rec["missing_human"] = _missing_human(rec["field_meta"], rec["input"])
         rec["pending_file_fields"] = [k for k, v in rec["field_meta"].items() if v.get("state") == "file"]
         try:
@@ -420,6 +423,101 @@ class ClientStore:
             raise ValueError(f"שדה לא מוכר: {path}")
         target[parts[-1]] = value
         return self.save(inp, cid, field_meta={path: {"state": "manual", "source": "עריכה ישירה"}})
+
+    # ---- אברהם (סבב 2, 9+13, 10): מעבר שנה
+    def rollover_year(self, cid: str) -> dict[str, Any]:
+        """סגירת שנת המס הנוכחית ופתיחת הבאה: מה שהוזן השנה (דיבידנד, הוצאות, מחזור, כרטסת) הופך ל"שנה קודמת"
+        ונשמר גם אם אינו בשום קובץ; העודפים מגולגלים כאומדן עד שיגיע דוח סגור; תמונת השנה נשמרת ב-years.
+        מחזיר את הרשומה החדשה עם checklist – מה הועבר ומה צריך לבדוק."""
+        from .engine import _rolled_retained
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        inp = json.loads(json.dumps(rec["input"]))
+        res = rec.get("result") or {}
+        st = inp["structure"]
+        ty = int(st["tax_year"])
+        new_ty = ty + 1
+        by = self._by()
+        old_meta = rec.get("field_meta") or {}
+        factor = 1.0
+        m = inp.get("data_through_month")
+        if m and 1 <= int(m) <= 12:
+            factor = 12.0 / int(m)
+        ann = lambda v: round(float(v or 0) * factor)  # noqa: E731
+        src_of = lambda path: (old_meta.get(path) or {}).get("source") or "הוזן ידנית"  # noqa: E731
+        carried: dict[str, dict] = {}
+        checklist: list[str] = []
+        tag = f"מעבר שנה {ty}→{new_ty}"
+
+        def carry(dst: str, value, src_path: str, label: str) -> None:
+            self._set_path(inp, dst, value)
+            carried[dst] = {"state": "carried", "source": f"{tag}: {label} ({src_of(src_path)})", "force": True}
+
+        # תמונת השנה שנסגרה
+        rec.setdefault("years", {})[str(ty)] = {
+            "closed_at": datetime.now().isoformat(timespec="seconds"), "by": by,
+            "input": rec["input"], "field_meta": old_meta, "summary": _summary(rec),
+            "snapshot": (rec.get("history") or [{}])[-1].get("snapshot"),
+        }
+
+        # 1. עודפים: אומדן מגולגל לתום השנה שנסגרה (עד שיגיע דוח סגור)
+        ci = ClientInput.from_dict(rec["input"])
+        rolled = _rolled_retained(ci)
+        d = inp["distributions"]
+        profit_est = d.get("current_year_profit_estimate")
+        if profit_est is None:
+            profit_est = inp["s62a"].get("taxable_income_personal_effort") or 0
+        profit_est = ann(profit_est)
+        carry("retained.balance_sheet_retained_earnings", rolled, "retained.balance_sheet_retained_earnings",
+              f"עודפים לתום {st.get('last_closed_report_year') or ty - 1}" + (" לפי גלגול" if ci.structure.is_scenario_b else " מהדוח הסגור"))
+        carried["retained.balance_sheet_retained_earnings"]["state"] = "estimate" if ci.structure.is_scenario_b else "carried"
+        carry("retained.prev_year_profit_for_rollover", profit_est, "distributions.current_year_profit_estimate", f"רווח {ty} (אומדן שנתי) לגלגול")
+        checklist.append(f"עודפים: הבסיס לתום {ty} הוא אומדן (עודפי הדוח הסגור + רווח {ty} אחרי מס − דיבידנד {ty}). כשייסגר דוח {ty} – להעלות אותו והאומדן יוחלף.")
+
+        # 2. דיבידנדים וריכוזיות
+        div = float(d.get("dividends_taxed_current_year") or 0)
+        carry("distributions.dividends_prev_year", div, "distributions.dividends_taxed_current_year", f"דיבידנד {ty}")
+        self._set_path(inp, "distributions.dividends_taxed_current_year", 0.0)
+        checklist.append(f"דיבידנד {ty}: {div:,.0f} ₪ הועבר ל\"דיבידנד השנה הקודמת\" ומופחת מהעודפים. דיבידנד {new_ty} – להזין כשיחולק.")
+        excess = ((res.get("calc81") or {}).get("excess_profits"))
+        if excess is not None:
+            carry("distributions.excess_profits_prev_year", float(excess), "retained.balance_sheet_retained_earnings", f"רווחים עודפים לתום {ty} מהחישוב")
+        sh, s62 = inp["shields"], inp["s62a"]
+        carry("shields.expenses_prev2_year", float(sh.get("expenses_prev_year") or 0), "shields.expenses_prev_year", f"הוצאות {ty - 1}")
+        carry("shields.expenses_prev_year", ann(sh.get("expenses_current_year")), "shields.expenses_current_year", f"הוצאות {ty}" + (" (אומדן שנתי)" if factor != 1 else ""))
+        self._set_path(inp, "shields.expenses_current_year", 0.0)
+        checklist.append(f"מגן הוצאות: הממוצע עכשיו על {ty - 1}, {ty} ו-{new_ty}. הוצאות {new_ty} – ממאזן הבוחן הבא.")
+        carry("s62a.prev_year_revenue_for_concentration", ann(s62.get("total_revenue")), "s62a.total_revenue", f"מחזור {ty}")
+        carry("s62a.top_customers_prev_year", s62.get("top_customers") or [], "s62a.top_customers", f"כרטסת {ty}")
+        for k, v in (("s62a.total_revenue", 0.0), ("s62a.taxable_income_personal_effort", 0.0), ("s62a.related_company_payments", 0.0),
+                     ("s62a.top_customers", []), ("s62a.owner_salary_current_year", None), ("s62a.intercompany_dividend_received", 0.0),
+                     ("distributions.losses_current_year", 0.0), ("distributions.current_year_profit_estimate", None),
+                     ("shields.pay_62a_salary_by_year_end", False)):
+            self._set_path(inp, k, v)
+        checklist.append(f"ריכוזיות: נבדקת על {ty - 1}–{new_ty}; כרטסת {new_ty} חסרה עד ההעלאה הבאה.")
+        inp["data_through_month"] = None
+        inp["data_as_of"] = ""
+        st["tax_year"] = new_ty
+
+        # 3. הגנת מעבר
+        prot = (res.get("transition") or {}).get("protected_until_year") or 0
+        if prot and prot < new_ty:
+            checklist.append(f"הגנת המעבר פקעה (הייתה עד {prot}) – ב-{new_ty} הלקוח חשוף לפי המבחנים הרגילים.")
+        elif prot:
+            checklist.append(f"הגנת המעבר עדיין בתוקף עד {prot}.")
+        checklist.append(f"להעלות ל-{new_ty}: מאזן בוחן לפי חודשים + כרטסת הכנסות (עדכון רבעוני); דוח שנתי {ty} כשייסגר.")
+
+        # שדות התקופה שאופסו – מצבם נמחק (יוצגו כחסרים / ריקים), לא נרשמים כעריכה ידנית
+        reset = ("s62a.total_revenue", "s62a.taxable_income_personal_effort", "s62a.related_company_payments", "s62a.top_customers",
+                 "s62a.owner_salary_current_year", "s62a.intercompany_dividend_received", "distributions.dividends_taxed_current_year",
+                 "distributions.losses_current_year", "distributions.current_year_profit_estimate", "shields.expenses_current_year",
+                 "shields.pay_62a_salary_by_year_end", "data_through_month", "structure.tax_year")
+        self._write(cid, rec)
+        new = self.save(inp, cid, field_meta=carried, reset_paths=reset)
+        new["rollover_checklist"] = checklist
+        self._log(new, "מעבר שנה", f"{tag}: " + " · ".join(checklist), checklist=checklist)
+        return self._write(cid, new)
 
     def set_handling(self, cid: str, status: str, note: str = "") -> dict[str, Any] | None:
         rec = self.get(cid)
