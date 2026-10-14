@@ -225,7 +225,7 @@ def parse_annual_report(pdf: str | Path) -> dict[str, Any]:
             raise RuntimeError("ה-PDF סרוק ואין זיהוי תווים מותקן (ווינדוס: winget install UB-Mannheim.TesseractOCR; מק: brew install tesseract)")
         raise RuntimeError("לא נמצא טקסט ב-PDF")
     P = [_Page(group_lines(ws)) for ws in pages]
-    fields: dict[str, Any] = {}
+    base_fields: dict[str, Any] = {}
     notes: list[str] = []
     src: dict[str, str] = {}
 
@@ -243,62 +243,108 @@ def parse_annual_report(pdf: str | Path) -> dict[str, Any]:
             if 2 <= len(lab.split()) <= 7 and re.search(r"בע[\"'׳״]*\s?מ(\s|$)", lab):
                 nm = re.sub(r"[\u0591-\u05c7]", "", lab)                 # בלי ניקוד שזיהוי התווים ממציא
                 nm = re.sub(r"בע[\"'׳״]*\s?מ(?=\s|$)", 'בע"מ', nm)
-                fields["structure.name"] = re.sub(r"\s+", " ", nm).strip()
+                base_fields["structure.name"] = re.sub(r"\s+", " ", nm).strip()
                 break
-        if "structure.name" in fields:
+        if "structure.name" in base_fields:
             break
     if year:
-        fields["structure.last_closed_report_year"] = year
+        base_fields["structure.last_closed_report_year"] = year
         notes.append(f"דוח ליום 31.12.{year}")
     else:
         notes.append("לא זוהתה שנת הדוח – לבדוק")
         year = 0
 
+    # ערכים לפי שנה (עמודת הדוח ועמודת השנה הקודמת) – המיפוי לשדות תלוי בשנת המס, ראו map_annual_fields
+    by_year: dict[str, dict[int, float]] = {"retained": {}, "expenses": {}, "dividend": {}, "cash": {}, "capital": {}}
+    prev_year = year - 1 if year else 0
+
     # מאזן
     bs = next((pg for pg in P if "מאזן" in pg.text and any(k in pg.text for k in _RETAINED)), None)
     if bs:
-        v, lab = bs.value(_RETAINED, year)
-        if v is not None:
-            fields["retained.balance_sheet_retained_earnings"] = v
-            src["retained.balance_sheet_retained_earnings"] = lab
-            if year == 2025 and len(bs.year_cols) >= 2:
-                prev, _ = bs.value(_RETAINED, 2024)
-                if prev is not None:
-                    fields["distributions.retained_at_start_day"] = prev
-                    src["distributions.retained_at_start_day"] = lab + " (עמודת 2024 = יתרה ליום התחילה)"
-        v, lab = bs.value(("הון מניות",), year)
-        if v is not None:
-            prem, _ = bs.value(("פרמיה",), year)
-            fields["shields.share_capital_and_premium"] = v + (prem or 0)
-            src["shields.share_capital_and_premium"] = lab
-        v, lab = bs.value(("מזומנים", "מזומניס"), year)
-        if v is not None:
-            dep, _ = bs.value(("פיקדונות", "פקדונות"), year)
-            fields["shields.special_loans_deposits_cash"] = v + (dep or 0)
-            src["shields.special_loans_deposits_cash"] = lab
+        for y in (year, prev_year):
+            if not y or (y != year and len(bs.year_cols) < 2):
+                continue
+            v, lab = bs.value(_RETAINED, y)
+            if v is not None:
+                by_year["retained"][y] = v
+                src.setdefault("retained", lab)
+            v, lab = bs.value(("הון מניות",), y)
+            if v is not None:
+                prem, _ = bs.value(("פרמיה",), y)
+                by_year["capital"][y] = v + (prem or 0)
+                src.setdefault("capital", lab)
+            v, lab = bs.value(("מזומנים", "מזומניס"), y)
+            if v is not None:
+                dep, _ = bs.value(("פיקדונות", "פקדונות"), y)
+                by_year["cash"][y] = v + (dep or 0)
+                src.setdefault("cash", lab)
     else:
         notes.append("לא זוהה עמוד מאזן")
 
     # רווח והפסד
     pl = next((pg for pg in P if "רווח והפסד" in pg.text and "הוצאות" in pg.text), None)
     if pl:
-        cur, used = pl.sum_rows(_EXPENSE, year)
-        if used:
-            fields["shields.expenses_prev_year"] = cur
-            src["shields.expenses_prev_year"] = "; ".join(used)
-        if len(pl.year_cols) >= 2:
-            prev_year = min(pl.year_cols)
-            p2, used2 = pl.sum_rows(_EXPENSE, prev_year)
-            if used2:
-                fields["shields.expenses_prev2_year"] = p2
-                src["shields.expenses_prev2_year"] = f"עמודת {prev_year}: " + "; ".join(used2)
-        v, lab = pl.value(("ייעוד רווחים", "דיבידנד", "דיווידנד"), year)
-        if v is not None and year == 2025:
-            fields["distributions.dividend_in_determining_period"] = abs(v)
-            src["distributions.dividend_in_determining_period"] = lab + " – לוודא שחולק 1.1–30.11.2025 והמס שולם עד 31.12.2025"
+        for y in (year, prev_year):
+            if not y or (y != year and len(pl.year_cols) < 2):
+                continue
+            tot, used = pl.sum_rows(_EXPENSE, y)
+            if used:
+                by_year["expenses"][y] = tot
+                src.setdefault(f"expenses_{y}", "; ".join(used))
+            v, lab = pl.value(("ייעוד רווחים", "דיבידנד", "דיווידנד"), y)
+            if v is not None:
+                by_year["dividend"][y] = abs(v)
+                src.setdefault("dividend", lab)
         notes.append("הוצאות כוללות פחת – אם יש פחת על נכסים מיוחדים, להפחית ידנית")
     else:
         notes.append("לא זוהה עמוד רווח והפסד")
 
+    raw_src = dict(src)
+    fields, src = map_annual_fields(by_year, year, None, raw_src, notes)
+    fields.update(base_fields)
     return {"kind": "annual_report", "year": year or None, "fields": fields, "sources": src, "notes": notes,
-            "ocr": any(not ws or True for ws in pages) and ocr_available() is not None}
+            "by_year": {k: {str(y): v for y, v in d.items()} for k, d in by_year.items()}, "raw_sources": raw_src,
+            "ocr": ocr_available() is not None}
+
+
+def map_annual_fields(by_year: dict, report_year: int, tax_year: int | None, raw_src: dict, notes: list[str]) -> tuple[dict, dict]:
+    """ממפה ערכים-לפי-שנה לשדות הטופס לפי שנת המס הנבדקת.
+
+    tax_year = report_year + 1 (הרגיל, תרחיש א׳): עודפים → בסיס; הוצאות הדוח → שנה קודמת, העמודה הקודמת → שנתיים.
+    tax_year = report_year + 2 (דוח ישן בשנה, תרחיש ב׳): עודפי הדוח → בסיס כאומדן (אברהם מגלגל); הוצאות הדוח → שנתיים קודם;
+        הוצאות השנה הקודמת ודיבידנד 2025 לא בדוח – נשארים ריקים.
+    יתרה ליום התחילה (1.1.2025) = עודפים לתום 2024, מאיזו עמודה שהיא נמצאת.
+    """
+    by_year = {k: {int(y): v for y, v in d.items()} for k, d in by_year.items()}
+    f: dict[str, Any] = {}
+    src: dict[str, str] = {}
+    ty = tax_year or (report_year + 1)
+    gap = ty - report_year
+    ret, exp, div = by_year.get("retained", {}), by_year.get("expenses", {}), by_year.get("dividend", {})
+    if report_year in ret:
+        f["retained.balance_sheet_retained_earnings"] = ret[report_year]
+        src["retained.balance_sheet_retained_earnings"] = raw_src.get("retained", "") + (f" (דוח {report_year} – ישן בשנה: אומדן, תרחיש ב׳)" if gap >= 2 else "")
+    if 2024 in ret:
+        f["distributions.retained_at_start_day"] = ret[2024]
+        src["distributions.retained_at_start_day"] = raw_src.get("retained", "") + " (עודפים לתום 2024 = יתרה ליום התחילה 1.1.2025)"
+    for y, v in exp.items():
+        if y == ty - 1:
+            f["shields.expenses_prev_year"] = v
+            src["shields.expenses_prev_year"] = raw_src.get(f"expenses_{y}", "")
+        elif y == ty - 2:
+            f["shields.expenses_prev2_year"] = v
+            src["shields.expenses_prev2_year"] = f"עמודת {y}: " + raw_src.get(f"expenses_{y}", "")
+    if 2025 in div:
+        f["distributions.dividend_in_determining_period"] = div[2025]
+        src["distributions.dividend_in_determining_period"] = raw_src.get("dividend", "") + " – לוודא שחולק 1.1–30.11.2025 והמס שולם עד 31.12.2025"
+    for key, path in (("capital", "shields.share_capital_and_premium"), ("cash", "shields.special_loans_deposits_cash")):
+        if report_year in by_year.get(key, {}):
+            f[path] = by_year[key][report_year]
+            src[path] = raw_src.get(key, "")
+    if gap >= 2:
+        notes.append(f"הדוח הוא ל-{report_year} ושנת המס {ty} – תרחיש ב׳: העודפים הם אומדן עד שיש דוח {report_year + 1}; "
+                     f"הוצאות {report_year + 1} ודיבידנד 2025 אינם בדוח – להזין ידנית")
+    elif gap <= 0:
+        notes.append(f"הדוח ל-{report_year} אינו מוקדם לשנת המס {ty} – לבדוק את שנת המס")
+    return f, src
+

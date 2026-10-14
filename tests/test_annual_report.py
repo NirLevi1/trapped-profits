@@ -71,3 +71,33 @@ def test_slot_routing_rejects_wrong_kind():
         import_slot("trial_balance", bad)
     with pytest.raises(ValueError):
         import_slot("annual_report", bad)
+
+
+def test_map_fields_by_tax_year_scenario_b():
+    from trapped_profits.annual_report import map_annual_fields
+    by_year = {"retained": {"2024": 378_051, "2023": 306_709}, "expenses": {"2024": 1_088_771, "2023": 900_000},
+               "dividend": {"2024": 200_000}, "cash": {"2024": 2_045}, "capital": {"2024": 101}}
+    # דוח 2024, שנת מס 2025 – הרגיל
+    f, src = map_annual_fields(by_year, 2024, 2025, {}, [])
+    assert f["retained.balance_sheet_retained_earnings"] == 378_051 and f["distributions.retained_at_start_day"] == 378_051
+    assert f["shields.expenses_prev_year"] == 1_088_771 and f["shields.expenses_prev2_year"] == 900_000
+    assert "distributions.dividend_in_determining_period" not in f          # דיבידנד 2024 אינו בתקופה הקובעת
+    # דוח 2024, שנת מס 2026 – תרחיש ב׳: הוצאות 2025 חסרות, הדוח הופך ל"שנתיים קודם"
+    notes = []
+    f, src = map_annual_fields(by_year, 2024, 2026, {}, notes)
+    assert f["shields.expenses_prev2_year"] == 1_088_771 and "shields.expenses_prev_year" not in f
+    assert f["retained.balance_sheet_retained_earnings"] == 378_051 and "תרחיש ב" in src["retained.balance_sheet_retained_earnings"]
+    assert any("תרחיש ב" in n for n in notes)
+    # דוח 2025, שנת מס 2026 – הרגיל: דיבידנד 2025 נכנס לתקופה הקובעת
+    by25 = {"retained": {"2025": 382_730, "2024": 378_051}, "expenses": {"2025": 2_073_663, "2024": 1_088_771}, "dividend": {"2025": 35_000}}
+    f, _ = map_annual_fields(by25, 2025, 2026, {}, [])
+    assert f["distributions.dividend_in_determining_period"] == 35_000 and f["distributions.retained_at_start_day"] == 378_051
+    assert f["shields.expenses_prev_year"] == 2_073_663 and f["shields.expenses_prev2_year"] == 1_088_771
+
+
+def test_keep_copy_layout():
+    from trapped_profits.importers import keep_copy
+    src = Path(tempfile.mkdtemp()) / "x.csv"
+    src.write_text("a", encoding="utf-8")
+    dst = keep_copy(src, Path(tempfile.mkdtemp()) / "לקוח", "כרטסת")
+    assert dst.exists() and dst.parent.name[4] == "-" and "Q" in dst.parent.name and dst.name.startswith("כרטסת – x")

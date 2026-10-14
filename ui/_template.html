@@ -822,7 +822,9 @@
     slotMode = mode || 'form';
     slotMeta = slotMeta || (await api('import_slots')) || {slots: {}, ocr: false};
     const el = $(containerId || 'slots'); if (!el) return;
-    el.innerHTML = SLOT_ORDER.filter(k => slotMeta.slots[k]).map(k => { const m = slotMeta.slots[k]; return `<div class="slot" id="slot_${k}">
+    const hidePdf = slotMode === 'card' && !window._showPdfSlot;
+    el.innerHTML = (hidePdf ? `<div class="hint" style="margin-bottom:4px">עדכון רבעוני – שני קבצים. יצא דוח שנתי חדש? <a href="#" onclick="window._showPdfSlot=true;renderSlots('card','cardSlotsBody');return false">גם דוח שנתי</a></div>` : '') +
+      SLOT_ORDER.filter(k => slotMeta.slots[k] && !(hidePdf && k === 'annual_report')).map(k => { const m = slotMeta.slots[k]; return `<div class="slot" id="slot_${k}">
         <div><b>${esc(m.title)}</b><div class="hint">${esc(m.desc)}${k === 'annual_report' && !slotMeta.ocr ? ' <span style="color:var(--warn)">זיהוי תווים לא מותקן – PDF סרוק לא ייקרא (דיגיטלי כן).</span>' : ''}</div></div>
         <button onclick="importSlot('${k}')" id="btn_${k}">בחירת קובץ…</button>
         <div class="st ${slotStatus[k]?.cls || ''}" id="st_${k}">${slotStatus[k]?.html || ''}</div></div>`; }).join('') || '<div class="hint">ייבוא זמין רק בתוכנה המותקנת.</div>';
@@ -849,7 +851,10 @@
   async function importSlot(slot){
     const btn = $('btn_' + slot), st = $('st_' + slot);
     btn.disabled = true; st.className = 'st'; st.textContent = slot === 'annual_report' ? 'קורא את הדוח… (סרוק: עד חצי דקה)' : 'קורא…';
-    const r = await api('import_file', slot);
+    const curRec = slotMode === 'card' ? records.find(x => x.id === selectedId) : null;
+    const ty = slotMode === 'card' ? curRec?.input?.structure?.tax_year : (parseNum($(fid('structure.tax_year'))?.value) || null);
+    const cname = slotMode === 'card' ? curRec?.input?.structure?.name : ($(fid('structure.name'))?.value || '');
+    const r = await api('import_file', slot, ty, curRec?.id || null, cname || '');
     btn.disabled = false;
     if (!r){ st.textContent = 'ייבוא זמין רק בתוכנה המותקנת'; return; }
     if (r.cancelled){ st.textContent = ''; return; }
@@ -858,18 +863,18 @@
       const rec = records.find(x => x.id === selectedId); if (!rec) return;
       const upd = await api('apply_import', rec.id, r.fields, r.sources, (slotMeta.slots[slot]?.title || slot) + ' – ' + r.file);
       if (!upd || upd.error){ st.className = 'st err'; st.textContent = upd?.error || 'העדכון נכשל'; return; }
-      slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${Object.keys(r.fields || {}).length} שדות עודכנו וחושבו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '')};
+      slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${Object.keys(r.fields || {}).length} שדות עודכנו וחושבו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר: ${esc(r.saved_copy.split('/data/')[1] || r.saved_copy)}</div>` : '')};
       await reload(); renderClient();
       const el2 = $('cardSlots'); if (el2){ el2.style.display = ''; await renderSlots('card', 'cardSlotsBody'); }
       toast('הלקוח עודכן מהקובץ וחושב מחדש');
       return;
     }
     const n = fillFields(r.fields, r.sources, slotMeta.slots[slot]?.title);
-    st.className = 'st ok'; st.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '');
+    st.className = 'st ok'; st.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר: ${esc(r.saved_copy.split('/data/')[1] || r.saved_copy)}</div>` : '');
     toast(`${n} שדות מולאו – מסומנים בצהוב, לאישור`);
   }
   let slotsFor = null;
-  async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
+  async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ window._showPdfSlot = false; Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
   async function approveAllCard(id){ const r = await api('approve_fields', id, null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('השדות מהקובץ אושרו'); }
   function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
   function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }

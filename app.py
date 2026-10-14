@@ -143,9 +143,10 @@ class Api:
         from trapped_profits.annual_report import ocr_available
         return {"slots": SLOTS, "ocr": bool(ocr_available())}
 
-    def import_file(self, slot: str):
-        """אברהם 20 / משימה 5: בחירת קובץ אחד לחריץ (דוח שנתי / מאזן בוחן / כרטסת) → שדות לטופס, מסומנים לאישור."""
-        from trapped_profits.importers import SLOTS, import_slot
+    def import_file(self, slot: str, tax_year=None, cid: str | None = None, client_name: str = ""):
+        """אברהם 20 / משימה 5: בחירת קובץ אחד לחריץ (דוח שנתי / מאזן בוחן / כרטסת) → שדות לטופס, מסומנים לאישור.
+        שומר עותק של הקובץ ב-data/files/<לקוח>/<שנה-רבעון>/ (תיעוד)."""
+        from trapped_profits.importers import SLOTS, import_slot, keep_copy
         if slot not in SLOTS:
             return {"error": "חריץ לא מוכר"}
         try:
@@ -157,9 +158,16 @@ class Api:
         if not paths:
             return {"cancelled": True}
         try:
-            return import_slot(slot, paths[0])
+            r = import_slot(slot, paths[0], int(tax_year) if tax_year else None)
         except Exception as e:  # noqa: BLE001
             return {"error": str(e), "file": Path(paths[0]).name}
+        try:
+            name = client_name or (r.get("fields") or {}).get("structure.name") or cid or "לקוח חדש"
+            safe = "".join(ch for ch in str(name) if ch not in '\\/:*?"<>|').strip() or "לקוח"
+            r["saved_copy"] = str(keep_copy(paths[0], self.store.root.parent / "files" / safe, SLOTS[slot]["title"]))
+        except Exception as e:  # noqa: BLE001
+            r.setdefault("notes", []).append(f"לא נשמר עותק של הקובץ: {e}")
+        return r
 
     def open_data_folder(self):
         open_path(str(self.store.root))

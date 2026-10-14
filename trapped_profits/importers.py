@@ -214,16 +214,23 @@ SLOTS = {
 }
 
 
-def import_slot(slot: str, path: str | Path) -> dict[str, Any]:
-    """קובץ אחד לחריץ אחד. מוודא שהקובץ מתאים לחריץ; מה שלא נמצא – לא מוחזר."""
+def import_slot(slot: str, path: str | Path, tax_year: int | None = None) -> dict[str, Any]:
+    """קובץ אחד לחריץ אחד. מוודא שהקובץ מתאים לחריץ; מה שלא נמצא – לא מוחזר.
+    tax_year – שנת המס של הלקוח/הטופס: קובע איך עמודות הדוח השנתי ממופות (דוח ישן בשנה = תרחיש ב׳)."""
     if slot not in SLOTS:
         raise ValueError("חריץ לא מוכר")
     p = Path(path)
     if slot == "annual_report":
         if p.suffix.lower() != ".pdf":
             raise ValueError("הדוח השנתי צריך להיות PDF")
-        from .annual_report import parse_annual_report
+        from .annual_report import parse_annual_report, map_annual_fields
         r = parse_annual_report(p)
+        if tax_year and r.get("year"):
+            notes = [n for n in r["notes"] if "תרחיש ב" not in n and "אינו מוקדם" not in n]
+            f, src = map_annual_fields(r["by_year"], r["year"], int(tax_year), r.get("raw_sources", {}), notes)
+            base = {k: v for k, v in r["fields"].items() if k.startswith("structure.")}
+            f.update(base)
+            r["fields"], r["sources"], r["notes"] = f, src, notes
     else:
         kind = detect(p)
         if kind != slot:
@@ -234,3 +241,17 @@ def import_slot(slot: str, path: str | Path) -> dict[str, Any]:
     r["slot"] = slot
     r.setdefault("sources", {})
     return r
+
+
+def keep_copy(path: str | Path, client_dir: Path, slot: str) -> Path:
+    """שומר עותק של הקובץ שהועלה: data/files/<לקוח>/<שנה>-Q<רבעון>/<חריץ> – <שם הקובץ>  (תיעוד להיסטוריה)."""
+    import shutil
+    from datetime import date
+    d = date.today()
+    q = (d.month - 1) // 3 + 1
+    dst_dir = client_dir / f"{d.year}-Q{q}"
+    dst_dir.mkdir(parents=True, exist_ok=True)
+    p = Path(path)
+    dst = dst_dir / f"{slot} – {p.name}"
+    shutil.copy2(p, dst)
+    return dst
