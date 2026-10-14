@@ -51,6 +51,8 @@
     "owner_salary": 360000,
     "concentration_share": 0.62,
     "concentration_top_name": "עיריית חולון",
+    "attributed_if_concentration": 2900000.0,
+    "extra_tax_if_concentration": 748119.5999999999,
     "customers_breakdown": [
       {
         "name": "עיריית חולון",

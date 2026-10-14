@@ -176,10 +176,6 @@
       <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h12M2 8h12M2 12h8"/></svg>
       תור עבודה <span class="count" id="queueCount"></span>
     </a>
-    <a data-screen="review">
-      <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5M8 11h.01"/></svg>
-      לבדיקה ידנית <span class="count" id="reviewCount"></span>
-    </a>
     <a data-screen="clients">
       <svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="6" cy="6" r="2.5"/><path d="M1.5 13c.5-2.5 2.5-3.5 4.5-3.5s4 1 4.5 3.5M11 5.5a2 2 0 110 3M14.5 13c-.3-1.7-1.3-2.7-2.8-3.1"/></svg>
       לקוחות <span class="count" id="clientsCount"></span>
@@ -214,12 +210,6 @@
       <label class="check" style="padding:0;border:0"><input type="checkbox" id="fGroup" onchange="renderQueue()"><div><b style="font-weight:400">קיבוץ לפי בעל שליטה</b></div></label>
     </div>
     <div class="tablewrap" id="queueList"></div>
-  </section>
-
-  <!-- ── Review ── -->
-  <section class="screen" id="s-review">
-    <div class="toolbar"><div><h1>לבדיקה ידנית</h1><p class="lead" style="margin:0">לקוחות שהמנוע סימן: הבסיס אצלם עלול להיות לא מדויק, או שהם קרובים לסף.</p></div></div>
-    <div class="tablewrap" id="reviewList"></div>
   </section>
 
   <!-- ── Clients ── -->
@@ -412,7 +402,7 @@
   // ── nav ──
   document.querySelectorAll('.nav a').forEach(a => { a.tabIndex = 0; a.onclick = () => show(a.dataset.screen); a.onkeydown = e => { if (e.key === 'Enter') show(a.dataset.screen); }; });
   async function show(id){
-    if (['queue','review','clients'].includes(id)) await reload();   // תמיד עדכני מול הקבצים בדיסק
+    if (['queue','clients'].includes(id)) await reload();   // תמיד עדכני מול הקבצים בדיסק
     document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.screen === id || (id === 'client' && a.dataset.screen === 'queue') || (id === 'form' && a.dataset.screen === 'clients')));
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + id));
     if (id === 'client') renderClient();
@@ -425,7 +415,7 @@
   const handlingPill = h => { const st = h?.status || 'טרם טופל'; const k = st.startsWith('הוחלט') || st === 'טופל' ? 'good' : st === 'בשיחה' ? 'info' : ''; return `<span class="pill ${k}">${esc(st)}</span>`; };
   function row(c){
     return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
-      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(c.data_as_of || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(c.data_as_of)}` : '')}</div></td>
+      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c.manual_review?.length ? ` · <span style="color:var(--ink-3)" title="${esc(c.manual_review.join(' | '))}">⚠ ${c.manual_review.length} לבדיקה</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(c.data_as_of || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(c.data_as_of)}` : '')}</div></td>
       <td>${pill(c.dashboard.color_overall)}</td>
       <td>${pill(c.dashboard.color_81, short(c.dashboard.status_81))}</td>
       <td>${pill(c.dashboard.color_62a, short(c.dashboard.status_62a))}</td>
@@ -483,8 +473,8 @@
   }
   function renderReview(){
     const items = sortRisk(results()).filter(c => c.manual_review.length);
-    $('reviewCount').textContent = items.length || '';
-    const el = $('reviewList');
+    const rc = $('reviewCount'); if (rc) rc.textContent = items.length || '';
+    const el = $('reviewList'); if (!el) return;
     if (!items.length){ el.innerHTML = `<div class="empty"><b>אין לקוחות לבדיקה ידנית.</b>כל החישובים נשענים על נתונים שהמנוע סומך עליהם.</div>`; return; }
     el.innerHTML = `<table><thead><tr><th>לקוח</th><th>כולל</th><th>למה</th><th></th></tr></thead><tbody>` +
       items.map(c => `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
@@ -630,7 +620,8 @@
           ['שכר בעלים ששולם השנה', `<input type="text" inputmode="numeric" placeholder="לא הוזן" value="${s.owner_salary == null ? '' : fmtNum(s.owner_salary)}" onkeydown="if(event.key==='Enter')saveField('${esc(rec.id)}','s62a.owner_salary_current_year',this.value,false,true)" onblur="saveField('${esc(rec.id)}','s62a.owner_salary_current_year',this.value,true,true)" oninput="fmtInput(this)">`],
           ['עלות מס נוספת מוערכת', ils(s.extra_tax_cost)],
         ])}<div class="hint" style="margin-top:6px">${esc(s.extra_tax_cost_method || '')}</div>
-        ${pieHtml(s)}</div>
+        ${pieHtml(s)}
+        ${c.applies_62a && !rec.input?.s62a?.concentration_test_met && s.attributed_if_concentration > 0 ? `<div class="notice ${s.concentration_share >= 0.7 ? 'serious' : s.concentration_share >= 0.55 ? 'warn' : ''}" style="margin-top:10px;background:${s.concentration_share >= 0.55 ? '' : 'var(--neutral-bg)'}"><b>אם מבחן הריכוזיות מתקיים</b> (לקוח אחד ≥70% ב־22 מתוך 36 חודשים): ייחוס מלא – שכר לתיקון ${ils(s.attributed_if_concentration)}, עלות מס נוספת ${ils(s.extra_tax_if_concentration)} – גם עם פטור 750 אלף וגם מתחת ל-25%. ${s.concentration_share >= 0.7 ? 'השנה הלקוח הגדול מעל 70% – לבדוק שנתיים אחורה.' : ''}</div>` : ''}</div>
         ${c.next_year_notes?.length ? `<div class="card"><h3>תכנון ${c.tax_year + 1}</h3><ul class="rev">${c.next_year_notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
         ${c.manual_review.length ? `<div class="card"><h3>לבדיקה ידנית</h3><ul class="rev">${c.manual_review.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
         <div class="card"><h3>טיפול &nbsp;${handlingPill(rec.handling)}</h3>

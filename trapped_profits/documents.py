@@ -149,6 +149,10 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None, history:
         ("עלות מס נוספת מוערכת", _ils(s.extra_tax_cost), False),
         ("אופן החישוב", s.extra_tax_cost_method, False),
     ]))
+    if r.applies_62a and s.attributed_if_concentration > 0:
+        b.append(Block("p", f"אם מבחן הריכוזיות מתקיים (לקוח אחד 70% ומעלה ב-22 מתוך 36 חודשים): ייחוס מלא של "
+                            f"{_ils(s.attributed_if_concentration)} – עלות מס נוספת {_ils(s.extra_tax_if_concentration)}, "
+                            f"גם עם פטור 750 אלף ₪ וגם מתחת ל-25%."))
     if s.customers_breakdown:                   # אברהם 14.10 (12)
         b.append(Block("h2", "ריכוזיות – חלוקת ההכנסות לפי לקוח"))
         b.append(Block("kv", rows=[(x["name"], f"{_ils(x['amount'])} ({x['share']:.0%})", x["share"] >= 0.55)

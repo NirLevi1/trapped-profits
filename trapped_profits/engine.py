@@ -77,6 +77,9 @@ class Section62AResult:
     # אברהם 14.10 (12): ריכוזיות – חלקו של הלקוח הגדול ביותר מסך ההכנסות (0 = אין נתון)
     concentration_share: float = 0.0
     concentration_top_name: str = ""
+    # מה קורה אם מבחן הריכוזיות מתקיים (22 מתוך 36 חודשים): ייחוס מלא – לא רק מעל 25%, גם עם פטור 750 אלף
+    attributed_if_concentration: float = 0.0
+    extra_tax_if_concentration: float = 0.0
     customers_breakdown: list = field(default_factory=list)   # [{"name","amount","share"}] + "אחרים"
 
 
@@ -267,6 +270,12 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
             breakdown.append({"name": "אחרים", "amount": rest, "share": rest / base_rev})
     conc_share = breakdown[0]["share"] if customers and base_rev > 0 else 0.0
     conc_name = customers[0][0] if customers else ""
+    full = s.taxable_income_personal_effort if st.applies_62a else 0.0
+    if full > 0 and s.owner_salary_current_year is not None:
+        sal = max(0.0, s.owner_salary_current_year)
+        full_cost = max(0.0, _individual_tax(sal + full) - _individual_tax(sal) - s.corporate_tax_rate * full)
+    else:
+        full_cost = max(0.0, full * (s.marginal_tax_rate - s.corporate_tax_rate))
     partnership_under = 0 < st.partnership_income_share < 0.10                  # B39
     rate = s.holding_rate_in_paying_company                                     # B42
     interco = 0.55 * s.intercompany_dividend_received \
@@ -291,6 +300,8 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
         owner_salary=s.owner_salary_current_year,
         concentration_share=conc_share,
         concentration_top_name=conc_name,
+        attributed_if_concentration=full,
+        extra_tax_if_concentration=full_cost,
         customers_breakdown=breakdown,
     )
 

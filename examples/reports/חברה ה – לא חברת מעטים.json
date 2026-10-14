@@ -51,6 +51,8 @@
     "owner_salary": null,
     "concentration_share": 0.0,
     "concentration_top_name": "",
+    "attributed_if_concentration": 0.0,
+    "extra_tax_if_concentration": 0.0,
     "customers_breakdown": []
   },
   "shields": {
