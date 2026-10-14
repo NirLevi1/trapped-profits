@@ -53,7 +53,10 @@ def tessdata_dir() -> Path:
 
 def ocr_available() -> str | None:
     """נתיב לטסרקט, או None אם לא מותקן."""
-    for c in ("tesseract", r"C:\Program Files\Tesseract-OCR\tesseract.exe", "/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract"):
+    from .store import app_dir
+    portable = app_dir() / "tesseract"                     # תיקייה ניידת ליד התוכנה (כמו בממיין החשבוניות)
+    for c in (str(portable / "tesseract.exe"), str(portable / "tesseract"), "tesseract",
+              r"C:\Program Files\Tesseract-OCR\tesseract.exe", "/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract"):
         p = shutil.which(c) or (c if os.path.exists(c) else None)
         if p:
             return p

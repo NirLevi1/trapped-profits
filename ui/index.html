@@ -118,6 +118,12 @@
   .kv .v input{width:104px;padding:3px 6px;font:inherit;direction:ltr;text-align:right;border:1px solid var(--line);border-radius:6px}
   .kv .gov{color:var(--good);font-weight:600}
   input.from-file,.from-file input{background:#fbf3d9;border-color:var(--warn)}
+  input.st-approved,input.st-manual{border-color:var(--good)}
+  input.st-missing{border-color:var(--serious);background:#fdf1ee}
+  .fstate{font-size:11px;margin-top:3px;display:flex;gap:6px;align-items:center}
+  .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual{color:var(--good)} .fstate.missing{color:var(--serious)}
+  .fstate button{padding:0 6px;font-size:11px;line-height:18px;border-radius:5px}
+  .check .fstate{margin-inline-start:0}
   .slots{display:grid;gap:10px}
   .slot{display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center;padding:10px 12px;border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--canvas-2)}
   .slot b{font-weight:500} .slot .st{grid-column:1/-1;font-size:12.5px;color:var(--ink-2)} .slot .st.err{color:var(--serious)} .slot .st.ok{color:var(--good)}
@@ -269,6 +275,7 @@
     <div class="toolbar">
       <div><h1 id="formTitle">לקוח חדש</h1><p class="lead" style="margin:0">השדות העיקריים למעלה. "נתונים נוספים" – רק אם רלוונטי; ריק = אפס.</p></div>
       <div class="spacer"></div>
+      <button onclick="approveAllForm()" title="מסמן את כל השדות שמולאו מקובץ כמאושרים">✓ אשר הכל מהקובץ</button>
       <button onclick="cancelForm()">ביטול</button>
       <button class="primary" onclick="saveForm()">שמירה וחישוב</button>
     </div>
@@ -302,7 +309,8 @@
       case 'save_client': {
         const id = b || ('new' + Date.now());
         const prev = S.find(r => r.id === id);
-        const rec = { id, input: a, result: prev ? prev.result : null, error: prev ? null : 'החישוב רץ רק בתוכנה המותקנת (תצוגת דפדפן)', updated_at: new Date().toISOString().slice(0,19), logic_version: prev?.logic_version || '' };
+        const meta = {...(prev?.field_meta || {}), ...(arguments[3] || {})};
+        const rec = { id, input: a, result: prev ? prev.result : null, error: prev ? null : 'החישוב רץ רק בתוכנה המותקנת (תצוגת דפדפן)', updated_at: new Date().toISOString().slice(0,19), logic_version: prev?.logic_version || '', field_meta: meta, pending_file_fields: Object.keys(meta).filter(k => meta[k].state === 'file') };
         if (prev) Object.assign(prev, rec); else S.push(rec);
         return rec;
       }
@@ -319,6 +327,9 @@
       case 'open_data_folder': return true;
       case 'import_slots': return {slots: {annual_report:{title:'דוח שנתי סגור (PDF)',desc:'מאזן + רווח והפסד לשנה הקודמת'}, trial_balance:{title:'מאזן בוחן לפי חודשים (ריווחית)',desc:'רווח והפסד של השנה הנבדקת'}, ledger:{title:'כרטסת הכנסות (ריווחית)',desc:'לקוחות גדולים'}}, ocr: true};
       case 'import_file': return {error: 'ייבוא קבצים זמין רק בתוכנה המותקנת'};
+      case 'approve_fields': { const r = S.find(x => x.id === a); if (r){ Object.values(r.field_meta || {}).forEach(m => { if (m.state === 'file') m.state = 'approved'; }); r.pending_file_fields = []; } return r; }
+      case 'apply_import': return {error: 'זמין רק בתוכנה'};
+      case 'field_info': return {human_only: null};
     }
   };
   /*MOCK_END*/
@@ -402,7 +413,7 @@
   }
 
   let records = [], selectedId = null, editingId = null;
-  const results = () => records.filter(r => r.result).map(r => Object.assign(r.result, {_id: r.id, _updated: r.updated_at, _stale: !!r.stale, _handling: r.handling || {status:'טרם טופל'}, _owner: r.input?.structure?.controlling_owner_name || '', _cid: r.input?.structure?.company_id || '', _retained: r.input?.retained?.balance_sheet_retained_earnings ?? null, _history: r.history || []}));
+  const results = () => records.filter(r => r.result).map(r => Object.assign(r.result, {_id: r.id, _updated: r.updated_at, _stale: !!r.stale, _handling: r.handling || {status:'טרם טופל'}, _owner: r.input?.structure?.controlling_owner_name || '', _cid: r.input?.structure?.company_id || '', _retained: r.input?.retained?.balance_sheet_retained_earnings ?? null, _history: r.history || [], _pending: (r.pending_file_fields || []).length, _missingHuman: (r.missing_human || []).length}));
   let settings = null;
 
   // ── nav ──
@@ -421,7 +432,7 @@
   const handlingPill = h => { const st = h?.status || 'טרם טופל'; const k = st.startsWith('הוחלט') || st === 'טופל' ? 'good' : st === 'בשיחה' ? 'info' : ''; return `<span class="pill ${k}">${esc(st)}</span>`; };
   function row(c){
     return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
-      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(c.data_as_of || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(c.data_as_of)}` : '')}</div></td>
+      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(c.data_as_of || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(c.data_as_of)}` : '')}</div></td>
       <td>${pill(c.dashboard.color_overall)}</td>
       <td>${pill(c.dashboard.color_81, short(c.dashboard.status_81))}</td>
       <td>${pill(c.dashboard.color_62a, short(c.dashboard.status_62a))}</td>
@@ -546,6 +557,7 @@
       </div>
       <div class="toolbar">
         <button onclick="editClient('${esc(rec.id)}')">עריכת נתונים</button>
+        <button onclick="toggleCardSlots()" title="עדכון רבעוני: קובץ חדש דורס רק את השדות שבו ומחשב מחדש">עדכון מקבצים</button>
         <div class="seg" title="דוח מלא לרואה החשבון"><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">דוח לרו"ח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></div>
         <div class="seg" title="מכתב בשפה פשוטה ללקוח"><button type="button" onclick="exportDoc('${esc(rec.id)}','client','pdf')">מכתב ללקוח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></div>
       </div>`;
@@ -561,6 +573,9 @@
     if (k.exempt_6pct) tests.push(`דיבידנד ≥ ${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`);
     if (k.exempt_transition_2025) tests.push('הוראת מעבר 2025');
     const notices = [];
+    notices.push(`<div class="card" id="cardSlots" style="display:none;margin-bottom:12px"><h3 style="margin-top:0">עדכון מקבצים <small class="hint" style="display:inline">– קובץ חדש דורס רק את השדות שבו, מחשב מחדש ונרשם בהיסטוריה</small></h3><div class="slots" id="cardSlotsBody"></div></div>`);
+    if (rec.pending_file_fields?.length) notices.push(`<div class="notice warn" style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
+    if (rec.missing_human?.length) notices.push(`<div class="notice serious">חסר – רק אברהם יודע: ${rec.missing_human.map(esc).join(', ')}.</div>`);
     if (c.missing_fields?.length) notices.push(`<div class="notice warn">חסר: ${c.missing_fields.map(esc).join(', ')} – התוצאה חושבה עם אפס במקומם.</div>`);
     if (c.annualization_factor && c.annualization_factor !== 1) notices.push(`<div class="notice" style="background:var(--info-bg);color:var(--info)">נתוני השנה עד חודש ${rec.input?.data_through_month} – הוכפלו פי <span class="num">${c.annualization_factor.toFixed(2)}</span> לאומדן שנתי (לינארי).</div>`);
     if (rec.stale) notices.push(`<div class="notice serious">נתון מיושן – נכון ל־${esc(rec.input?.data_as_of || when(rec.updated_at))}. לעדכן לפני שמדברים עם הלקוח.</div>`);
@@ -735,17 +750,47 @@
   const setp = (o, k, v) => { const ps = k.split('.'); let x = o; ps.slice(0,-1).forEach(p => x = x[p] = x[p] || {}); x[ps.at(-1)] = v; };
   const fid = k => 'f_' + k.replace(/\./g, '_');
 
+  // אברהם 14.10 (3): מצב לכל שדה – מהקובץ (לאישור) / אושר / ידני / חסר (רק אדם יודע)
+  let formMeta = {};
+  let humanOnly = null;
+  const HUMAN_ONLY_FALLBACK = {'structure.company_id':1,'structure.controlling_owner_name':1,'structure.controlling_owners_count':1,'structure.group_companies_count':1,'structure.owner_controls_another_company':1,'shields.total_assets_cost':1,'distributions.dividends_taxed_current_year':1,'distributions.determining_period_paid_and_taxed':1,'s62a.owner_salary_current_year':1};
+  const isHuman = k => !!((humanOnly || HUMAN_ONLY_FALLBACK)[k]);
+  function stateOf(k){ const m = formMeta[k]; if (m?.state) return m.state; return isHuman(k) ? 'missing' : ''; }
+  function stateHtml(k){
+    const st = stateOf(k); if (!st) return '';
+    const m = formMeta[k] || {};
+    const txt = st === 'file' ? 'מהקובץ · לאישור' : st === 'approved' ? 'אושר ' + (m.at ? when(m.at).slice(0,10) : '') : st === 'manual' ? 'הוזן ידנית' : 'חסר – לאברהם';
+    return `<div class="fstate ${st}" id="fs_${fid(k)}" title="${esc(m.source || '')}">${txt}${st === 'file' ? ` <button type="button" class="quiet" onclick="approveField('${k}')">✓ אשר</button>` : ''}</div>`;
+  }
+  function paintState(k){
+    const st = stateOf(k);
+    const els = $(fid(k)) ? [$(fid(k))] : [0,1,2,3,4].map(i => $(fid(k) + '_n' + i)).filter(Boolean).concat([0,1,2,3,4].map(i => $(fid(k) + '_a' + i)).filter(Boolean));
+    els.forEach(el => { el.classList.remove('from-file','st-approved','st-manual','st-missing'); if (st === 'file') el.classList.add('from-file'); else if (st) el.classList.add('st-' + st); el.title = formMeta[k]?.source || ''; });
+    const box = $('fs_' + fid(k)); if (box) box.outerHTML = stateHtml(k); else if (st && els[0]){ const lab = els[0].closest('label'); if (lab) lab.insertAdjacentHTML('beforeend', stateHtml(k)); }
+  }
+  function markManual(k){ if (stateOf(k) === 'manual') return; formMeta[k] = {state: 'manual', source: 'הוזן ידנית', at: new Date().toISOString().slice(0,19)}; paintState(k); }
+  function approveField(k){ if (formMeta[k]?.state === 'file'){ formMeta[k] = {...formMeta[k], state: 'approved', at: new Date().toISOString().slice(0,19)}; paintState(k); } }
+  function approveAllForm(){ let n = 0; Object.keys(formMeta).forEach(k => { if (formMeta[k].state === 'file'){ approveField(k); n++; } }); toast(n ? `אושרו ${n} שדות` : 'אין שדות מהקובץ שממתינים לאישור'); }
+  function bindManual(){
+    for (const f of F){
+      const els = f.t === 'customers' ? [0,1,2,3,4].flatMap(i => [$(fid(f.k)+'_n'+i), $(fid(f.k)+'_a'+i)]).filter(Boolean) : [$(fid(f.k))].filter(Boolean);
+      els.forEach(el => el.addEventListener('input', () => markManual(f.k)));
+      els.forEach(el => el.addEventListener('change', () => markManual(f.k)));
+    }
+  }
   function fieldHtml(f, val){
     const id = fid(f.k);
-    if (f.t === 'bool') return `<label class="check"><input type="checkbox" id="${id}" ${val ? 'checked' : ''}><div><b>${esc(f.l)}</b>${f.h ? `<small>${esc(f.h)}</small>` : ''}</div></label>`;
+    if (f.t === 'bool') return `<label class="check"><input type="checkbox" id="${id}" ${val ? 'checked' : ''}><div><b>${esc(f.l)}</b>${f.h ? `<small>${esc(f.h)}</small>` : ''}${stateHtml(f.k)}</div></label>`;
     if (f.t === 'customers') return `<div style="grid-column:1/-1"><div class="hint" style="margin-bottom:6px">${esc(f.l)}</div><div class="grid">${[0,1,2,3,4].map(i => `<label class="field"><span>לקוח ${i+1}</span><div style="display:flex;gap:6px"><input type="text" id="${id}_n${i}" placeholder="שם" value="${esc(val?.[i]?.name || '')}" style="flex:1"><input type="text" inputmode="numeric" id="${id}_a${i}" placeholder="הכנסות ממנו" value="${fmtNum(val?.[i]?.amount)}" oninput="fmtInput(this)" dir="ltr" style="width:140px"></div></label>`).join('')}</div>${f.h ? `<div class="hint">${esc(f.h)}</div>` : ''}</div>`;
     let v = val ?? '';
     if (f.t === 'rate' && v !== '') v = Math.round(v * 10000) / 100;
     if (f.t === 'num' && v !== '') v = fmtNum(v);
     const attrs = f.t === 'text' ? 'type="text"' : f.t === 'num' ? 'type="text" inputmode="numeric" dir="ltr" oninput="fmtInput(this)"' : `type="number" ${f.t === 'int' ? 'step="1"' : 'step="0.01"'}`;
-    return `<label class="field"><span>${esc(f.l)}</span><input ${attrs} id="${id}" value="${esc(v)}" ${f.t === 'text' && !['structure.name','structure.controlling_owner_name'].includes(f.k) ? 'dir="ltr"' : ''}>${f.h ? `<div class="hint">${esc(f.h)}</div>` : ''}</label>`;
+    const st = stateOf(f.k), cls = st === 'file' ? 'from-file' : st ? 'st-' + st : '';
+    return `<label class="field"><span>${esc(f.l)}</span><input ${attrs} class="${cls}" id="${id}" value="${esc(v)}" ${f.t === 'text' && !['structure.name','structure.controlling_owner_name'].includes(f.k) ? 'dir="ltr"' : ''}>${f.h ? `<div class="hint">${esc(f.h)}</div>` : ''}${stateHtml(f.k)}</label>`;
   }
-  function renderForm(inp){
+  function renderForm(inp, meta){
+    formMeta = JSON.parse(JSON.stringify(meta || {}));
     const groups = [...new Set(F.map(f => f.g))];
     const sect = (g, main) => {
       const fs = F.filter(f => f.g === g && !!f.main === main);
@@ -757,6 +802,7 @@
     const extra = groups.filter(g => F.some(f => f.g === g && !f.main)).map(g => sect(g, false)).join('');
     const extraFilled = F.filter(f => !f.main).some(f => { const v = getp(inp, f.k); return v != null && v !== 0 && v !== false && v !== '' && v !== f.d; });
     $('formBody').innerHTML = main + `<details class="card" ${extraFilled ? 'open' : ''}><summary>נתונים נוספים <small>– רווחים ממקור פטור, נוסחת המס, נכסים מיוחדים נדירים, 62א מורחב</small></summary><div class="inner">${extra}</div></details>`;
+    bindManual();
   }
   function collectForm(){
     const out = {structure:{}, retained:{}, shields:{}, distributions:{}, s62a:{}, simulator:{}, flags:{}};
@@ -775,29 +821,32 @@
   // אברהם 20: שלושה חריצי ייבוא – דוח שנתי (PDF), מאזן בוחן לפי חודשים, כרטסת הכנסות
   const SLOT_ORDER = ['annual_report', 'trial_balance', 'ledger'];
   let slotMeta = null;
-  async function renderSlots(){
+  let slotMode = 'form';          // 'form' – ממלא את הטופס; 'card' – מעדכן לקוח קיים ומחשב (עדכון רבעוני)
+  async function renderSlots(mode, containerId){
+    slotMode = mode || 'form';
     slotMeta = slotMeta || (await api('import_slots')) || {slots: {}, ocr: false};
-    const el = $('slots'); if (!el) return;
+    const el = $(containerId || 'slots'); if (!el) return;
     el.innerHTML = SLOT_ORDER.filter(k => slotMeta.slots[k]).map(k => { const m = slotMeta.slots[k]; return `<div class="slot" id="slot_${k}">
         <div><b>${esc(m.title)}</b><div class="hint">${esc(m.desc)}${k === 'annual_report' && !slotMeta.ocr ? ' <span style="color:var(--warn)">זיהוי תווים לא מותקן – PDF סרוק לא ייקרא (דיגיטלי כן).</span>' : ''}</div></div>
         <button onclick="importSlot('${k}')" id="btn_${k}">בחירת קובץ…</button>
         <div class="st" id="st_${k}"></div></div>`; }).join('') || '<div class="hint">ייבוא זמין רק בתוכנה המותקנת.</div>';
   }
-  function fillFields(fields, sources){
+  function fillFields(fields, sources, label){
     let n = 0;
     for (const [k, v] of Object.entries(fields || {})){
       const f = F.find(x => x.k === k); if (!f) continue;
-      const src = sources?.[k] ? 'מהקובץ: ' + sources[k] : 'מהקובץ';
+      const src = sources?.[k] ? 'מהקובץ: ' + sources[k] : 'מהקובץ' + (label ? ' ' + label : '');
       if (f.t === 'customers'){
-        [0,1,2,3,4].forEach(i => { const nEl = $(fid(k) + '_n' + i), aEl = $(fid(k) + '_a' + i); if (!nEl) return; nEl.value = v[i]?.name || ''; aEl.value = v[i] ? fmtNum(v[i].amount) : ''; nEl.classList.toggle('from-file', !!v[i]); aEl.classList.toggle('from-file', !!v[i]); nEl.title = aEl.title = v[i] ? src : ''; });
-        n++; continue;
+        [0,1,2,3,4].forEach(i => { const nEl = $(fid(k) + '_n' + i), aEl = $(fid(k) + '_a' + i); if (!nEl) return; nEl.value = v[i]?.name || ''; aEl.value = v[i] ? fmtNum(v[i].amount) : ''; });
+      } else {
+        const el = $(fid(k)); if (!el) continue;
+        if (f.t === 'bool') el.checked = !!v;
+        else if (f.t === 'num') el.value = fmtNum(v);
+        else if (f.t === 'rate') el.value = Math.round(v * 10000) / 100;
+        else el.value = v ?? '';
       }
-      const el = $(fid(k)); if (!el) continue;
-      if (f.t === 'bool') el.checked = !!v;
-      else if (f.t === 'num') el.value = fmtNum(v);
-      else if (f.t === 'rate') el.value = Math.round(v * 10000) / 100;
-      else el.value = v ?? '';
-      el.classList.add('from-file'); el.title = src; n++;
+      formMeta[k] = {state: 'file', source: src, at: new Date().toISOString().slice(0,19)};
+      paintState(k); n++;
     }
     return n;
   }
@@ -809,19 +858,30 @@
     if (!r){ st.textContent = 'ייבוא זמין רק בתוכנה המותקנת'; return; }
     if (r.cancelled){ st.textContent = ''; return; }
     if (r.error){ st.className = 'st err'; st.textContent = (r.file ? r.file + ': ' : '') + r.error; return; }
-    const n = fillFields(r.fields, r.sources);
+    if (slotMode === 'card'){
+      const rec = records.find(x => x.id === selectedId); if (!rec) return;
+      const upd = await api('apply_import', rec.id, r.fields, r.sources, (slotMeta.slots[slot]?.title || slot) + ' – ' + r.file);
+      if (!upd || upd.error){ st.className = 'st err'; st.textContent = upd?.error || 'העדכון נכשל'; return; }
+      await reload(); renderClient();
+      const el2 = $('cardSlots'); if (el2){ el2.style.display = ''; await renderSlots('card', 'cardSlotsBody'); const st2 = $('st_' + slot); if (st2){ st2.className = 'st ok'; st2.innerHTML = `✓ ${esc(r.file)} – ${Object.keys(r.fields || {}).length} שדות עודכנו וחושבו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : ''); } }
+      toast('הלקוח עודכן מהקובץ וחושב מחדש');
+      return;
+    }
+    const n = fillFields(r.fields, r.sources, slotMeta.slots[slot]?.title);
     st.className = 'st ok'; st.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '');
     toast(`${n} שדות מולאו – מסומנים בצהוב, לאישור`);
   }
-  function newClient(){ editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}); renderSlots(); show('form'); }
-  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}); renderSlots(); show('form'); }
+  async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
+  async function approveAllCard(id){ const r = await api('approve_fields', id, null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('השדות מהקובץ אושרו'); }
+  function newClient(){ editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
+  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
   function cancelForm(){ show(editingId ? 'client' : 'clients'); }
   async function saveForm(){
     const inp = collectForm();
     if (!inp.structure.name){ toast('צריך שם חברה'); $(fid('structure.name')).focus(); return; }
     if (inp.data_through_month != null && (inp.data_through_month < 1 || inp.data_through_month > 12)){ toast('"עד חודש" חייב להיות בין 1 ל-12'); $(fid('data_through_month')).focus(); return; }
     if (inp.structure.company_id && !/^\d{5,9}$/.test(inp.structure.company_id)){ toast('מספר ח.פ. – ספרות בלבד (5–9)'); $(fid('structure.company_id')).focus(); return; }
-    const rec = await api('save_client', inp, editingId);
+    const rec = await api('save_client', inp, editingId, formMeta);
     if (!rec || rec.error && !rec.id){ toast('לא נשמר: ' + (rec?.error || '')); return; }
     await reload();
     selectedId = rec.id; editingId = null;
@@ -904,7 +964,7 @@
     records = (await api('list_clients')) || [];
     renderQueue(); renderReview(); renderClients();
   }
-  function boot(){ MOCK = isMock(); loadSettings().then(reload); }
+  function boot(){ MOCK = isMock(); api('field_info').then(r => { if (r?.human_only) humanOnly = r.human_only; }); loadSettings().then(reload); }
   window.addEventListener('pywebviewready', boot);   // התוכנה: נטען שוב מהמנוע ברגע שהגשר מוכן
   boot();                                            // דפדפן / לפני שהגשר מוכן: דמו או ריק
 </script>

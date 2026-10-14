@@ -115,3 +115,28 @@ def test_history_letter_note_and_update_field():
     assert "בהמשך לשיחתנו" in html
     html = render_html(build_accountant_doc(r, rec3["handling"], rec3["history"]))
     assert "היסטוריה" in html and "הקובע" in html
+
+
+# ── (14.10 שלב ב) מצב שדות: מהקובץ / אושר / ידני / חסר; עדכון מקובץ בכרטיס ──
+def test_field_meta_states_and_apply_import():
+    from trapped_profits.store import HUMAN_ONLY_FIELDS
+    s = ClientStore(Path(tempfile.mkdtemp()))
+    rec = s.save(_inp(), field_meta={"retained.balance_sheet_retained_earnings": {"state": "file", "source": "רווח שנצבר"}})
+    assert rec["pending_file_fields"] == ["retained.balance_sheet_retained_earnings"]
+    assert len(rec["missing_human"]) == len(HUMAN_ONLY_FIELDS)          # עוד לא נגעו באף שדה "רק אדם יודע"
+    # עריכה ישירה = ידני → יוצא מהחסרים
+    rec = s.update_field(rec["id"], "structure.company_id", "515000001")
+    assert "מספר ח.פ." not in rec["missing_human"] and rec["field_meta"]["structure.company_id"]["state"] == "manual"
+    # אישור הכל
+    rec = s.approve_fields(rec["id"])
+    assert rec["pending_file_fields"] == [] and rec["field_meta"]["retained.balance_sheet_retained_earnings"]["state"] == "approved"
+    # עדכון רבעוני מקובץ בכרטיס: דורס רק את השדות שבקובץ, מסמן "מהקובץ", רושם בהיסטוריה
+    before = rec["input"]["structure"]["company_id"]
+    rec = s.apply_import(rec["id"], {"s62a.total_revenue": 999_000, "data_through_month": 9}, {"s62a.total_revenue": "4 הכנסות"}, "מאזן בוחן")
+    assert rec["input"]["s62a"]["total_revenue"] == 999_000 and rec["input"]["data_through_month"] == 9
+    assert rec["input"]["structure"]["company_id"] == before
+    assert rec["field_meta"]["s62a.total_revenue"]["state"] == "file" and rec["pending_file_fields"] == ["s62a.total_revenue", "data_through_month"]
+    assert rec["history"][-1]["kind"] == "עדכון מקובץ"
+    # מצב לא חוקי לא נשמר
+    rec = s.save(rec["input"], rec["id"], field_meta={"s62a.total_revenue": {"state": "bogus"}})
+    assert rec["field_meta"]["s62a.total_revenue"]["state"] == "file"

@@ -51,9 +51,9 @@ class Api:
         return self.store.get(cid)
 
     # ---- write
-    def save_client(self, inp: dict, cid: str | None = None):
+    def save_client(self, inp: dict, cid: str | None = None, field_meta: dict | None = None):
         try:
-            return self.store.save(inp, cid)
+            return self.store.save(inp, cid, field_meta)
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 
@@ -86,6 +86,22 @@ class Api:
             return self.store.set_letter_note(cid, note) or {"error": "לקוח לא נמצא"}
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
+
+    def approve_fields(self, cid: str, paths=None):
+        try:
+            return self.store.approve_fields(cid, paths)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
+    def apply_import(self, cid: str, fields: dict, sources: dict | None = None, label: str = "קובץ"):
+        try:
+            return self.store.apply_import(cid, fields, sources, label)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
+    def field_info(self):
+        from trapped_profits.store import HUMAN_ONLY_FIELDS
+        return {"human_only": HUMAN_ONLY_FIELDS}
 
     def update_field(self, cid: str, path: str, value=None):
         """עריכת שדה בודד (עודפים במאזן מהתור, דיבידנד שחולק מהסימולטור, שכר בעלים) – שומר ומחשב."""

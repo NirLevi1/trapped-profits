@@ -60,7 +60,8 @@ DISCLAIMER = ("כלי ניטור וסינון ראשוני בלבד – אינו
 # ---------------------------------------------------------------------------
 # דוח לרו"ח
 # ---------------------------------------------------------------------------
-def build_accountant_doc(r: ClientResult, handling: dict | None = None, history: list | None = None) -> Doc:
+def build_accountant_doc(r: ClientResult, handling: dict | None = None, history: list | None = None,
+                         pending_fields: list | None = None, missing_human: list | None = None) -> Doc:
     d, c, s, m, sh, tr = r.dashboard, r.calc81, r.s62a, r.simulator, r.shields, r.transition
     b: list[Block] = []
     meta = [f"שנת מס {r.tax_year}", f"בסיס לתום {r.previous_year}"]
@@ -77,6 +78,10 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None, history:
     ]))
     if r.missing_fields:
         b.append(Block("callout", "חסר: " + ", ".join(r.missing_fields) + " – התוצאה חושבה עם אפס במקומם.", tone="warn"))
+    if pending_fields:
+        b.append(Block("callout", f"{len(pending_fields)} שדות מולאו מקובץ וטרם אושרו.", tone="warn"))
+    if missing_human:
+        b.append(Block("callout", "חסר – רק רואה החשבון יודע: " + ", ".join(missing_human) + ".", tone="serious"))
     if r.annualization_factor != 1.0:
         b.append(Block("p", f"נתוני השנה הוכפלו פי {r.annualization_factor:.2f} לאומדן שנתי (לינארי)."))
 
@@ -430,8 +435,10 @@ def html_to_pdf(html_path: Path, pdf_path: Path, doc: "Doc | None" = None) -> Pa
 # ---------------------------------------------------------------------------
 def export(r: ClientResult, kind: str, fmt: str, out_dir: Path, handling: dict | None = None,
            letter_note: str = "", history: list | None = None,
-           firm_name: str = "", accountant_name: str = "") -> Path | None:
-    doc = build_client_doc(r, firm_name, accountant_name, letter_note) if kind == "client" else build_accountant_doc(r, handling, history)
+           firm_name: str = "", accountant_name: str = "",
+           pending_fields: list | None = None, missing_human: list | None = None) -> Path | None:
+    doc = build_client_doc(r, firm_name, accountant_name, letter_note) if kind == "client" \
+        else build_accountant_doc(r, handling, history, pending_fields, missing_human)
     out_dir.mkdir(parents=True, exist_ok=True)
     safe = "".join(ch for ch in r.name if ch not in '\\/:*?"<>|').strip() or "client"
     stem = f"{safe} – {'מכתב ללקוח' if kind == 'client' else 'דוח לרואה חשבון'} {r.tax_year}"

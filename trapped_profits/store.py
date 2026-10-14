@@ -82,6 +82,36 @@ def _diff(prev: dict | None, cur: dict) -> list[dict]:
     return out
 
 
+# אברהם 14.10 (3): מצב לכל שדה – מהקובץ (לאישור) / אושר / ידני; ושדות שרק אדם יודע
+FIELD_STATES = ("file", "approved", "manual")
+HUMAN_ONLY_FIELDS = {
+    "structure.company_id": "מספר ח.פ.",
+    "structure.controlling_owner_name": "שם בעל השליטה",
+    "structure.controlling_owners_count": "מספר בעלי השליטה",
+    "structure.group_companies_count": "חברות מעטים בשליטת בעל השליטה",
+    "structure.owner_controls_another_company": "בעל שליטה בחברה אחרת",
+    "shields.total_assets_cost": "עלות כלל נכסי החברה",
+    "distributions.dividends_taxed_current_year": "דיבידנד ששולם עליו מס השנה",
+    "distributions.determining_period_paid_and_taxed": "המס על דיבידנד 2025 שולם עד 31.12.2025",
+    "s62a.owner_salary_current_year": "שכר בעלים ששולם השנה",
+}
+
+
+def _missing_human(meta: dict) -> list[str]:
+    """שדות שרק אדם יודע ועדיין לא נגעו בהם (אין מצב ידני/מאושר)."""
+    return [label for path, label in HUMAN_ONLY_FIELDS.items()
+            if (meta.get(path) or {}).get("state") not in ("manual", "approved")]
+
+
+def _merge_meta(prev: dict | None, new: dict | None) -> dict:
+    out = dict(prev or {})
+    for k, v in (new or {}).items():
+        if not isinstance(v, dict) or v.get("state") not in FIELD_STATES:
+            continue
+        out[k] = {"state": v["state"], "source": str(v.get("source") or ""), "at": v.get("at") or datetime.now().isoformat(timespec="seconds")}
+    return out
+
+
 # החלטה 14: סטטוס טיפול ידני (לא משפיע על החישוב)
 HANDLING_STATUSES = ["טרם טופל", "בשיחה", "הוחלט: חלוקה", "הוחלט: שכר", "הוחלט: לא לפעול", "טופל"]
 
@@ -160,7 +190,7 @@ class ClientStore:
         return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
     # ---- write
-    def save(self, inp: dict[str, Any], cid: str | None = None) -> dict[str, Any]:
+    def save(self, inp: dict[str, Any], cid: str | None = None, field_meta: dict | None = None) -> dict[str, Any]:
         inp = dict(inp)
         inp["flags"] = {**(inp.get("flags") or {}), **self.settings.load()["flags"]}   # הדגלים מההגדרות גוברים
         inp["data_as_of"] = _normalize_date(inp.get("data_as_of") or "")
@@ -181,7 +211,10 @@ class ClientStore:
             "handling": (prev or {}).get("handling") or {"status": HANDLING_STATUSES[0], "note": "", "at": None},
             "letter_note": (prev or {}).get("letter_note", ""),      # אברהם 14.10 (18) – טקסט חופשי למכתב
             "history": (prev or {}).get("history") or [],
+            "field_meta": _merge_meta((prev or {}).get("field_meta"), field_meta),
         }
+        rec["missing_human"] = _missing_human(rec["field_meta"])
+        rec["pending_file_fields"] = [k for k, v in rec["field_meta"].items() if v.get("state") == "file"]
         try:
             rec["result"] = compute(ci).to_dict()
         except Exception as e:  # noqa: BLE001
@@ -220,6 +253,47 @@ class ClientStore:
         self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
         return rec
 
+    def approve_fields(self, cid: str, paths: list[str] | None = None) -> dict[str, Any]:
+        """אישור שדות שמולאו מקובץ – כולם (None) או רשימה."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        meta = rec.get("field_meta") or {}
+        now = datetime.now().isoformat(timespec="seconds")
+        n = 0
+        for k, v in meta.items():
+            if v.get("state") == "file" and (paths is None or k in paths):
+                v.update(state="approved", at=now)
+                n += 1
+        rec["field_meta"] = meta
+        rec["missing_human"] = _missing_human(meta)
+        rec["pending_file_fields"] = [k for k, v in meta.items() if v.get("state") == "file"]
+        self._log(rec, "אישור", f"אושרו {n} שדות מהקובץ")
+        self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+        return rec
+
+    def apply_import(self, cid: str, fields: dict, sources: dict | None, label: str) -> dict[str, Any]:
+        """אברהם 14.10 (2): עדכון רבעוני מקובץ בכרטיס לקוח קיים – דורס רק את השדות שבקובץ, מחשב, ורושם בהיסטוריה."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        inp = rec["input"]
+        meta = {}
+        now = datetime.now().isoformat(timespec="seconds")
+        for path, value in (fields or {}).items():
+            parts = path.split(".")
+            target = inp
+            for pth in parts[:-1]:
+                target = target.setdefault(pth, {})
+            if parts[-1] not in target and path not in ("data_as_of", "data_through_month"):
+                continue
+            target[parts[-1]] = value
+            meta[path] = {"state": "file", "source": (sources or {}).get(path, label), "at": now}
+        new = self.save(inp, cid, field_meta=meta)
+        self._log(new, "עדכון מקובץ", f"{label} – {len(meta)} שדות")
+        self._path(cid).write_text(json.dumps(new, ensure_ascii=False, indent=2), encoding="utf-8")
+        return new
+
     def update_field(self, cid: str, path: str, value: Any) -> dict[str, Any]:
         """אברהם 14.10 (3, 15): עריכת שדה בודד מהתור/מהכרטיס – שומר ומחשב מחדש."""
         rec = self.get(cid)
@@ -233,7 +307,7 @@ class ClientStore:
         if parts[-1] not in target and path not in ("data_as_of", "data_through_month"):
             raise ValueError(f"שדה לא מוכר: {path}")
         target[parts[-1]] = value
-        return self.save(inp, cid)
+        return self.save(inp, cid, field_meta={path: {"state": "manual", "source": "עריכה ישירה"}})
 
     def set_handling(self, cid: str, status: str, note: str = "") -> dict[str, Any] | None:
         rec = self.get(cid)
@@ -271,7 +345,8 @@ class ClientStore:
         try:
             return export(compute(ClientInput.from_dict(rec["input"])), kind, fmt, self.root.parent / "reports",
                           handling=rec.get("handling"), firm_name=st.get("firm_name", ""), accountant_name=st.get("accountant_name", ""),
-                          letter_note=rec.get("letter_note", ""), history=rec.get("history") or [])
+                          letter_note=rec.get("letter_note", ""), history=rec.get("history") or [],
+                          pending_fields=rec.get("pending_file_fields") or [], missing_human=rec.get("missing_human") or [])
         except PermissionError as e:
             raise RuntimeError("הקובץ הקודם פתוח (בוורד/בדפדפן) – לסגור אותו ולייצא שוב") from e
 
