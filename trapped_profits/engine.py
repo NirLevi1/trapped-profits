@@ -246,7 +246,9 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
     else:
         attributed = 0.0
     # B34 – אברהם 14.10 (10): עם שכר בעלים – לפי מדרגות מס; בלעדיו – מס שולי משוקלל (כמו באקסל)
-    if s.owner_salary_current_year is not None and attributed > 0:
+    if attributed <= 0:
+        extra_cost, method = 0.0, "אין הכנסה מיוחסת – אין עלות נוספת"
+    elif s.owner_salary_current_year is not None:
         sal = max(0.0, s.owner_salary_current_year)
         extra_cost = max(0.0, _individual_tax(sal + attributed) - _individual_tax(sal) - s.corporate_tax_rate * attributed)
         method = f"מדרגות מס על שכר {sal:,.0f} ₪ + הכנסה מיוחסת, בניכוי מס חברות {s.corporate_tax_rate:.0%}"

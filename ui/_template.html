@@ -124,7 +124,7 @@
   .pie .leg{font-size:12.5px;display:grid;gap:3px}
   .pie .leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-inline-end:6px;vertical-align:middle}
   .hist{font-size:12.5px;display:grid;gap:4px;max-height:260px;overflow:auto}
-  .hist div{display:grid;grid-template-columns:120px 80px 1fr;gap:8px;border-bottom:1px solid var(--line-soft);padding:3px 0}
+  .hist div{display:grid;grid-template-columns:150px 110px 1fr;gap:10px;border-bottom:1px solid var(--line-soft);padding:3px 0}
   .hist .t{color:var(--ink-3)}
   textarea{width:100%;min-height:64px;padding:8px;font:inherit;border:1px solid var(--line);border-radius:8px;resize:vertical}
   ul.rev{margin:0;padding-inline-start:18px} ul.rev li{line-height:1.45}
@@ -373,7 +373,7 @@
     const td = ev.currentTarget; if (td.querySelector('input')) return;
     td.innerHTML = `<input type="text" inputmode="numeric" value="${fmtNum(cur)}" oninput="fmtInput(this)">`;
     const inp = td.querySelector('input'); inp.focus(); inp.select();
-    inp.onkeydown = e => { if (e.key === 'Enter') saveField(id, path, inp.value); if (e.key === 'Escape') renderQueue(); };
+    inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') saveField(id, path, inp.value); if (e.key === 'Escape') renderQueue(); };
     inp.onblur = () => saveField(id, path, inp.value, true);
   }
   async function saveLetterNote(id){
@@ -632,7 +632,7 @@
           <label class="field" style="margin-top:12px"><span>הערה מהשיחה – מצטרפת למכתב ללקוח ("בהמשך לשיחתנו")</span><textarea id="letter_note" placeholder="טקסט חופשי שייכנס למכתב">${esc(rec.letter_note || '')}</textarea></label>
           <div class="toolbar" style="margin:0"><div class="spacer"></div><button onclick="saveLetterNote('${esc(rec.id)}')">שמירת ההערה</button></div>
         </div>
-        <div class="card"><h3>היסטוריה <span class="hint" style="display:inline">· ${(rec.history || []).length} רשומות</span></h3>${historyHtml(rec.history || [])}</div>
+        <div class="card" style="grid-column:1/-1"><h3>היסטוריה <span class="hint" style="display:inline">· ${(rec.history || []).length} רשומות</span></h3>${historyHtml(rec.history || [])}</div>
       </div>`;
     $('cardLead').textContent = `שנת מס ${c.tax_year} · בסיס לתום ${c.previous_year}${c.is_estimate ? ' · אומדן (תרחיש ב׳)' : ''} · עודכן ${when(rec.updated_at)} · גרסת לוגיקה ${c.logic_version}`;
   }
