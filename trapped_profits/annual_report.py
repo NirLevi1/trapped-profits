@@ -66,8 +66,13 @@ def ocr_available() -> str | None:
     """נתיב לטסרקט, או None אם לא מותקן."""
     from .store import app_dir
     portable = app_dir() / "tesseract"                     # תיקייה ניידת ליד התוכנה (כמו בממיין החשבוניות)
+    local = os.environ.get("LOCALAPPDATA", "")
     for c in (str(portable / "tesseract.exe"), str(portable / "tesseract"), "tesseract",
-              r"C:\Program Files\Tesseract-OCR\tesseract.exe", "/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract"):
+              r"C:\Program Files\Tesseract-OCR\tesseract.exe", r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+              os.path.join(local, "Programs", "Tesseract-OCR", "tesseract.exe") if local else "",
+              "/opt/homebrew/bin/tesseract", "/usr/local/bin/tesseract"):
+        if not c:
+            continue
         p = shutil.which(c) or (c if os.path.exists(c) else None)
         if p:
             return p
