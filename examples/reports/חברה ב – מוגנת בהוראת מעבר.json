@@ -55,7 +55,11 @@
     "concentration_share_prev_year": 0.0,
     "attributed_if_concentration": 2900000.0,
     "extra_tax_if_concentration": 783000.0,
-    "customers_breakdown": []
+    "customers_breakdown": [],
+    "concentration_share_36m": 0.0,
+    "concentration_years": [],
+    "concentration_met_by_data": false,
+    "concentration_test_met": false
   },
   "shields": {
     "fixed_shield": 375000.0,
@@ -133,8 +137,23 @@
   "missing_fields": [],
   "annualization_factor": 1.0,
   "next_year_notes": [
+    "אומדן עודפים לתום 2026: 7,165,000 ₪ (עודפי 2025 7,165,000 ₪).",
     "מוגנת גם ב-2027 (עד 2028).",
-    "המגן הקובע (4,300,000 ₪) גדול מהרווחים הנצברים ב-335,000 ₪ – גם אחרי רווח 2027 אין חשיפה צפויה כל עוד ההוצאות נשארות ברמה דומה.",
-    "שכר בעלים שוטף של כ-70,833 ₪ לחודש ב-2027 מוריד את הרווחיות מתחת ל-25% לאורך השנה במקום תיקון בדצמבר (ומגדיל את מגן ההוצאות של 81)."
-  ]
+    "המגן הקובע (4,300,000 ₪) גדול מהרווחים הנצברים ב-335,000 ₪ – גם אחרי רווח 2026 אין חשיפה צפויה ב-2027 כל עוד ההוצאות נשארות ברמה דומה.",
+    "שכר בעלים מעכשיו: כ-70,833 ₪ לחודש ל-12 החודשים שנותרו ב-2026 (במקום תיקון של 850,000 ₪ בדצמבר) מוריד את הרווחיות ל-25% ומגדיל את מגן ההוצאות של 81. ב-2027: כ-70,833 ₪ לחודש לאורך השנה."
+  ],
+  "actuals": {
+    "through_month": null,
+    "revenue": 8500000.0,
+    "taxable_income": 2900000.0,
+    "expenses": 3100000.0,
+    "profit_estimate": null
+  },
+  "estimate_notes": [],
+  "years_used": {
+    "retained": "דוח 2025",
+    "expenses_avg": "2024–2026",
+    "current_year": "2026",
+    "concentration": "אין כרטסת (0 מתוך 3 שנים)"
+  }
 }

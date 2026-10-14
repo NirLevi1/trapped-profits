@@ -85,7 +85,8 @@ def _diff(prev: dict | None, cur: dict) -> list[dict]:
 # אברהם 14.10 (3): מצב לכל שדה – מהקובץ (לאישור) / אושר / ידני; ושדות שרק אדם יודע
 FIELD_STATES = ("file", "approved", "manual", "carried", "estimate")
 # carried = הועבר ממעבר שנה (ערך מהשנה הקודמת שאינו בקבצים); estimate = אומדן של המערכת (לבדיקת אברהם)
-FIELD_SKIP = ("flags", "data_as_of")                 # לא נרשמת להם היסטוריית ערכים
+FIELD_SKIP = ("flags", "data_as_of", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue")
+TOP_LEVEL_FIELDS = ("data_as_of", "data_through_month", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue")                 # לא נרשמת להם היסטוריית ערכים
 
 
 def _flatten(d: dict, prefix: str = "") -> dict:
@@ -400,7 +401,7 @@ class ClientStore:
             target = inp
             for pth in parts[:-1]:
                 target = target.setdefault(pth, {})
-            if parts[-1] not in target and path not in ("data_as_of", "data_through_month"):
+            if parts[-1] not in target and path not in TOP_LEVEL_FIELDS:
                 continue
             target[parts[-1]] = value
             meta[path] = {"state": "file", "source": (sources or {}).get(path, label), "at": now}
@@ -419,7 +420,7 @@ class ClientStore:
         target = inp
         for pth in parts[:-1]:
             target = target.setdefault(pth, {})
-        if parts[-1] not in target and path not in ("data_as_of", "data_through_month"):
+        if parts[-1] not in target and path not in TOP_LEVEL_FIELDS:
             raise ValueError(f"שדה לא מוכר: {path}")
         target[parts[-1]] = value
         return self.save(inp, cid, field_meta={path: {"state": "manual", "source": "עריכה ישירה"}})
@@ -496,6 +497,13 @@ class ClientStore:
                      ("shields.pay_62a_salary_by_year_end", False)):
             self._set_path(inp, k, v)
         checklist.append(f"ריכוזיות: נבדקת על {ty - 1}–{new_ty}; כרטסת {new_ty} חסרה עד ההעלאה הבאה.")
+        inp["period_breakdown_prev_year"] = inp.get("period_breakdown") or {}
+        inp["period_breakdown"] = {}
+        inp["months_without_revenue"] = []
+        carry("s62a.top_customers_prev2_year", s62.get("top_customers_prev_year") or [], "s62a.top_customers_prev_year", f"כרטסת {ty - 1}")
+        carry("s62a.prev2_year_revenue_for_concentration", float(s62.get("prev_year_revenue_for_concentration") or 0), "s62a.prev_year_revenue_for_concentration", f"מחזור {ty - 1}")
+        for k in ("s62a.purchases_current_year",):
+            self._set_path(inp, k, None)
         inp["data_through_month"] = None
         inp["data_as_of"] = ""
         st["tax_year"] = new_ty
@@ -512,7 +520,7 @@ class ClientStore:
         reset = ("s62a.total_revenue", "s62a.taxable_income_personal_effort", "s62a.related_company_payments", "s62a.top_customers",
                  "s62a.owner_salary_current_year", "s62a.intercompany_dividend_received", "distributions.dividends_taxed_current_year",
                  "distributions.losses_current_year", "distributions.current_year_profit_estimate", "shields.expenses_current_year",
-                 "shields.pay_62a_salary_by_year_end", "data_through_month", "structure.tax_year")
+                 "shields.pay_62a_salary_by_year_end", "data_through_month", "structure.tax_year", "s62a.purchases_current_year")
         self._write(cid, rec)
         new = self.save(inp, cid, field_meta=carried, reset_paths=reset)
         new["rollover_checklist"] = checklist

@@ -59,6 +59,23 @@ def detect(path: str | Path) -> str:
 _INCOME_SECTIONS = ("הכנסות",)
 _FIN_INCOME = ("הכנסות מימון",)
 _OTHER_INCOME = ("הכנסות אחרות", "רווחים אחרים")
+# אברהם (סבב 2, 5–7): סעיפי הוצאה לבדיקת שלמות בין שנים
+CATEGORIES = (
+    ("שכר", ("שכר עבודה", "משכורת", "משכורות")),
+    ("עלויות מעסיק", ("ביטוח לאומי", "תגמולים", "פיצויים", "קרן השתלמות", "פנסיה", "סוציאליות")),
+    ("שכירות", ("שכר דירה", "שכירות", "דמי שכירות")),
+    ("פחת", ("פחת",)),
+    ("קבלני משנה", ("קבלני משנה", "קבלנים", "קבלן משנה", "עבודות חוץ")),
+    ("קניות", ("קניות",)),
+    ("דמי ניהול", ("דמי ניהול",)),
+)
+
+
+def categorize(name: str) -> str | None:
+    for cat, keys in CATEGORIES:
+        if any(k in name for k in keys):
+            return cat
+    return None
 
 
 def parse_trial_balance(path: str | Path) -> dict[str, Any]:
@@ -100,6 +117,7 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
     months_activity = [0.0] * 12
     rev_months = [0.0] * 12
     hints: dict[str, float] = defaultdict(float)
+    breakdown: dict[str, float] = defaultdict(float)
     for a in accounts:
         sec, tot = a["section"], a["total"]
         for i, v in enumerate(a["months"]):
@@ -123,9 +141,13 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
                 hints["management_fees"] += tot
             if "פחת" in nm:
                 hints["depreciation"] += tot
+            cat = categorize(nm)
+            if cat:
+                breakdown[cat] += tot
     last_rev_month = max((i + 1 for i, v in enumerate(rev_months) if abs(v) > 0.5), default=0)
     last_any_month = max((i + 1 for i, v in enumerate(months_activity) if v > 0.5), default=0)
     profit = revenue + fin_income + other_income - expenses
+    months_without = [i + 1 for i, v in enumerate(rev_months[:last_rev_month]) if abs(v) <= 0.5]
     notes = [f"הכנסות עד {MONTHS[last_rev_month - 1] if last_rev_month else '—'}; תנועות אחרונות עד {MONTHS[last_any_month - 1] if last_any_month else '—'}"]
     if hints.get("management_fees"):
         notes.append(f"דמי ניהול {hints['management_fees']:,.0f} ₪ – אם לחברה בשליטת בעל השליטה: תשלום לחברה קשורה")
@@ -139,7 +161,12 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
         "s62a.taxable_income_personal_effort": round(max(0.0, profit)),
         "shields.expenses_current_year": round(expenses - hints.get("depreciation", 0.0)),
         "distributions.current_year_profit_estimate": round(profit),
+        "s62a.purchases_current_year": round(breakdown["קניות"]) if breakdown.get("קניות") else None,
+        "period_breakdown": {k: round(v) for k, v in breakdown.items()},
+        "months_without_revenue": months_without,
     }
+    if months_without:
+        notes.append("חודשים בלי הכנסות: " + ", ".join(MONTHS[m - 1] for m in months_without) + " – לבדוק אם חסר קובץ/רישום")
     return {"kind": "trial_balance", "year": year, "fields": {k: v for k, v in fields.items() if v is not None},
             "hints": dict(hints), "notes": notes,
             "summary": {"revenue": revenue, "fin_income": fin_income, "other_income": other_income, "expenses": expenses, "profit": profit,
@@ -222,8 +249,10 @@ SLOTS = {
     # תרחיש ב׳ – הדוח הסגור ישן בשנה: השנה הקודמת מגיעה ממאזן בוחן מלא (וכרטסת לריכוזיות על פני שנתיים)
     "trial_balance_prev": {"title": "מאזן בוחן לפי חודשים – השנה הקודמת (מלא)", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
                            "desc": "רק כשאין דוח סגור לשנה הקודמת: רווח השנה הקודמת לגלגול העודפים, והוצאות השנה הקודמת למגן.", "prev": True},
-    "ledger_prev": {"title": "כרטסת הכנסות – השנה הקודמת (אופציונלי)", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
-                    "desc": "ריכוזיות: האם אותו לקוח גדול גם בשנה הקודמת (המבחן הוא 22 מתוך 36 חודשים).", "prev": True},
+    "ledger_prev": {"title": "כרטסת הכנסות – השנה הקודמת", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
+                    "desc": "ריכוזיות על פני 36 חודשים: 70% מלקוח אחד על סך שלוש השנים.", "conc": True},
+    "ledger_prev2": {"title": "כרטסת הכנסות – שנתיים אחורה", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
+                     "desc": "השנה השלישית למבחן 36 החודשים.", "conc": True},
 }
 
 
@@ -241,24 +270,27 @@ def import_slot(slot: str, path: str | Path, tax_year: int | None = None) -> dic
         if tax_year and r.get("year"):
             notes = [n for n in r["notes"] if "תרחיש ב" not in n and "אינו מוקדם" not in n]
             f, src = map_annual_fields(r["by_year"], r["year"], int(tax_year), r.get("raw_sources", {}), notes)
-            base = {k: v for k, v in r["fields"].items() if k.startswith("structure.")}
+            keep = ("structure.", "shields.total_assets_cost", "shields.depreciation_annual_estimate", "s62a.has_inventory", "s62a.gross_margin_rate")
+            base = {k: v for k, v in r["fields"].items() if k.startswith(keep)}
             f.update(base)
+            src.update({k: v for k, v in r.get("sources", {}).items() if k in base})
             r["fields"], r["sources"], r["notes"] = f, src, notes
     else:
         kind = detect(p)
-        base = slot.replace("_prev", "")
+        base = slot.replace("_prev2", "").replace("_prev", "")
         if kind != base:
             names = {"trial_balance": "מאזן בוחן לפי חודשים", "ledger": "כרטסת", "unknown": "קובץ לא מזוהה"}
             raise ValueError(f"זה נראה כמו {names.get(kind, kind)} – לא {SLOTS[slot]['title']}")
         r = parse_trial_balance(p) if base == "trial_balance" else parse_ledger(p)
-        want = (int(tax_year) - 1 if slot.endswith("_prev") else int(tax_year)) if tax_year else None
+        want = (int(tax_year) - 2 if slot.endswith("_prev2") else int(tax_year) - 1 if slot.endswith("_prev") else int(tax_year)) if tax_year else None
         if want and r.get("year") and r["year"] != want:
             other = "השנה הקודמת" if r["year"] == (want - 1) else ("השנה הנבדקת" if r["year"] == want + 1 else str(r["year"]))
             raise ValueError(f"הקובץ הוא לשנת {r['year']} והחריץ הזה מצפה ל-{want} – אולי זה שייך לחריץ של {other}?")
         if slot == "trial_balance_prev":
             f = r["fields"]
             r["fields"] = {"shields.expenses_prev_year": f.get("shields.expenses_current_year", 0) + r.get("hints", {}).get("depreciation", 0),
-                           "retained.prev_year_profit_for_rollover": f.get("distributions.current_year_profit_estimate", 0)}
+                           "retained.prev_year_profit_for_rollover": f.get("distributions.current_year_profit_estimate", 0),
+                           "period_breakdown_prev_year": f.get("period_breakdown", {})}
             r["sources"] = {"shields.expenses_prev_year": f"מאזן בוחן {r.get('year')}: סך הוצאות (כולל פחת)",
                             "retained.prev_year_profit_for_rollover": f"מאזן בוחן {r.get('year')}: רווח לפני מס – המנוע מגלגל: עודפי הדוח + רווח × (1 − 23%) − דיבידנד השנה הקודמת (ידני)"}
             r["notes"] = [n for n in r["notes"] if "הכנסות עד" not in n] + [f"גלגול: דיבידנד {r.get('year')} אינו במאזן בוחן – להזין ידנית אם חולק"]
@@ -266,6 +298,10 @@ def import_slot(slot: str, path: str | Path, tax_year: int | None = None) -> dic
             r["fields"] = {"s62a.top_customers_prev_year": r["fields"]["s62a.top_customers"],
                            "s62a.prev_year_revenue_for_concentration": round(r["summary"]["total"])}
             r["sources"] = {"s62a.top_customers_prev_year": f"כרטסת {r.get('year')}"}
+        elif slot == "ledger_prev2":
+            r["fields"] = {"s62a.top_customers_prev2_year": r["fields"]["s62a.top_customers"],
+                           "s62a.prev2_year_revenue_for_concentration": round(r["summary"]["total"])}
+            r["sources"] = {"s62a.top_customers_prev2_year": f"כרטסת {r.get('year')}"}
     r["file"] = p.name
     r["slot"] = slot
     r.setdefault("sources", {})

@@ -82,8 +82,16 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None, history:
         b.append(Block("callout", f"{len(pending_fields)} שדות מולאו מקובץ וטרם אושרו.", tone="warn"))
     if missing_human:
         b.append(Block("callout", "חסר – רק רואה החשבון יודע: " + ", ".join(missing_human) + ".", tone="serious"))
+    if r.estimate_notes:
+        b.append(Block("callout", "אומדנים שהמערכת הוסיפה – לבדיקה: " + " · ".join(r.estimate_notes), tone="warn"))
     if r.annualization_factor != 1.0:
-        b.append(Block("p", f"נתוני השנה הוכפלו פי {r.annualization_factor:.2f} לאומדן שנתי (לינארי)."))
+        a = r.actuals or {}
+        b.append(Block("p", f"נתוני השנה עד חודש {a.get('through_month')} – הוכפלו פי {r.annualization_factor:.2f} לאומדן שנתי (לינארי). "
+                            f"בפועל: הכנסות {_ils(a.get('revenue') or 0)}, הכנסה חייבת {_ils(a.get('taxable_income') or 0)}, הוצאות {_ils(a.get('expenses') or 0)}; "
+                            f"אומדן שנתי: הכנסות {_ils(s.personal_effort_income + s.other_income_total)}, הכנסה חייבת {_ils(s.taxable_income_personal_effort)}."))
+    if r.years_used:
+        y = r.years_used
+        b.append(Block("p", f"שנים בחישוב: עודפים – {y.get('retained')}; ממוצע הוצאות – {y.get('expenses_avg')}; השנה הנבדקת – {y.get('current_year')}; ריכוזיות – {y.get('concentration')}."))
 
     b.append(Block("h2", "המלצה"))
     b.append(Block("p", m.recommendation_text or m.recommendation))
@@ -149,8 +157,13 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None, history:
         ("עלות מס נוספת מוערכת", _ils(s.extra_tax_cost), False),
         ("אופן החישוב", s.extra_tax_cost_method, False),
     ]))
-    if r.applies_62a and s.attributed_if_concentration > 0:
-        b.append(Block("p", f"אם מבחן הריכוזיות מתקיים (לקוח אחד 70% ומעלה ב-22 מתוך 36 חודשים): ייחוס מלא של "
+    if s.concentration_years:
+        b.append(Block("p", f"ריכוזיות על {len(s.concentration_years)} שנים ({s.concentration_years[0]}–{s.concentration_years[-1]}): "
+                            f"{s.concentration_top_name} {s.concentration_share_36m:.0%} מסך ההכנסות"
+                            + (" – המבחן מתקיים לפי הנתונים (ייחוס מלא)." if s.concentration_met_by_data else
+                               (f" – חסרות כרטסות של {3 - len(s.concentration_years)} שנים למבחן 36 החודשים." if len(s.concentration_years) < 3 else " – מתחת ל-70%."))))
+    if r.applies_62a and s.attributed_if_concentration > 0 and not s.concentration_test_met:
+        b.append(Block("p", f"אם מבחן הריכוזיות מתקיים (לקוח אחד 70% ומעלה מסך 36 חודשים): ייחוס מלא של "
                             f"{_ils(s.attributed_if_concentration)} – עלות מס נוספת {_ils(s.extra_tax_if_concentration)}, "
                             f"גם עם פטור 750 אלף ₪ וגם מתחת ל-25%."))
     if s.customers_breakdown:                   # אברהם 14.10 (12)
@@ -158,7 +171,7 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None, history:
         b.append(Block("kv", rows=[(x["name"], f"{_ils(x['amount'])} ({x['share']:.0%})", x["share"] >= 0.55)
                                    for x in s.customers_breakdown]))
     if r.next_year_notes:                        # אברהם 14.10 (22)
-        b.append(Block("h2", f"תכנון {r.tax_year + 1}"))
+        b.append(Block("h2", f"פעולות שאפשר להתחיל כבר ב-{r.tax_year} (על בסיס עודפי {r.previous_year} ורווח {r.tax_year})"))
         b.append(Block("ul", items=list(r.next_year_notes)))
 
     if r.manual_review:

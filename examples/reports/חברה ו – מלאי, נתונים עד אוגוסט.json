@@ -1,0 +1,184 @@
+{
+  "name": "חברה ו – מלאי, נתונים עד אוגוסט",
+  "tax_year": 2026,
+  "previous_year": 2025,
+  "data_as_of": "2026-09-28",
+  "is_estimate": false,
+  "logic_version": "2026.10.14-a",
+  "flags": {
+    "start_day_basis_year": 2024,
+    "deduct_transition_from_50pct_base": false,
+    "enable_20pct_current_year_rule": true,
+    "deduction_base_excludes_related_payments": false,
+    "profitability_warning_threshold": 0.2
+  },
+  "applies_81": true,
+  "applies_62a": true,
+  "companies_for_750k_split": 2,
+  "retained": {
+    "formula_profits": 7165000.0,
+    "accounting_cap": 7800000.0,
+    "used_balance_sheet": false,
+    "retained_profits": 7165000.0,
+    "retained_for_81a": 7165000.0,
+    "exempt_sources_total": 0.0,
+    "special_assets_net": 5000000.0,
+    "exempt_alt1": 0.0,
+    "exempt_alt2": 0.0,
+    "taxable_retained_alt1": 7165000.0,
+    "taxable_retained_alt2": 7165000.0,
+    "manual_review_reasons": [
+      "רווחים נצברים לפי הנוסחה המיסויית נמוכים מיתרת העודפים במאזן – לאמת את נתוני המס המצטברים"
+    ],
+    "rollover_note": ""
+  },
+  "s62a": {
+    "other_income_total": 450000.0,
+    "personal_effort_income": 6900000.0,
+    "taxable_income_personal_effort": 1705467.999999999,
+    "profitability": 0.2471692753623187,
+    "governing_profitability": 0.2471692753623187,
+    "crossed_25pct": false,
+    "revenue_threshold": 60000000.0,
+    "below_revenue_threshold": true,
+    "exemption_750k_applies": false,
+    "section_applies": false,
+    "deduction_25pct": 1725000.0,
+    "attributed_income": 1705467.999999999,
+    "extra_tax_cost": 425595.9599999996,
+    "partnership_under_10pct": false,
+    "intercompany_dividend_attributed": 0.0,
+    "extra_tax_cost_method": "מדרגות מס על שכר 360,000 ₪ + הכנסה מיוחסת, בניכוי מס חברות 23%",
+    "owner_salary": 360000,
+    "concentration_share": 0.7755102040816326,
+    "concentration_top_name": "לקוח גדול בע\"מ",
+    "concentration_share_prev_year": 0.7130730050933786,
+    "attributed_if_concentration": 1705467.999999999,
+    "extra_tax_if_concentration": 425595.9599999996,
+    "customers_breakdown": [
+      {
+        "name": "לקוח גדול בע\"מ",
+        "amount": 5700000.0,
+        "share": 0.7755102040816326
+      },
+      {
+        "name": "אחר",
+        "amount": 450000.0,
+        "share": 0.061224489795918366
+      },
+      {
+        "name": "אחרים",
+        "amount": 1200000.0,
+        "share": 0.16326530612244897
+      }
+    ],
+    "concentration_share_36m": 0.7267121779343757,
+    "concentration_years": [
+      2024,
+      2025,
+      2026
+    ],
+    "concentration_met_by_data": true,
+    "concentration_test_met": true
+  },
+  "shields": {
+    "fixed_shield": 375000.0,
+    "salary_added_to_expenses": 0.0,
+    "expenses_current_adjusted": 5644532.000000001,
+    "expenses_avg_3y": 3714844.0,
+    "expenses_shield": 5644532.000000001,
+    "special_assets_gross": 6500000.0,
+    "special_assets_net": 5000000.0,
+    "assets_shield": 4300000.0,
+    "governing_shield_alt1": 5644532.000000001,
+    "governing_shield_alt2": 5644532.000000001
+  },
+  "transition": {
+    "start_day_remaining": 3200000.0,
+    "rule_20pct_met": false,
+    "determining_period_rate": 0.125,
+    "protected_until_year": 0,
+    "protected_in_tax_year": false
+  },
+  "calc81": {
+    "transition_reduction": 0.0,
+    "excess_alt1": 1520467.999999999,
+    "excess_alt2": 1520467.999999999,
+    "chosen_alternative": 2,
+    "taxable_retained": 7165000.0,
+    "governing_shield": 5644532.000000001,
+    "excess_profits": 1520467.999999999,
+    "dividend_deducted": 0.0,
+    "surtax_base": 1520467.999999999,
+    "required_distribution_rate": 0.06,
+    "exempt_losses": false,
+    "exempt_50pct": false,
+    "exempt_6pct": false,
+    "exempt_transition_2025": false,
+    "is_exempt": false,
+    "surtax": 30409.359999999982,
+    "status_label": "חייב בתוספת מס",
+    "exempt_reason": "",
+    "alternative_relevant": false
+  },
+  "simulator": {
+    "option_6pct": 429900.0,
+    "option_50pct": 1950000.0,
+    "cheaper_option": "חלופת 6%",
+    "min_dividend": 429900.0,
+    "already_distributed": 0.0,
+    "gap_to_close": 429900.0,
+    "dividend_tax_cost": 141867.0,
+    "surtax_if_not_distributing": 30409.359999999982,
+    "difference": 111457.64000000001,
+    "years_to_breakeven": 4.6652412283586395,
+    "recommendation": "תוספת המס זולה יותר השנה – יש לבחון את ההשפעה הרב-שנתית",
+    "action_required": true,
+    "option_20pct_start_day": 640000.0,
+    "estimated_retained_year_end": 9113210.36,
+    "surtax_if_salary_paid": 0.0,
+    "recommendation_text": "מסלול 81: רווחים עודפים של 1,520,468 ₪ אחרי מגן של 5,644,532 ₪. ללא פעולה – תוספת מס של 30,409 ₪ (2%), וזה חוזר כל שנה. לפטור השנה נדרש דיבידנד של 429,900 ₪ (חלופת 6%); חולקו 0 ₪, הפער לסגירה עד 31.12 הוא 429,900 ₪. מס הדיבידנד על הפער: 141,867 ₪ (יקר מתוספת המס השנה; מתאזן אחרי 4.7 שנים). תשלום שכר התיקון של 62א עד 31.12 מגדיל את מגן ההוצאות ומוריד את תוספת המס מ-30,409 ₪ ל-0 ₪. מסלול 62א: מבחן הריכוזיות מתקיים – כל ההכנסה החייבת מעתירת יגיעה אישית (1,705,468 ₪) מיוחסת לבעל המניות במס שולי."
+  },
+  "dashboard": {
+    "status_81": "אדום – חשוף לתוספת מס",
+    "status_62a": "אדום – מבחן ריכוזיות: ייחוס מלא (לפי כרטסות 2024–2026: 73%)",
+    "status_overall": "אדום – טיפול נדרש",
+    "color_81": "אדום",
+    "color_62a": "אדום",
+    "color_overall": "אדום",
+    "protected_until": "אין"
+  },
+  "manual_review": [
+    "רווחים נצברים לפי הנוסחה המיסויית נמוכים מיתרת העודפים במאזן – לאמת את נתוני המס המצטברים",
+    "חברה עם ני\"ע או החזקות – העודפים החשבונאיים עלולים לנפח את הבסיס",
+    "הכנסות מריבית או שכירות – לוודא ייחוס הוצאות ל\"הכנסה אחרת\" (62א(ג1))",
+    "רווחיות בטווח 20%–30% – קרובה לסף 25%; לאמת מול הסימולטור של רשות המסים",
+    "ריכוזיות: לפי כרטסות 2024–2026 – לקוח גדול בע\"מ 73% מסך 36 החודשים → המבחן מתקיים לפי הנתונים: ייחוס מלא. לאשר (או לסמן ידנית אם לא)"
+  ],
+  "missing_fields": [],
+  "annualization_factor": 1.5,
+  "next_year_notes": [
+    "אומדן עודפים לתום 2026: 8,478,210 ₪ (עודפי 2025 7,165,000 ₪ + רווח 2026 אחרי מס 1,313,210 ₪).",
+    "ללא פעולה ב-2026: רווחים עודפים צפויים ב-2027 של כ-2,833,678 ₪ ותוספת מס של כ-56,674 ₪.",
+    "לחלק עוד ב-2026: דיבידנד של כ-508,693 ₪ (6% מאומדן העודפים לתום 2026) שומר על הפטור ב-2027; השנה עצמה דורשת 429,900 ₪ לסגירת הפער.",
+    "שכר בעלים מעכשיו: כ-426,367 ₪ לחודש ל-4 החודשים שנותרו ב-2026 (במקום תיקון של 1,705,468 ₪ בדצמבר) מוריד את הרווחיות ל-25% ומגדיל את מגן ההוצאות של 81. ב-2027: כ-142,122 ₪ לחודש לאורך השנה."
+  ],
+  "actuals": {
+    "through_month": 8,
+    "revenue": 4900000,
+    "taxable_income": 2600000,
+    "expenses": 2300000,
+    "profit_estimate": 2600000
+  },
+  "estimate_notes": [
+    "פחת: מאזן הבוחן בלי פחת – נוסף פחת שנתי 61,646 ₪ לפי הדוח השנתי (אומדן)",
+    "מלאי: במקום קניות 2,250,000 ₪ – עלות מכר לפי רווח גולמי 41.0% (ממוצע שתי השנים שבדוח): 4,336,500 ₪; הרווח קטן ב-2,086,500 ₪ (אומדן, אין ספירת מלאי)",
+    "חסר השנה: שכירות – בשנה הקודמת 46,386 ₪; נוסף כאומדן שנתי (לבדוק אם חסר רישום)"
+  ],
+  "years_used": {
+    "retained": "דוח 2025",
+    "expenses_avg": "2024–2026",
+    "current_year": "2026 עד חודש 8 (אומדן שנתי)",
+    "concentration": "2024–2026 (3 מתוך 3 שנים)"
+  }
+}

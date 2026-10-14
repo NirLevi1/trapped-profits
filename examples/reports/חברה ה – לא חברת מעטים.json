@@ -55,7 +55,11 @@
     "concentration_share_prev_year": 0.0,
     "attributed_if_concentration": 0.0,
     "extra_tax_if_concentration": 0.0,
-    "customers_breakdown": []
+    "customers_breakdown": [],
+    "concentration_share_36m": 0.0,
+    "concentration_years": [],
+    "concentration_met_by_data": false,
+    "concentration_test_met": false
   },
   "shields": {
     "fixed_shield": 375000.0,
@@ -131,5 +135,19 @@
   ],
   "missing_fields": [],
   "annualization_factor": 1.0,
-  "next_year_notes": []
+  "next_year_notes": [],
+  "actuals": {
+    "through_month": null,
+    "revenue": 8500000.0,
+    "taxable_income": 2900000.0,
+    "expenses": 3100000.0,
+    "profit_estimate": null
+  },
+  "estimate_notes": [],
+  "years_used": {
+    "retained": "דוח 2025",
+    "expenses_avg": "2024–2026",
+    "current_year": "2026",
+    "concentration": "אין כרטסת (0 מתוך 3 שנים)"
+  }
 }

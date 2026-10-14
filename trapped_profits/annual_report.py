@@ -222,6 +222,11 @@ class _Page:
             lab = _label(l)
             if _has(lab, *label_keys) and not (label_keys is _RETAINED and _has(lab, *_RETAINED_SKIP)):
                 nums = _numbers(l)
+                if not nums:                                   # תווית ארוכה והמספרים בשורה שמתחתיה
+                    i = self.lines.index(l)
+                    nxt = self.lines[i + 1] if i + 1 < len(self.lines) else []
+                    if nxt and not _HEB.search(_label(nxt)):
+                        nums = _numbers(nxt)
                 if not nums:
                     continue
                 return self._pick(nums, year), lab
@@ -330,12 +335,95 @@ def parse_annual_report(pdf: str | Path) -> dict[str, Any]:
     else:
         notes.append("לא זוהה עמוד רווח והפסד")
 
+    # אברהם (סבב 2, 1, 14, 15): רכוש קבוע (עלות / נטו), פחת, רווח גולמי ומלאי
+    extra = _assets_and_margin(P, bs, pl, year, prev_year, notes)
     raw_src = dict(src)
     fields, src = map_annual_fields(by_year, year, None, raw_src, notes)
+    fields.update(extra["fields"])
+    src.update(extra["sources"])
     fields.update(base_fields)
     return {"kind": "annual_report", "year": year or None, "fields": fields, "sources": src, "notes": notes,
             "by_year": {k: {str(y): v for y, v in d.items()} for k, d in by_year.items()}, "raw_sources": raw_src,
             "ocr": ocr_available() is not None}
+
+
+def _line_total(l: list[Word]) -> float | None:
+    """סכום השורה בטבלת ביאור (עמודת סה"כ) – הגדול מבין המספרים (הסכום גדול מכל רכיב)."""
+    nums = _numbers(l)
+    return max((abs(v) for _, v in nums), default=None)
+
+
+def _assets_and_margin(P: list, bs, pl, year: int, prev_year: int, notes: list[str]) -> dict:
+    f: dict[str, Any] = {}
+    src: dict[str, str] = {}
+    # 1. ביאור רכוש קבוע: "עלות … יתרת סגירה" = עלות; "פחת השנה" = פחת
+    note_pg = next((pg for pg in P if _has(pg.text, "רכוש קבוע") and _has(pg.text, "פחת שנצבר", "פחת נצבר")
+                    and _has(pg.text, "יתרת סגירה", "יתרה לסוף")), None)
+    cost = dep = None
+    if note_pg:
+        in_cost = False
+        for l in note_pg.lines:
+            lab = _label(l)
+            if _n(lab).strip() in ("עלות", "עלות:") or (_has(lab, "עלות") and len(lab.split()) <= 2 and not _numbers(l)):
+                in_cost = True
+                continue
+            if _has(lab, "פחת שנצבר", "פחת נצבר"):
+                in_cost = False
+            if in_cost and _has(lab, "יתרת סגירה", "יתרה לסוף") and cost is None:
+                cost = _line_total(l)
+                src["shields.total_assets_cost"] = f"ביאור רכוש קבוע – עלות, {lab}: {cost:,.0f}" if cost else ""
+            if _has(lab, "פחת השנה", "פחת לשנה", "תוספות פחת") and dep is None:
+                dep = _line_total(l)
+                src["shields.depreciation_annual_estimate"] = f"ביאור רכוש קבוע – {lab}: {dep:,.0f}" if dep else ""
+    if cost is not None:
+        f["shields.total_assets_cost"] = cost
+        f["shields.total_assets_cost_is_net"] = False
+    elif bs:
+        v, lab = bs.value(("רכוש קבוע",), year)
+        if v is not None:
+            f["shields.total_assets_cost"] = abs(v)
+            f["shields.total_assets_cost_is_net"] = True
+            src["shields.total_assets_cost"] = f"מאזן – {lab}: {abs(v):,.0f} (נטו אחרי פחת; אין ביאור רכוש קבוע – לאישור אברהם)"
+            notes.append("עלות נכסים: אין ביאור רכוש קבוע בדוח – נלקח הרכוש הקבוע נטו מהמאזן (לאישור)")
+    # פחת – אם לא בביאור, משורת "פחת" בביאור ההוצאות / רווח והפסד
+    if dep is None:
+        for pg in P:
+            if pg is bs:
+                continue
+            for l in pg.lines:
+                lab = _label(l)
+                if re.fullmatch(r"פחת(\s+והפחתות)?", _n(lab).strip()) and _numbers(l):
+                    v = pg._pick(_numbers(l), year)
+                    if v is not None and abs(v) >= 100:
+                        dep = abs(v)
+                        src["shields.depreciation_annual_estimate"] = f"{lab}: {dep:,.0f}"
+                        break
+            if dep is not None:
+                break
+    if dep is not None:
+        f["shields.depreciation_annual_estimate"] = dep
+    # 2. מלאי במאזן
+    if bs:
+        v, lab = bs.value(("מלאי",), year)
+        f["s62a.has_inventory"] = bool(v)
+        if v:
+            src["s62a.has_inventory"] = f"מאזן – {lab}: {abs(v):,.0f}"
+    # 3. רווח גולמי ÷ מכירות, ממוצע שתי השנים
+    if pl:
+        rates = []
+        used = []
+        for y in (year, prev_year):
+            if not y or (y != year and len(pl.year_cols) < 2):
+                continue
+            g, glab = pl.value(("רווח גולמי", "רווח גלמי"), y)
+            r, rlab = pl.value(("הכנסות ממכירות", "מכירות", "הכנסות"), y)
+            if g is not None and r:
+                rates.append(abs(g) / abs(r))
+                used.append(f"{y}: {glab} {abs(g):,.0f} ÷ {rlab} {abs(r):,.0f} = {abs(g) / abs(r):.1%}")
+        if rates:
+            f["s62a.gross_margin_rate"] = round(sum(rates) / len(rates), 4)
+            src["s62a.gross_margin_rate"] = "; ".join(used)
+    return {"fields": f, "sources": src}
 
 
 def map_annual_fields(by_year: dict, report_year: int, tax_year: int | None, raw_src: dict, notes: list[str]) -> tuple[dict, dict]:

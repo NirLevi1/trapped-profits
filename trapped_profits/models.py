@@ -121,6 +121,9 @@ class ShieldsInput:
     expenses_prev_year: float = 0.0                    # B11
     expenses_prev2_year: float = 0.0                   # B12
     pay_62a_salary_by_year_end: bool = False           # B15 – "כן" מוסיף את שכר התיקון להוצאות
+    # אברהם (סבב 2, 15): פחת שנתי מהדוח השנתי האחרון – אומדן לשנה השוטפת כשמאזן הבוחן בלי פחת
+    depreciation_annual_estimate: Optional[float] = None
+    total_assets_cost_is_net: bool = False             # אברהם (סבב 2, 1): אין ביאור רכוש קבוע – נלקח הנטו מהמאזן (לאישור)
 
     # מגן ג' – נכסים
     total_assets_cost: float = 0.0                     # B17
@@ -192,6 +195,12 @@ class Section62AInput:
     top_customers: list = field(default_factory=list)
     top_customers_prev_year: list = field(default_factory=list)   # כרטסת השנה הקודמת – ריכוזיות על פני שנתיים
     prev_year_revenue_for_concentration: float = 0.0           # סך הכרטסת של השנה הקודמת (המכנה)
+    top_customers_prev2_year: list = field(default_factory=list)  # אברהם (סבב 2, 3): כרטסת שנתיים אחורה – 36 חודשים
+    prev2_year_revenue_for_concentration: float = 0.0
+    # אברהם (סבב 2, 14): חברה עם מלאי – מאזן בוחן באמצע שנה בלי ספירת מלאי; אומדן רווח לפי רווח גולמי מהדוח השנתי
+    has_inventory: bool = False
+    gross_margin_rate: Optional[float] = None                  # רווח גולמי ÷ מכירות, ממוצע שתי השנים שבדוח
+    purchases_current_year: Optional[float] = None             # קניות סחורה ממאזן הבוחן (במקום עלות מכר)
 
     # ה. מבחנים משלימים (סימון ידני)
     concentration_test_met: bool = False               # B37 – 70% מגורם אחד ב-22 מתוך 36 חודשים
@@ -228,6 +237,11 @@ class ClientInput:
     # החלטה 4: נתוני השנה הנבדקת הם מתחילת השנה עד חודש זה (1–12). ריק/12 = שנה מלאה.
     # המנוע מכפיל לינארית את תזרימי השנה (הכנסות, הכנסה חייבת, הוצאות). עד שיש מבנה אחיד – לינארי.
     data_through_month: Optional[int] = None
+    # אברהם (סבב 2, 5–7): פירוט סעיפי הוצאה ממאזן הבוחן (שכר, עלויות מעסיק, שכירות, פחת, קבלני משנה, קניות…)
+    # לבדיקת שלמות מול השנה הקודמת; חודשים בלי הכנסות
+    period_breakdown: dict = field(default_factory=dict)
+    period_breakdown_prev_year: dict = field(default_factory=dict)
+    months_without_revenue: list = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -252,4 +266,7 @@ class ClientInput:
             data_as_of=d.get("data_as_of", ""),
             is_estimate=bool(d.get("is_estimate", False)),
             data_through_month=d.get("data_through_month") or None,
+            period_breakdown=dict(d.get("period_breakdown") or {}),
+            period_breakdown_prev_year=dict(d.get("period_breakdown_prev_year") or {}),
+            months_without_revenue=list(d.get("months_without_revenue") or []),
         )
