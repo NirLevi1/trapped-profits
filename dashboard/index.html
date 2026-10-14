@@ -806,7 +806,7 @@
     const r = await api('revert_today', id); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
     await reload(); if (editingId === id) editClient(id); else renderClient(); toast('השינויים מהיום בוטלו');
   }
-  const changedToday = rec => { const t = new Date().toISOString().slice(0,10); return Object.values(rec?.field_meta || {}).filter(m => m.prev?.length && String(m.at || '').startsWith(t) && (m.state === 'manual' || m.state === 'estimate')).length; };
+  const changedToday = rec => { const t = new Date().toISOString().slice(0,10); return Object.values(rec?.field_meta || {}).filter(m => m.prev?.length && String(m.at || '').startsWith(t) && m.state === 'manual').length; };
   function approveField(k){ if (formMeta[k]?.state === 'file'){ formMeta[k] = {...formMeta[k], state: 'approved', at: new Date().toISOString().slice(0,19)}; paintState(k); } }
   function approveAllForm(){ let n = 0; Object.keys(formMeta).forEach(k => { if (formMeta[k].state === 'file'){ approveField(k); n++; } }); toast(n ? `אושרו ${n} שדות` : 'אין שדות מהקובץ שממתינים לאישור'); }
   function bindManual(){

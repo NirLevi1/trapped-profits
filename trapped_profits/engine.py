@@ -849,6 +849,9 @@ def _estimates(ci: ClientInput) -> tuple[ClientInput, list[str]]:
     bd, bd_prev = ci.period_breakdown or {}, ci.period_breakdown_prev_year or {}
     add_exp = 0.0          # להוצאות למגן
     add_cost = 0.0         # הקטנת הרווח (הכנסה חייבת ואומדן רווח)
+    has_period_data = bool(bd) or sh.expenses_current_year > 0 or s.total_revenue > 0
+    if not has_period_data:                                   # עוד אין מאזן בוחן לשנה – אין על מה לאמוד
+        return ci, notes
     if sh.depreciation_annual_estimate and not bd.get("פחת"):
         dep = float(sh.depreciation_annual_estimate)
         add_exp += dep
@@ -864,7 +867,7 @@ def _estimates(ci: ClientInput) -> tuple[ClientInput, list[str]]:
                      f"{cogs:,.0f} ₪; הרווח {'קטן' if delta > 0 else 'גדל'} ב-{abs(delta):,.0f} ₪ (אומדן, אין ספירת מלאי)")
     for cat, v_prev in bd_prev.items():
         v_prev = float(v_prev or 0)
-        if v_prev > 0 and not bd.get(cat) and cat not in ("פחת", "קניות"):
+        if bd and v_prev > 0 and not bd.get(cat) and cat not in ("פחת", "קניות"):
             add_exp += v_prev
             add_cost += v_prev
             notes.append(f"חסר השנה: {cat} – בשנה הקודמת {v_prev:,.0f} ₪; נוסף כאומדן שנתי (לבדוק אם חסר רישום)")

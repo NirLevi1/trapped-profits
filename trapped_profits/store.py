@@ -333,7 +333,7 @@ class ClientStore:
             raise ValueError("לקוח לא נמצא")
         today = datetime.now().date().isoformat()
         paths = [k for k, v in (rec.get("field_meta") or {}).items()
-                 if v.get("prev") and str(v.get("at", "")).startswith(today) and v.get("state") in ("manual", "estimate")]
+                 if v.get("prev") and str(v.get("at", "")).startswith(today) and v.get("state") == "manual"]
         for p in paths:
             rec = self.revert_field(cid, p)
         if paths:
@@ -471,7 +471,7 @@ class ClientStore:
             profit_est = inp["s62a"].get("taxable_income_personal_effort") or 0
         profit_est = ann(profit_est)
         carry("retained.balance_sheet_retained_earnings", rolled, "retained.balance_sheet_retained_earnings",
-              f"עודפים לתום {st.get('last_closed_report_year') or ty - 1}" + (" לפי גלגול" if ci.structure.is_scenario_b else " מהדוח הסגור"))
+              f"עודפים לתום {ty - 1}" + (f" לפי גלגול מדוח {st.get('last_closed_report_year')}" if ci.structure.is_scenario_b else " מהדוח הסגור"))
         carried["retained.balance_sheet_retained_earnings"]["state"] = "estimate" if ci.structure.is_scenario_b else "carried"
         carry("retained.prev_year_profit_for_rollover", profit_est, "distributions.current_year_profit_estimate", f"רווח {ty} (אומדן שנתי) לגלגול")
         checklist.append(f"עודפים: הבסיס לתום {ty} הוא אומדן (עודפי הדוח הסגור + רווח {ty} אחרי מס − דיבידנד {ty}). כשייסגר דוח {ty} – להעלות אותו והאומדן יוחלף.")
