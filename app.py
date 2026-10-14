@@ -261,7 +261,22 @@ class Api:
         return {"data_dir": str(new), "clients": len(self.store.list())}
 
 
+def set_app_name() -> None:
+    """במק התהליך הוא פייתון – ולכן בשורת התפריטים ובדוק כתוב "Python". משנים את שם החבילה בזיכרון לפני שהחלון עולה."""
+    if sys.platform != "darwin":
+        return
+    try:
+        from Foundation import NSBundle  # type: ignore[import-not-found]
+        info = NSBundle.mainBundle().localizedInfoDictionary() or NSBundle.mainBundle().infoDictionary()
+        if info is not None:
+            info["CFBundleName"] = "פורטרה"
+            info["CFBundleDisplayName"] = "פורטרה"
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main() -> None:
+    set_app_name()
     api = Api()
     window = webview.create_window(WINDOW_TITLE, ui_path(), js_api=api, width=1240, height=820, min_size=(900, 600), maximized=True)
     window.events.shown += lambda: set_app_icon(window)
