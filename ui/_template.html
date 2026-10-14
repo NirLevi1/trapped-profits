@@ -826,6 +826,7 @@
   const SLOT_ORDER = ['annual_report', 'trial_balance', 'ledger'];
   let slotMeta = null;
   let slotMode = 'form';          // 'form' – ממלא את הטופס; 'card' – מעדכן לקוח קיים ומחשב (עדכון רבעוני)
+  const slotStatus = {};          // סטטוס אחרון לכל חריץ (נשמר בין רינדורים של הכרטיס)
   async function renderSlots(mode, containerId){
     slotMode = mode || 'form';
     slotMeta = slotMeta || (await api('import_slots')) || {slots: {}, ocr: false};
@@ -833,7 +834,7 @@
     el.innerHTML = SLOT_ORDER.filter(k => slotMeta.slots[k]).map(k => { const m = slotMeta.slots[k]; return `<div class="slot" id="slot_${k}">
         <div><b>${esc(m.title)}</b><div class="hint">${esc(m.desc)}${k === 'annual_report' && !slotMeta.ocr ? ' <span style="color:var(--warn)">זיהוי תווים לא מותקן – PDF סרוק לא ייקרא (דיגיטלי כן).</span>' : ''}</div></div>
         <button onclick="importSlot('${k}')" id="btn_${k}">בחירת קובץ…</button>
-        <div class="st" id="st_${k}"></div></div>`; }).join('') || '<div class="hint">ייבוא זמין רק בתוכנה המותקנת.</div>';
+        <div class="st ${slotStatus[k]?.cls || ''}" id="st_${k}">${slotStatus[k]?.html || ''}</div></div>`; }).join('') || '<div class="hint">ייבוא זמין רק בתוכנה המותקנת.</div>';
   }
   function fillFields(fields, sources, label){
     let n = 0;
@@ -866,8 +867,9 @@
       const rec = records.find(x => x.id === selectedId); if (!rec) return;
       const upd = await api('apply_import', rec.id, r.fields, r.sources, (slotMeta.slots[slot]?.title || slot) + ' – ' + r.file);
       if (!upd || upd.error){ st.className = 'st err'; st.textContent = upd?.error || 'העדכון נכשל'; return; }
+      slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${Object.keys(r.fields || {}).length} שדות עודכנו וחושבו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '')};
       await reload(); renderClient();
-      const el2 = $('cardSlots'); if (el2){ el2.style.display = ''; await renderSlots('card', 'cardSlotsBody'); const st2 = $('st_' + slot); if (st2){ st2.className = 'st ok'; st2.innerHTML = `✓ ${esc(r.file)} – ${Object.keys(r.fields || {}).length} שדות עודכנו וחושבו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : ''); } }
+      const el2 = $('cardSlots'); if (el2){ el2.style.display = ''; await renderSlots('card', 'cardSlotsBody'); }
       toast('הלקוח עודכן מהקובץ וחושב מחדש');
       return;
     }
@@ -875,9 +877,10 @@
     st.className = 'st ok'; st.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '');
     toast(`${n} שדות מולאו – מסומנים בצהוב, לאישור`);
   }
-  async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
+  let slotsFor = null;
+  async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
   async function approveAllCard(id){ const r = await api('approve_fields', id, null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('השדות מהקובץ אושרו'); }
-  function newClient(){ editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
+  function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
   function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
   function cancelForm(){ show(editingId ? 'client' : 'clients'); }
   async function saveForm(){
