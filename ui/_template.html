@@ -45,11 +45,16 @@
 
   main{flex:1;min-width:0;overflow:auto;padding:24px 28px 40px}
   .screen{display:none;max-width:1040px}
+  #s-queue,#s-clients,#s-client{max-width:1180px}
+  .tablewrap{overflow-x:auto}
   .screen.active{display:block}
   h1{font-size:22px;font-weight:500;margin:0 0 4px;letter-spacing:-.01em}
   .lead{color:var(--ink-3);margin:0 0 22px;font-size:14px}
   h2{font-size:14px;font-weight:600;margin:26px 0 10px;color:var(--ink-2)}
   .toolbar{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  .toolbar.sticky{position:sticky;top:-24px;z-index:5;background:var(--canvas);padding:14px 0 10px;margin:-24px 0 14px;border-bottom:1px solid var(--line-soft)}
+  details.card>summary{cursor:pointer;list-style:none} details.card>summary::-webkit-details-marker{display:none} details.card>summary::before{content:'▸';display:inline-block;margin-inline-end:6px;color:var(--ink-3);transition:transform .15s} details.card[open]>summary::before{transform:rotate(90deg)}
+  .card h3.fgroup{font-size:14px;font-weight:600;color:var(--ink);margin:0 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line-soft)}
   .toolbar .spacer{flex:1}
 
   /* ── primitives ── */
@@ -124,7 +129,7 @@
   input.st-missing{border-color:var(--serious);background:#fdf1ee}
   table.mini{border-collapse:collapse;font-size:12px} table.mini th,table.mini td{padding:2px 10px 2px 0;text-align:right} table.mini th{font-weight:500;color:inherit;opacity:.8}
   .fstate{font-size:11px;margin-top:3px;display:flex;gap:6px;align-items:center}
-  .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)}
+  .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
   .fstate button{padding:0 6px;font-size:11px;line-height:18px;border-radius:5px}
   .check .fstate{margin-inline-start:0}
   .slots{display:grid;gap:10px}
@@ -250,7 +255,7 @@
         <label class="field"><span>שם המשרד (לחתימת המכתב ללקוח)</span><input type="text" id="st_firm"></label>
         <label class="field"><span>שם רואה החשבון המטפל</span><input type="text" id="st_acc"></label>
       </div>
-      <label class="field"><span>תיקיית הנתונים</span><input type="text" id="st_dir" dir="ltr" disabled></label>
+      <div class="field"><span>תיקיית הנתונים</span><div style="display:flex;gap:10px;align-items:center"><code id="st_dir" dir="ltr" style="font-size:12px;color:var(--ink-2)"></code><button type="button" class="quiet" onclick="api('open_data_folder')">פתיחה</button></div></div>
     </div>
     <h2>נקודות פתוחות לאישור אברהם (דגלים)</h2>
     <div class="card">
@@ -267,17 +272,17 @@
 
   <!-- ── Form ── -->
   <section class="screen" id="s-form">
-    <div class="toolbar">
+    <div class="toolbar sticky">
       <div><h1 id="formTitle">לקוח חדש</h1><p class="lead" style="margin:0">השדות העיקריים למעלה. "נתונים נוספים" – רק אם רלוונטי; ריק = אפס.</p></div>
       <div class="spacer"></div>
       <button onclick="approveAllForm()" title="מסמן את כל השדות שמולאו מקובץ כמאושרים">✓ אשר הכל מהקובץ</button>
       <button onclick="cancelForm()">ביטול</button>
       <button class="primary" onclick="saveForm()">שמירה וחישוב</button>
     </div>
-    <div class="card">
-      <h3 style="margin-top:0">ייבוא מקבצים <small class="hint" style="display:inline">– שדה שמולא מסומן בצהוב; ריחוף עליו מראה מאיזו שורה נקרא. מה שלא נמצא נשאר ריק.</small></h3>
-      <div class="slots" id="slots"></div>
-    </div>
+    <details class="card" id="slotsBox" open>
+      <summary><h3 style="margin:0;display:inline">ייבוא מקבצים</h3> <small class="hint" style="display:inline">– שדה שמולא מסומן בצהוב; ריחוף עליו מראה מאיזו שורה נקרא. מה שלא נמצא נשאר ריק.</small></summary>
+      <div class="slots" id="slots" style="margin-top:12px"></div>
+    </details>
     <div id="formBody"></div>
     <div class="toolbar"><div class="spacer"></div><button onclick="cancelForm()">ביטול</button><button class="primary" onclick="saveForm()">שמירה וחישוב</button></div>
   </section>
@@ -336,9 +341,10 @@
   // ── helpers ──
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const ils = v => v == null ? '—' : `<span class="num">₪${Math.round(v).toLocaleString('en-US')}</span>`;
+  const ils = v => v == null ? '—' : `<span class="num">${Math.round(v).toLocaleString('en-US')}&#8239;₪</span>`;
   const pct = x => `<span class="num">${(x*100).toFixed(1)}%</span>`;
   const yn = b => b ? 'כן' : 'לא';
+  const fmtDate = d => { if (!d) return ''; const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${+m[3]}.${+m[2]}.${m[1]}` : String(d); };
   const when = t => t ? new Date(t).toLocaleString('he-IL', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'}) : '';
   const ORDER = {'אדום':0,'צהוב':1,'ירוק':2};
   const KIND = {'אדום':'serious','צהוב':'warn','ירוק':'good'};
@@ -350,9 +356,10 @@
   };
   const strip = s => s.replace(/^\S+ – /, '');
   // תווית קצרה לתור (הטבלה צריכה להיכנס במסך של מחשב נייד); הנוסח המלא בכרטיס
-  const SHORT = {'חשוף לתוספת מס':'חשוף', 'ייחוס הכנסה לבעל המניות':'ייחוס הכנסה', 'מבחן ריכוזיות: ייחוס מלא':'ריכוזיות', 'נדרשת חלוקה לשמירת הפטור':'נדרשת חלוקה', 'רווחיות מתקרבת לסף 25%':'מתקרב לסף', 'החוק אינו חל':'אינו חל', 'הסעיף אינו חל':'אינו חל'};
-  const short = s => { const t = strip(s); if (SHORT[t]) return SHORT[t]; const m = t.match(/^מוגן לפי הוראת מעבר עד (\d+)$/); return m ? 'מוגן עד ' + m[1] : t; };
+  const SHORT = {'חייב בתוספת מס':'חייב', 'חשוף לתוספת מס':'חשוף', 'ייחוס הכנסה לבעל המניות':'ייחוס הכנסה', 'מבחן ריכוזיות: ייחוס מלא':'ריכוזיות', 'נדרשת חלוקה לשמירת הפטור':'נדרשת חלוקה', 'רווחיות מתקרבת לסף 25%':'מתקרב לסף', 'החוק אינו חל':'אינו חל', 'הסעיף אינו חל':'אינו חל'};
+  const short = s => { const t = strip(s); if (SHORT[t]) return SHORT[t]; let m = t.match(/^מוגן לפי הוראת מעבר עד (\d+)$/); if (m) return 'מוגן עד ' + m[1]; if (/^מבחן ריכוזיות/.test(t)) return 'ריכוזיות – ייחוס מלא'; m = t.match(/^לקוח אחד (\d+%) מההכנסות/); if (m) return `לקוח אחד ${m[1]}`; return t; };
   const fmtv = v => typeof v === 'number' ? ils(v) : esc(v);
+  const recHtml = t => (t || '').split(/(?=מסלול 81:|מסלול 62א:)/).map(x => x.trim()).filter(Boolean).map(x => `<p style="margin:6px 0 0">${esc(x)}</p>`).join('');
   const pill = (color, text) => `<span class="pill ${KIND[color] || ''}">${ICON[KIND[color]] || ICON.neutral} ${esc(text || color)}</span>`;
   let toastTimer = null;
   function toast(msg, ms){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms || (/לא נשמר|נכשל|שגיאה|כבר קיים|חייב|בלבד|לסגור/.test(msg) ? 6000 : 2200)); }
@@ -431,7 +438,7 @@
   const handlingPill = h => { const st = h?.status || 'טרם טופל'; const k = st.startsWith('הוחלט') || st === 'טופל' ? 'good' : st === 'בשיחה' ? 'info' : ''; return `<span class="pill ${k}">${esc(st)}</span>`; };
   function row(c){
     return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
-      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c.manual_review?.length ? ` · <span style="color:var(--ink-3)" title="${esc(c.manual_review.join(' | '))}">⚠ ${c.manual_review.length} לבדיקה</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(c.data_as_of || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(c.data_as_of)}` : '')}</div></td>
+      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c.manual_review?.length ? ` · <span style="color:var(--ink-3)" title="${esc(c.manual_review.join(' | '))}">⚠ ${c.manual_review.length} לבדיקה</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(fmtDate(c.data_as_of) || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(fmtDate(c.data_as_of))}` : '')}</div></td>
       <td>${pill(c.dashboard.color_overall)}</td>
       <td>${pill(c.dashboard.color_81, short(c.dashboard.status_81))}</td>
       <td>${pill(c.dashboard.color_62a, short(c.dashboard.status_62a))}</td>
@@ -478,12 +485,12 @@
     } else body = list.map(row).join('');
     if (!rs.length){ el.innerHTML = pendingNote + `<div class="empty"><b>עדיין אין לקוחות מחושבים.</b>הוסיפו לקוח ומלאו את נתוני הבסיס – החישוב רץ בשמירה.</div>`; }
     else if (!list.length){ el.innerHTML = pendingNote + `<div class="empty"><b>אין לקוחות שמתאימים לסינון.</b></div>`; }
-    else el.innerHTML = pendingNote + `<table><thead><tr>${HEAD}</tr></thead><tbody>${body}</tbody></table>`;
+    else el.innerHTML = pendingNote + `<div class="tablewrap"><table><thead><tr>${HEAD}</tr></thead><tbody>${body}</tbody></table></div>`;
     bind(el);
     $('queueCount').textContent = rs.length || '';
     $('clientsCount').textContent = records.length || '';
     const dates = [...new Set(rs.map(c => c.data_as_of).filter(Boolean))].sort();
-    $('asof').textContent = !dates.length ? '' : dates.length === 1 ? `נכון ל־${dates[0]}` : `נתונים מ־${dates[0]} עד ${dates.at(-1)}`;
+    $('asof').textContent = !dates.length ? '' : dates.length === 1 ? `נכון ל־${fmtDate(dates[0])}` : `נתונים מ־${fmtDate(dates[0])} עד ${fmtDate(dates.at(-1))}`;
     const lv = rs[0]?.logic_version || records[0]?.logic_version || '';
     $('statusCard').innerHTML = `<b>${records.length} לקוחות · שנת מס ${rs[0]?.tax_year ?? settings?.default_tax_year ?? Y}</b>${lv ? `גרסת לוגיקה <span class="num">${esc(lv)}</span>` : 'עדיין אין חישובים'}${MOCK ? '<br>תצוגת דפדפן – החישוב רץ רק בתוכנה' : ''}`;
   }
@@ -557,7 +564,6 @@
       <div class="toolbar">
         <button onclick="editClient('${esc(rec.id)}')">עריכת נתונים</button>
         <button onclick="toggleCardSlots()" title="עדכון רבעוני: קובץ חדש דורס רק את השדות שבו ומחשב מחדש">עדכון מקבצים</button>
-        <button class="quiet" id="rollBtn" onclick="askRollover('${esc(rec.id)}', ${Number(rec.input?.structure?.tax_year) || 0})" title="סגירת שנת המס ופתיחת הבאה: הדיבידנד, ההוצאות והכרטסת של השנה הופכים ל'שנה קודמת' ונשמרים; העודפים מגולגלים כאומדן">מעבר לשנת ${(Number(rec.input?.structure?.tax_year) || 0) + 1}</button>
         <div class="seg" title="דוח מלא לרואה החשבון"><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">דוח לרו"ח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></div>
         <div class="seg" title="מכתב בשפה פשוטה ללקוח"><button type="button" onclick="exportDoc('${esc(rec.id)}','client','pdf')">מכתב ללקוח · PDF</button><button type="button" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></div>
       </div>`;
@@ -589,7 +595,7 @@
         ${row('הכנסות', a.revenue, s.personal_effort_income + s.other_income_total)}${row('הכנסה חייבת', a.taxable_income, s.taxable_income_personal_effort)}${row('הוצאות למגן', a.expenses, sh.expenses_current_adjusted - (sh.salary_added_to_expenses || 0))}</table></div>`);
     }
     if (c.years_used) notices.push(`<div class="hint" style="margin:2px 0 8px">שנים בחישוב: עודפים – ${esc(c.years_used.retained)} · ממוצע הוצאות – ${esc(c.years_used.expenses_avg)} · השנה הנבדקת – ${esc(c.years_used.current_year)} · ריכוזיות – ${esc(c.years_used.concentration)}</div>`);
-    if (rec.stale) notices.push(`<div class="notice serious">נתון מיושן – נכון ל־${esc(rec.input?.data_as_of || when(rec.updated_at))}. לעדכן לפני שמדברים עם הלקוח.</div>`);
+    if (rec.stale) notices.push(`<div class="notice serious">נתון מיושן – נכון ל־${esc(fmtDate(rec.input?.data_as_of) || when(rec.updated_at))}. לעדכן לפני שמדברים עם הלקוח.</div>`);
     if (rec.changes?.length) notices.push(`<div class="notice" style="background:var(--neutral-bg);color:var(--ink-2)">השתנה בחישוב האחרון: ${rec.changes.map(x => `${esc(x.what)}: ${fmtv(x.from)} ← ${fmtv(x.to)}`).join(' · ')}</div>`);
     el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall)) + notices.join('') + `
       <div class="cols">
@@ -624,11 +630,9 @@
           <h3 style="margin-top:14px">מה אם…</h3>
           <div class="row">
             <label class="field"><span>דיבידנד נוסף לחלוקה</span><input type="text" inputmode="numeric" dir="ltr" id="wi_div" value="0" oninput="fmtInput(this)"></label>
-            <label class="field"><span>שכר לבעל המניות עד 31.12 (סה"כ)</span><input type="text" inputmode="numeric" dir="ltr" id="wi_sal" value="0" oninput="fmtInput(this)"></label>
-            <label class="field"><span>או: העלאת שכר חודשי של</span><input type="text" inputmode="numeric" dir="ltr" id="wi_raise" value="0" oninput="fmtInput(this);wiRaise()"></label>
-            <label class="field"><span>מחודש</span><input type="text" inputmode="numeric" dir="ltr" id="wi_from" value="${Math.min(12, (rec.input?.data_through_month || new Date().getMonth()) + 1)}" oninput="wiRaise()"></label>
+            <label class="field"><span>שכר נוסף לבעל המניות עד 31.12</span><input type="text" inputmode="numeric" dir="ltr" id="wi_sal" value="0" oninput="fmtInput(this)"></label>
           </div>
-          <div class="hint" id="wi_raise_out" style="margin:-4px 0 6px"></div>
+          <div class="hint" style="display:flex;gap:5px;align-items:center;white-space:nowrap;margin:-2px 0 8px">או העלאה חודשית: <input type="text" inputmode="numeric" dir="ltr" id="wi_raise" value="0" oninput="fmtInput(this);wiRaise()" style="width:72px;padding:3px 6px"> ₪ מחודש <input type="text" inputmode="numeric" dir="ltr" id="wi_from" value="${Math.min(12, (rec.input?.data_through_month || new Date().getMonth()) + 1)}" oninput="wiRaise()" style="width:38px;padding:3px 6px"></div><div class="hint" id="wi_raise_out" style="margin:-4px 0 8px"></div>
           <div class="toolbar" style="margin-bottom:8px">
             <button class="quiet" onclick="wiSet(${Math.round(m.gap_to_close)}, 0)">הפער לפטור</button>
             <button class="quiet" onclick="wiSet(0, ${Math.round(s.attributed_income)})">שכר התיקון</button>
@@ -638,7 +642,7 @@
           </div>
           <div id="wi_out" class="hint">הסימולציה לא נשמרת. ${MOCK ? 'בתצוגת הדפדפן אין מנוע – זמין בתוכנה.' : ''}</div>
         </div>
-        <div class="rec"><b>המלצה:</b> ${esc(m.recommendation_text || m.recommendation)}</div></div>
+        <div class="rec"><b>המלצה</b>${recHtml(m.recommendation_text || m.recommendation)}</div></div>
         <div class="card"><h3>סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}</h3>${kv([
           ['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)],
           ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)],
@@ -648,7 +652,7 @@
           ['זכאית לפטור 750 אלף ₪?', yn(s.exemption_750k_applies)],
           ['62א חל?', yn(s.section_applies)],
           null,
-          ...(s.concentration_years?.length ? [[`ריכוזיות על ${s.concentration_years.length} שנים (${s.concentration_years[0]}${s.concentration_years.length > 1 ? '–' + s.concentration_years.at(-1) : ''})`, `<span class="num" style="color:${s.concentration_share_36m >= 0.7 ? 'var(--serious)' : 'inherit'}">${(s.concentration_share_36m * 100).toFixed(0)}%</span> ${s.concentration_years.length < 3 ? `<span class="hint" style="display:inline">(חסרות ${3 - s.concentration_years.length} כרטסות)</span>` : s.concentration_met_by_data ? '<span style="color:var(--serious)">– המבחן מתקיים לפי הנתונים</span>' : '– מתחת ל-70%'}`]] : []),
+          ...(s.concentration_years?.length ? [[`ריכוזיות ${s.concentration_years.length === 1 ? 'על שנה אחת' : s.concentration_years.length === 2 ? 'על שנתיים' : 'על 3 שנים'} (${s.concentration_years[0]}${s.concentration_years.length > 1 ? '–' + s.concentration_years.at(-1) : ''})`, `<span class="num" style="color:${s.concentration_share_36m >= 0.7 ? 'var(--serious)' : 'inherit'}">${(s.concentration_share_36m * 100).toFixed(0)}%</span> ${s.concentration_years.length < 3 ? `<span class="hint" style="display:inline">(חסרות ${3 - s.concentration_years.length} כרטסות)</span>` : s.concentration_met_by_data ? '<span style="color:var(--serious)">– המבחן מתקיים לפי הנתונים</span>' : '– מתחת ל-70%'}`]] : []),
           ['שכר לתיקון עד 31.12', ils(s.attributed_income), true],
           ['שכר בעלים ששולם השנה', `<input type="text" inputmode="numeric" placeholder="לא הוזן" value="${s.owner_salary == null ? '' : fmtNum(s.owner_salary)}" onkeydown="if(event.key==='Enter')saveField('${esc(rec.id)}','s62a.owner_salary_current_year',this.value,false,true)" onblur="saveField('${esc(rec.id)}','s62a.owner_salary_current_year',this.value,true,true)" oninput="fmtInput(this)">`],
           ['עלות מס נוספת מוערכת', ils(s.extra_tax_cost)],
@@ -662,13 +666,14 @@
             <label class="field"><span>סטטוס</span><select id="h_status">${(settings?.handling_statuses || ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל']).map(x => `<option ${rec.handling?.status === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
             <label class="field" style="flex:2"><span>הערה</span><input type="text" id="h_note" value="${esc(rec.handling?.note || '')}" placeholder="מה סוכם עם הלקוח"></label>
           </div>
-          <div class="toolbar" style="margin:0"><span class="hint">${rec.handling?.at ? 'עודכן ' + when(rec.handling.at) : ''}</span><div class="spacer"></div><button onclick="setHandling('${esc(rec.id)}')">שמירת סטטוס</button></div>
-          <label class="field" style="margin-top:12px"><span>הערה מהשיחה – מצטרפת למכתב ללקוח ("בהמשך לשיחתנו")</span><textarea id="letter_note" placeholder="טקסט חופשי שייכנס למכתב">${esc(rec.letter_note || '')}</textarea></label>
-          <div class="toolbar" style="margin:0"><div class="spacer"></div><button onclick="saveLetterNote('${esc(rec.id)}')">שמירת ההערה</button></div>
+          <label class="field" style="margin-top:8px"><span>הערה מהשיחה – מצטרפת למכתב ללקוח ("בהמשך לשיחתנו")</span><textarea id="letter_note" placeholder="טקסט חופשי שייכנס למכתב">${esc(rec.letter_note || '')}</textarea></label>
+          <div class="toolbar" style="margin:0"><span class="hint">${rec.handling?.at ? 'עודכן ' + when(rec.handling.at) : ''}</span><div class="spacer"></div><button onclick="saveHandling('${esc(rec.id)}')">שמירה</button></div>
+          <div class="toolbar" style="margin:14px 0 0;padding-top:10px;border-top:1px solid var(--line-soft)"><span class="hint">סוף שנה: סגירת ${c.tax_year} ופתיחת ${c.tax_year + 1}</span><div class="spacer"></div><button class="quiet" id="rollBtn" onclick="askRollover('${esc(rec.id)}', ${c.tax_year})" title="הדיבידנד, ההוצאות והכרטסת של השנה הופכים ל'שנה קודמת' ונשמרים; העודפים מגולגלים כאומדן">מעבר לשנת ${c.tax_year + 1}</button></div>
         </div>
         <div class="card" style="grid-column:1/-1"><h3>היסטוריה <span class="hint" style="display:inline">· ${(rec.history || []).length} רשומות</span></h3>${historyHtml(rec.history || [])}</div>
       </div>`;
-    $('cardLead').textContent = `שנת מס ${c.tax_year} · בסיס לתום ${c.previous_year}${c.is_estimate ? ' · אומדן (תרחיש ב׳)' : ''} · עודכן ${when(rec.updated_at)} · גרסת לוגיקה ${c.logic_version}`;
+    $('cardLead').textContent = `שנת מס ${c.tax_year} · בסיס לתום ${c.previous_year}${c.is_estimate ? ' · אומדן (תרחיש ב׳)' : ''} · עודכן ${when(rec.updated_at)}`;
+    $('cardLead').title = `גרסת לוגיקה ${c.logic_version}`;
   }
 
   // ── form schema (key = path into ClientInput) ──
@@ -679,7 +684,7 @@
     {g:'זיהוי', main:1, k:'structure.company_id', t:'text', l:'מספר ח.פ.'},
     {g:'זיהוי', main:1, k:'structure.tax_year', t:'int', l:'שנת המס הנבדקת', d:Y},
     {g:'זיהוי', main:1, k:'structure.last_closed_report_year', t:'int', l:'שנת הדוח הסגור האחרון', h:'אם נמוכה משנה קודמת – תרחיש ב׳, התוצאה מסומנת אומדן', d:Y-2},
-    {g:'זיהוי', main:1, k:'data_as_of', t:'text', l:'נתונים נכון ל־', h:'תאריך הקובץ האחיד / הדוח, למשל 30.9.2026'},
+    {g:'זיהוי', main:1, k:'data_as_of', t:'date', l:'נתונים נכון ל־', h:'תאריך הקובץ האחיד / הדוח, למשל 30.9.2026'},
     {g:'זיהוי', main:1, k:'data_through_month', t:'int', l:'נתוני השנה הנבדקת עד חודש', h:'1–12. אם מוזן – הכנסות, הכנסה חייבת והוצאות השנה מוזנים עד אותו חודש והמערכת מכפילה לשנה מלאה (לינארי). ריק = הוזנו נתוני שנה מלאה'},
 
     {g:'בעלות ושליטה', main:1, k:'structure.controlling_owner_name', t:'text', l:'שם בעל השליטה', h:'לקיבוץ חברות של אותו בעל שליטה בתור'},
@@ -783,12 +788,13 @@
   let humanOnly = null;
   const HUMAN_ONLY_FALLBACK = {'structure.company_id':1,'structure.controlling_owner_name':1,'structure.controlling_owners_count':1,'structure.group_companies_count':1,'structure.owner_controls_another_company':1,'shields.total_assets_cost':1,'distributions.dividends_taxed_current_year':1,'distributions.determining_period_paid_and_taxed':1,'s62a.owner_salary_current_year':1};
   const isHuman = k => !!((humanOnly || HUMAN_ONLY_FALLBACK)[k]);
-  function stateOf(k){ const m = formMeta[k]; if (m?.state) return m.state; return isHuman(k) ? 'missing' : ''; }
-  function stateHtml(k){
-    const st = stateOf(k); if (!st) return '';
+  function hasValue(k, val){ const f = F.find(x => x.k === k); if (!f || f.t === 'bool') return false; if (val !== undefined) return f.t === 'customers' ? !!val?.[0]?.name : (val != null && String(val).trim() !== '' && Number(val) !== 0); if (f.t === 'customers') return !!$(fid(k) + '_n0')?.value; const el = $(fid(k)); if (!el) return false; return String(el.value || '').trim() !== '' && parseNum(el.value) !== 0; }
+  function stateOf(k, val){ const m = formMeta[k]; if (m?.state) return m.state; return isHuman(k) ? (hasValue(k, val) ? 'filled' : 'missing') : ''; }
+  function stateHtml(k, val){
+    const st = stateOf(k, val); if (!st) return '';
     const m = formMeta[k] || {};
     const who = (m.by ? ' · ' + esc(m.by) : '') + (m.at ? ' · ' + when(m.at).slice(0,10) : '');
-    const txt = st === 'file' ? 'מהקובץ · לאישור' : st === 'approved' ? 'אושר' + who : st === 'manual' ? 'הוזן ידנית' + who : st === 'carried' ? 'הועבר ממעבר שנה' + who : st === 'estimate' ? 'אומדן – לבדיקת אברהם' : 'חסר – לאברהם';
+    const txt = st === 'file' ? 'מהקובץ · לאישור' : st === 'filled' ? 'הוזן' : st === 'approved' ? 'אושר' + who : st === 'manual' ? 'הוזן ידנית' + who : st === 'carried' ? 'הועבר ממעבר שנה' + who : st === 'estimate' ? 'אומדן – לבדיקת אברהם' : 'חסר – לאברהם';
     const canRevert = editingId && m.prev?.length;
     return `<div class="fstate ${st}" id="fs_${fid(k)}" title="${esc(m.source || '')}${canRevert ? ' · ערך קודם: ' + esc(fmtAny(m.prev.at(-1).value)) : ''}">${txt}${st === 'file' ? ` <button type="button" class="quiet" onclick="approveField('${k}')">✓ אשר</button>` : ''}${canRevert ? ` <button type="button" class="quiet" onclick="revertField('${k}')" title="חזרה ל-${esc(fmtAny(m.prev.at(-1).value))}">↶ בטל</button>` : ''}</div>`;
   }
@@ -834,9 +840,10 @@
     let v = val ?? '';
     if (f.t === 'rate' && v !== '') v = Math.round(v * 10000) / 100;
     if (f.t === 'num' && v !== '') v = fmtNum(v);
-    const attrs = f.t === 'text' ? 'type="text"' : f.t === 'num' ? 'type="text" inputmode="numeric" dir="ltr" oninput="fmtInput(this)"' : `type="number" ${f.t === 'int' ? 'step="1"' : 'step="0.01"'}`;
-    const st = stateOf(f.k), cls = st === 'file' ? 'from-file' : st ? 'st-' + st : '';
-    return `<label class="field"><span>${esc(f.l)}</span><input ${attrs} class="${cls}" id="${id}" value="${esc(v)}" ${f.t === 'text' && !['structure.name','structure.controlling_owner_name'].includes(f.k) ? 'dir="ltr"' : ''}>${f.h ? `<div class="hint">${esc(f.h)}</div>` : ''}${stateHtml(f.k)}</label>`;
+    if (f.t === 'date') v = fmtDate(v);
+    const attrs = (f.t === 'text' || f.t === 'date') ? 'type="text"' : f.t === 'num' ? 'type="text" inputmode="numeric" dir="ltr" oninput="fmtInput(this)"' : `type="number" ${f.t === 'int' ? 'step="1"' : 'step="0.01"'}`;
+    const st = stateOf(f.k, val), cls = st === 'file' ? 'from-file' : st ? 'st-' + st : '';
+    return `<label class="field"><span>${esc(f.l)}</span><input ${attrs} class="${cls}" id="${id}" value="${esc(v)}" ${f.t === 'text' && !['structure.name','structure.controlling_owner_name'].includes(f.k) ? 'dir="ltr"' : ''}>${f.h ? `<div class="hint">${esc(f.h)}</div>` : ''}${stateHtml(f.k, val)}</label>`;
   }
   let formHidden = {};   // שדות שאינם בטופס (כרטסות שנים קודמות, פירוט סעיפים…) – נשמרים כמו שהם
   function renderForm(inp, meta){
@@ -847,7 +854,7 @@
       const fs = F.filter(f => f.g === g && !!f.main === main);
       if (!fs.length) return '';
       const bools = fs.filter(f => f.t === 'bool'), nums = fs.filter(f => f.t !== 'bool');
-      return `<h3>${esc(g)}</h3><div class="grid">${nums.map(f => fieldHtml(f, getp(inp, f.k) ?? f.d)).join('')}</div>${bools.map(f => fieldHtml(f, getp(inp, f.k) ?? f.d)).join('')}`;
+      return `<h3 class="${main ? 'fgroup' : ''}">${esc(g)}</h3><div class="grid">${nums.map(f => fieldHtml(f, getp(inp, f.k) ?? f.d)).join('')}</div>${bools.map(f => fieldHtml(f, getp(inp, f.k) ?? f.d)).join('')}`;
     };
     const main = groups.filter(g => F.some(f => f.g === g && f.main)).map(g => `<div class="card">${sect(g, true)}</div>`).join('');
     const extra = groups.filter(g => F.some(f => f.g === g && !f.main)).map(g => sect(g, false)).join('');
@@ -863,7 +870,7 @@
       const el = $(fid(f.k)); if (!el && f.t !== 'customers') continue;
       let v;
       if (f.t === 'bool') v = el.checked;
-      else if (f.t === 'text') v = el.value.trim();
+      else if (f.t === 'text' || f.t === 'date') v = el.value.trim();
       else if (f.t === 'customers') v = [0,1,2,3,4].map(i => ({name: $(fid(f.k) + '_n' + i).value.trim(), amount: parseNum($(fid(f.k) + '_a' + i).value) || 0})).filter(x => x.name || x.amount);
       else if (parseNum(el.value) == null) v = (f.k === 'retained.cumulative_taxable_income' || f.k === 'distributions.current_year_profit_estimate' || f.k === 's62a.holding_rate_in_paying_company' || f.k === 'structure.last_closed_report_year' || f.k === 'data_through_month' || f.k === 's62a.owner_salary_current_year' || f.k === 'retained.prev_year_profit_for_rollover' || f.k === 's62a.purchases_current_year' || f.k === 'shields.depreciation_annual_estimate' || f.k === 's62a.gross_margin_rate') ? null : 0;
       else { v = parseNum(el.value); if (f.t === 'rate') v = v / 100; if (f.t === 'int') v = Math.round(v); }
@@ -908,6 +915,7 @@
         if (f.t === 'bool') el.checked = !!v;
         else if (f.t === 'num') el.value = fmtNum(v);
         else if (f.t === 'rate') el.value = Math.round(v * 10000) / 100;
+        else if (f.t === 'date') el.value = fmtDate(v);
         else el.value = v ?? '';
       }
       formMeta[k] = {state: 'file', source: src, at: new Date().toISOString().slice(0,19)};
@@ -946,8 +954,8 @@
   let slotsFor = null;
   async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ window._showPdfSlot = false; Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
   async function approveAllCard(id){ const r = await api('approve_fields', id, null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('השדות מהקובץ אושרו'); }
-  function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); pendingCopies = []; showPrev = false; editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
-  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; if (slotsFor !== id){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = id; } editingId = id; showPrev = !!(rec.input?.structure?.last_closed_report_year && rec.input.structure.last_closed_report_year < rec.input.structure.tax_year - 1); $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
+  function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); pendingCopies = []; showPrev = false; editingId = null; $('formTitle').textContent = 'לקוח חדש'; $('slotsBox').open = true; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
+  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; if (slotsFor !== id){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = id; } editingId = id; showPrev = !!(rec.input?.structure?.last_closed_report_year && rec.input.structure.last_closed_report_year < rec.input.structure.tax_year - 1); $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; $('slotsBox').open = false; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
   function cancelForm(){ show(editingId ? 'client' : 'clients'); }
   async function saveForm(){
     const inp = collectForm();
@@ -967,12 +975,15 @@
   document.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button[data-v]').forEach(b => b.onclick = () => { seg.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); seg.id === 'cView' ? renderClients() : renderQueue(); }));
 
   // ── handling status (החלטה 14) ──
-  async function setHandling(id){
-    const st = $('h_status').value, note = $('h_note').value.trim();
-    const r = await api('set_handling', id, st, note);
-    if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
+  async function saveHandling(id){
+    const rec = records.find(r => r.id === id);
+    const st = $('h_status').value, note = $('h_note').value.trim(), letter = $('letter_note').value;
+    let r = null;
+    if (st !== rec?.handling?.status || note !== (rec?.handling?.note || '')){ r = await api('set_handling', id, st, note); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } }
+    if (letter !== (rec?.letter_note || '')){ r = await api('set_letter_note', id, letter); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } }
+    if (!r){ toast('אין שינוי לשמור'); return; }
     const top = document.querySelector('main').scrollTop;
-    await reload(); renderClient(); document.querySelector('main').scrollTop = top; toast('סטטוס הטיפול נשמר');
+    await reload(); renderClient(); document.querySelector('main').scrollTop = top; toast('הטיפול נשמר' + (letter !== (rec?.letter_note || '') ? ' – ההערה תיכנס למכתב ללקוח' : ''));
   }
 
   // ── delete (אישור בתוך הדף – אין חלונות קופצים) ──
@@ -990,7 +1001,7 @@
   // ── settings (החלטה 18) ──
   async function loadSettings(){
     settings = await api('get_settings'); if (!settings) return;
-    $('st_year').value = settings.default_tax_year; $('st_stale').value = settings.stale_days; $('st_dir').value = settings.data_dir || '';
+    $('st_year').value = settings.default_tax_year; $('st_stale').value = settings.stale_days; $('st_dir').textContent = settings.data_dir || '';
     $('st_firm').value = settings.firm_name || ''; $('st_acc').value = settings.accountant_name || '';
     const f = settings.flags || {};
     $('fl_50').checked = !!f.deduct_transition_from_50pct_base; $('fl_20').checked = !!f.enable_20pct_current_year_rule;
@@ -1018,7 +1029,7 @@
   function wiRaise(){
     const raise = parseNum($('wi_raise').value) || 0, from = Math.min(12, Math.max(1, parseNum($('wi_from').value) || 1));
     const months = 13 - from, total = raise * months;
-    if (raise > 0){ $('wi_sal').value = fmtNum(total); $('wi_raise_out').textContent = `${fmtNum(raise)} × ${months} חודשים (${from}–12) = ${fmtNum(total)} ₪ שכר נוסף עד 31.12`; }
+    if (raise > 0){ $('wi_sal').value = fmtNum(total); $('wi_raise_out').textContent = `= ${fmtNum(total)} ₪ (${months} חודשים)`; }
     else $('wi_raise_out').textContent = '';
   }
   async function runWhatIf(){
