@@ -572,15 +572,13 @@
         <div><div class="detail-head"><h1>${esc(title)}</h1>${status}</div>
         <p class="lead" style="margin:0" id="cardLead"></p></div>
         <div class="spacer"></div>
-        <button class="quiet" onclick="show('queue')">חזרה לתור</button>
-      </div>
-      <div class="toolbar">
         <button onclick="editClient('${esc(rec.id)}')" title="עריכת הנתונים ועדכון מקבצים">עריכה</button>
         <div class="menu" id="exportMenu"><button type="button" onclick="$('exportMenu').classList.toggle('open')">ייצוא ▾</button>
           <div class="pop"><table>
             <tr><td>דוח לרואה החשבון</td><td><button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">PDF</button> <button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></td></tr>
             <tr><td>מכתב ללקוח</td><td><button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','client','pdf')">PDF</button> <button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></td></tr>
           </table></div></div>
+        <button class="quiet" onclick="show('queue')">חזרה לתור</button>
       </div>`;
     const c = rec.result;
     if (!c){
@@ -679,9 +677,12 @@
         ])}<div class="hint" style="margin-top:6px">${esc(s.extra_tax_cost_method || '')}</div>
         ${pieHtml(s)}
         ${c.applies_62a && !s.concentration_test_met && s.attributed_if_concentration > 0 ? `<div class="notice ${s.concentration_share >= 0.7 ? 'serious' : s.concentration_share >= 0.55 ? 'warn' : ''}" style="margin-top:10px;background:${s.concentration_share >= 0.55 ? '' : 'var(--neutral-bg)'}"><b>אם מבחן הריכוזיות מתקיים</b> (לקוח אחד ≥70% מסך 36 חודשים): ייחוס מלא – שכר לתיקון ${ils(s.attributed_if_concentration)}, עלות מס נוספת ${ils(s.extra_tax_if_concentration)} – גם עם פטור 750 אלף וגם מתחת ל-25%. ${s.concentration_share >= 0.7 && (s.concentration_years?.length || 0) < 3 ? 'השנה הלקוח הגדול מעל 70% – להעלות כרטסות של שנתיים אחורה.' : ''}</div>` : ''}</div>
-        ${c.next_year_notes?.length ? `<div class="card"><h3>פעולות שאפשר להתחיל כבר ב-${c.tax_year} <small class="hint" style="display:inline">– על בסיס עודפי ${c.previous_year} ורווח ${c.tax_year}</small></h3><ul class="rev">${c.next_year_notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-        ${c.manual_review.length ? `<div class="card"><h3>לבדיקה ידנית</h3><ul class="rev">${c.manual_review.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-        <div class="card"><h3>טיפול &nbsp;${handlingPill(rec.handling)}</h3>
+        </div>
+        ${(() => {
+          const bottom = [];
+          if (c.next_year_notes?.length) bottom.push({key:'actions', label:`פעולות שאפשר להתחיל כבר ב-${c.tax_year}`, html: `<div class="card"><h3>פעולות שאפשר להתחיל כבר ב-${c.tax_year} <small class="hint" style="display:inline">– על בסיס עודפי ${c.previous_year} ורווח ${c.tax_year}</small></h3><ul class="rev">${c.next_year_notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`});
+          if (c.manual_review.length) bottom.push({key:'review', label:`לבדיקה ידנית ${c.manual_review.length}`, html: `<div class="card"><h3>לבדיקה ידנית</h3><ul class="rev">${c.manual_review.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`});
+          bottom.push({key:'handling', label:`טיפול · ${esc(rec.handling?.status || 'טרם טופל')}`, html: `        <div class="card"><h3>טיפול &nbsp;${handlingPill(rec.handling)}</h3>
           <div class="row">
             <label class="field"><span>סטטוס</span><select id="h_status">${(settings?.handling_statuses || ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל']).map(x => `<option ${rec.handling?.status === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
             <label class="field" style="flex:2"><span>הערה</span><input type="text" id="h_note" value="${esc(rec.handling?.note || '')}" placeholder="מה סוכם עם הלקוח"></label>
@@ -689,9 +690,10 @@
           <label class="field" style="margin-top:8px"><span>הערה מהשיחה – מצטרפת למכתב ללקוח ("בהמשך לשיחתנו")</span><textarea id="letter_note" placeholder="טקסט חופשי שייכנס למכתב">${esc(rec.letter_note || '')}</textarea></label>
           <div class="toolbar" style="margin:0"><span class="hint">${rec.handling?.at ? 'עודכן ' + when(rec.handling.at) : ''}</span><div class="spacer"></div><button onclick="saveHandling('${esc(rec.id)}')">שמירה</button></div>
           <div class="toolbar" style="margin:14px 0 0;padding-top:10px;border-top:1px solid var(--line-soft)"><span class="hint">סוף שנה: סגירת ${c.tax_year} ופתיחת ${c.tax_year + 1}</span><div class="spacer"></div><button class="quiet" id="rollBtn" onclick="askRollover('${esc(rec.id)}', ${c.tax_year})" title="הדיבידנד, ההוצאות והכרטסת של השנה הופכים ל'שנה קודמת' ונשמרים; העודפים מגולגלים כאומדן">מעבר לשנת ${c.tax_year + 1}</button></div>
-        </div>
-        <div class="card" style="grid-column:1/-1"><h3>היסטוריה <span class="hint" style="display:inline">· ${(rec.history || []).length} רשומות</span></h3>${historyHtml(rec.history || [])}</div>
-      </div>`;
+        </div>`});
+          bottom.push({key:'history', label:`היסטוריה ${(rec.history || []).length}`, html: `<div class="card" style="grid-column:1/-1"><h3>היסטוריה <span class="hint" style="display:inline">· ${(rec.history || []).length} רשומות</span></h3>${historyHtml(rec.history || [])}</div>`});
+          return `<div class="flags" style="margin-top:16px">${bottom.map(f => `<button type="button" class="flag neutral ${openFlags.has(f.key) ? 'on' : ''}" onclick="toggleFlag('${f.key}')">${f.label}</button>`).join('')}</div>` + bottom.filter(f => openFlags.has(f.key)).map(f => f.html).join('');
+        })()}`;
     $('cardLead').textContent = `שנת מס ${c.tax_year} · בסיס לתום ${c.previous_year}${c.is_estimate ? ' · אומדן (תרחיש ב׳)' : ''} · עודכן ${when(rec.updated_at)}`;
     $('cardLead').title = `גרסת לוגיקה ${c.logic_version}`;
   }
