@@ -916,13 +916,13 @@
   // ── delete (אישור בתוך הדף – אין חלונות קופצים) ──
   function askDelete(btn, id){
     const td = btn.parentElement;
-    td.innerHTML = `<span class="confirm"><span class="hint">למחוק?</span><button class="quiet danger" data-act="del" onclick="doDelete('${esc(id)}')">כן, מחק</button><button class="quiet" data-act="edit" onclick="renderClients()">ביטול</button></span>`;
+    td.innerHTML = `<span class="confirm"><span class="hint">להעביר לארכיון (כולל קבצים ודוחות)?</span><button class="quiet danger" data-act="del" onclick="doDelete('${esc(id)}')">כן, מחק</button><button class="quiet" data-act="edit" onclick="renderClients()">ביטול</button></span>`;
   }
   async function doDelete(id){
     const r = await api('delete_client', id);
     if (!r || !r.ok){ toast('לא נמחק'); return; }
     if (selectedId === id) selectedId = null;
-    await reload(); toast('הלקוח נמחק');
+    await reload(); toast('הלקוח הועבר לארכיון (data/_deleted)');
   }
 
   // ── settings (החלטה 18) ──

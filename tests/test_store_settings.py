@@ -79,3 +79,21 @@ def test_recompute_only_outdated_logic_version():
     s.save(inp2)
     assert s.recompute_all(only_outdated=True) == 1
     assert s.recompute_all(only_outdated=True) == 0
+
+
+def test_delete_archives_everything():
+    s, inp = _store()
+    rec = s.save(inp)
+    name = s.safe_name(inp["structure"]["name"])
+    data = s.root.parent
+    (data / "files" / name / "2026-Q4").mkdir(parents=True)
+    (data / "files" / name / "2026-Q4" / "x.csv").write_text("a")
+    (data / "reports").mkdir(exist_ok=True)
+    (data / "reports" / f"{name} – דוח לרואה חשבון 2026.pdf").write_bytes(b"%PDF")
+    assert s.delete(rec["id"]) is True
+    assert s.get(rec["id"]) is None and not (data / "files" / name).exists()
+    arch = list((data / "_deleted").glob(f"{name} – *"))
+    assert len(arch) == 1
+    assert (arch[0] / f"{rec['id']}.json").exists() and (arch[0] / "files" / "2026-Q4" / "x.csv").exists()
+    assert any((arch[0] / "reports").glob("*.pdf"))
+    assert s.delete(rec["id"]) is False

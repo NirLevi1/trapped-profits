@@ -170,8 +170,7 @@ class Api:
         return r
 
     def _client_folder(self, name: str) -> Path:
-        safe = "".join(ch for ch in str(name) if ch not in '\\/:*?"<>|').strip() or "לקוח"
-        return self.store.root.parent / "files" / safe
+        return self.store.root.parent / "files" / self.store.safe_name(name)
 
     def attach_copies(self, client_name: str, paths: list | None = None):
         """אחרי שמירת לקוח חדש: מעביר את העותקים שהועלו בטופס מ-"_בהמתנה" לתיקיית הלקוח."""

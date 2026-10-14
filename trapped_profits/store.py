@@ -324,12 +324,31 @@ class ClientStore:
         self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
         return rec
 
+    @staticmethod
+    def safe_name(name: str) -> str:
+        return "".join(ch for ch in str(name) if ch not in '\\/:*?"<>|').strip() or "לקוח"
+
     def delete(self, cid: str) -> bool:
+        """מחיקה = ארכוב: הרשומה, עותקי הקבצים שהועלו והדוחות עוברים ל-data/_deleted/<שם> – <תאריך>/. שום דבר לא מושמד."""
+        import shutil
         p = self._path(cid)
-        if p.exists():
-            p.unlink()
-            return True
-        return False
+        if not p.exists():
+            return False
+        rec = self.get(cid) or {}
+        name = self.safe_name((rec.get("input") or {}).get("structure", {}).get("name") or cid)
+        data = self.root.parent
+        dst = data / "_deleted" / f"{name} – {datetime.now().strftime('%Y-%m-%d %H%M')}"
+        dst.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(p), str(dst / p.name))
+        files = data / "files" / name
+        if files.exists():
+            shutil.move(str(files), str(dst / "files"))
+        reports = data / "reports"
+        if reports.exists():
+            for f in reports.glob(f"{name} – *"):
+                (dst / "reports").mkdir(exist_ok=True)
+                shutil.move(str(f), str(dst / "reports" / f.name))
+        return True
 
     def recompute_all(self, only_outdated: bool = False) -> int:
         """מחשב מחדש את כל הלקוחות. only_outdated=True – רק מי שחושב בגרסת לוגיקה ישנה (אחרי update.bat)."""
