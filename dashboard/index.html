@@ -113,6 +113,10 @@
   .kv .v input{width:104px;padding:3px 6px;font:inherit;direction:ltr;text-align:right;border:1px solid var(--line);border-radius:6px}
   .kv .gov{color:var(--good);font-weight:600}
   input.from-file,.from-file input{background:#fbf3d9;border-color:var(--warn)}
+  .slots{display:grid;gap:10px}
+  .slot{display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center;padding:10px 12px;border:1px solid var(--line-soft);border-radius:var(--radius);background:var(--canvas-2)}
+  .slot b{font-weight:500} .slot .st{grid-column:1/-1;font-size:12.5px;color:var(--ink-2)} .slot .st.err{color:var(--serious)} .slot .st.ok{color:var(--good)}
+  .slot .notes{grid-column:1/-1;font-size:12px;color:var(--ink-3)}
   .pie{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:8px}
   .pie svg{width:120px;height:120px;flex:none}
   .pie .leg{font-size:12.5px;display:grid;gap:3px}
@@ -261,10 +265,9 @@
       <button onclick="cancelForm()">ביטול</button>
       <button class="primary" onclick="saveForm()">שמירה וחישוב</button>
     </div>
-    <div class="card" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-      <div style="flex:1;min-width:220px"><b style="font-weight:500">ייבוא מריווחית</b><div class="hint">בוחרים את שני הקבצים יחד: "מאזן בוחן יתרות לפי חודשים" (רווח והפסד של השנה) ו"כרטסת" של כרטיס ההכנסות (לקוחות). השדות שמולאו מסומנים בצהוב – לאישור. הדוח השנתי הסגור (מאזן) – הקלדה ידנית בפיילוט.</div><div class="hint" id="importNotes" style="margin-top:6px"></div></div>
-      <button class="primary" onclick="importRivhit()">ייבוא מריווחית…</button>
-      <button disabled title="הדוח הסגור סרוק – להקליד: עודפים, הוצאות 2025/2024, מזומן, הון מניות, דיבידנד 2025">מהדוח השנתי (ידני)</button>
+    <div class="card">
+      <h3 style="margin-top:0">ייבוא מקבצים <small class="hint" style="display:inline">– שלושה קבצים, כל אחד בנפרד. שדה שמולא מסומן בצהוב; ריחוף עליו מראה מאיזו שורה נקרא. מה שלא נמצא נשאר ריק.</small></h3>
+      <div class="slots" id="slots"></div>
     </div>
     <div id="formBody"></div>
     <div class="toolbar"><div class="spacer"></div><button onclick="cancelForm()">ביטול</button><button class="primary" onclick="saveForm()">שמירה וחישוב</button></div>
@@ -307,7 +310,8 @@
       case 'export_report': return {path: null};
       case 'export_document': return {error: 'ייצוא קבצים זמין רק בתוכנה המותקנת'};
       case 'open_data_folder': return true;
-      case 'import_rivhit': return {error: 'ייבוא קבצים זמין רק בתוכנה המותקנת'};
+      case 'import_slots': return {slots: {annual_report:{title:'דוח שנתי סגור (PDF)',desc:'מאזן + רווח והפסד לשנה הקודמת'}, trial_balance:{title:'מאזן בוחן לפי חודשים (ריווחית)',desc:'רווח והפסד של השנה הנבדקת'}, ledger:{title:'כרטסת הכנסות (ריווחית)',desc:'לקוחות גדולים'}}, ocr: true};
+      case 'import_file': return {error: 'ייבוא קבצים זמין רק בתוכנה המותקנת'};
     }
   };
   /*MOCK_END*/
@@ -761,17 +765,24 @@
     }
     return out;
   }
-  // אברהם 20: ייבוא מריווחית → מילוי הטופס וסימון השדות
-  async function importRivhit(){
-    const r = await api('import_rivhit');
-    if (!r){ toast('ייבוא זמין רק בתוכנה המותקנת'); return; }
-    if (r.cancelled) return;
-    if (r.error){ toast(r.error, 6000); return; }
+  // אברהם 20: שלושה חריצי ייבוא – דוח שנתי (PDF), מאזן בוחן לפי חודשים, כרטסת הכנסות
+  const SLOT_ORDER = ['annual_report', 'trial_balance', 'ledger'];
+  let slotMeta = null;
+  async function renderSlots(){
+    slotMeta = slotMeta || (await api('import_slots')) || {slots: {}, ocr: false};
+    const el = $('slots'); if (!el) return;
+    el.innerHTML = SLOT_ORDER.filter(k => slotMeta.slots[k]).map(k => { const m = slotMeta.slots[k]; return `<div class="slot" id="slot_${k}">
+        <div><b>${esc(m.title)}</b><div class="hint">${esc(m.desc)}${k === 'annual_report' && !slotMeta.ocr ? ' <span style="color:var(--warn)">זיהוי תווים לא מותקן – PDF סרוק לא ייקרא (דיגיטלי כן).</span>' : ''}</div></div>
+        <button onclick="importSlot('${k}')" id="btn_${k}">בחירת קובץ…</button>
+        <div class="st" id="st_${k}"></div></div>`; }).join('') || '<div class="hint">ייבוא זמין רק בתוכנה המותקנת.</div>';
+  }
+  function fillFields(fields, sources){
     let n = 0;
-    for (const [k, v] of Object.entries(r.fields || {})){
+    for (const [k, v] of Object.entries(fields || {})){
       const f = F.find(x => x.k === k); if (!f) continue;
+      const src = sources?.[k] ? 'מהקובץ: ' + sources[k] : 'מהקובץ';
       if (f.t === 'customers'){
-        [0,1,2,3,4].forEach(i => { const nEl = $(fid(k) + '_n' + i), aEl = $(fid(k) + '_a' + i); if (!nEl) return; nEl.value = v[i]?.name || ''; aEl.value = v[i] ? fmtNum(v[i].amount) : ''; nEl.classList.toggle('from-file', !!v[i]); aEl.classList.toggle('from-file', !!v[i]); });
+        [0,1,2,3,4].forEach(i => { const nEl = $(fid(k) + '_n' + i), aEl = $(fid(k) + '_a' + i); if (!nEl) return; nEl.value = v[i]?.name || ''; aEl.value = v[i] ? fmtNum(v[i].amount) : ''; nEl.classList.toggle('from-file', !!v[i]); aEl.classList.toggle('from-file', !!v[i]); nEl.title = aEl.title = v[i] ? src : ''; });
         n++; continue;
       }
       const el = $(fid(k)); if (!el) continue;
@@ -779,14 +790,24 @@
       else if (f.t === 'num') el.value = fmtNum(v);
       else if (f.t === 'rate') el.value = Math.round(v * 10000) / 100;
       else el.value = v ?? '';
-      el.classList.add('from-file'); n++;
+      el.classList.add('from-file'); el.title = src; n++;
     }
-    const notes = [...(r.notes || []), ...(r.errors || []).map(e => '⚠ ' + e)];
-    $('importNotes').innerHTML = notes.map(esc).join('<br>');
-    toast(`${n} שדות מולאו מהקובץ – מסומנים בצהוב, לאישור`);
+    return n;
   }
-  function newClient(){ editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}); show('form'); }
-  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}); show('form'); }
+  async function importSlot(slot){
+    const btn = $('btn_' + slot), st = $('st_' + slot);
+    btn.disabled = true; st.className = 'st'; st.textContent = slot === 'annual_report' ? 'קורא את הדוח… (סרוק: עד חצי דקה)' : 'קורא…';
+    const r = await api('import_file', slot);
+    btn.disabled = false;
+    if (!r){ st.textContent = 'ייבוא זמין רק בתוכנה המותקנת'; return; }
+    if (r.cancelled){ st.textContent = ''; return; }
+    if (r.error){ st.className = 'st err'; st.textContent = (r.file ? r.file + ': ' : '') + r.error; return; }
+    const n = fillFields(r.fields, r.sources);
+    st.className = 'st ok'; st.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '');
+    toast(`${n} שדות מולאו – מסומנים בצהוב, לאישור`);
+  }
+  function newClient(){ editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}); renderSlots(); show('form'); }
+  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}); renderSlots(); show('form'); }
   function cancelForm(){ show(editingId ? 'client' : 'clients'); }
   async function saveForm(){
     const inp = collectForm();

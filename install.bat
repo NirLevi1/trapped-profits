@@ -30,6 +30,12 @@ where git >nul 2>nul || (
   winget install -e --id Git.Git --accept-source-agreements --accept-package-agreements --silent || (echo Git install failed & pause & exit /b 1)
 )
 
+REM ---- Tesseract OCR (reading scanned annual reports). Optional: the app works without it, scanned PDFs just won't be read.
+where tesseract >nul 2>nul || if not exist "C:\Program Files\Tesseract-OCR\tesseract.exe" (
+  echo Installing Tesseract OCR ...
+  winget install -e --id UB-Mannheim.TesseractOCR --accept-source-agreements --accept-package-agreements --silent || echo Tesseract install failed - scanned PDFs will not be read
+)
+
 REM ---- refresh PATH for this window (new installs are not visible to the current cmd otherwise)
 for /f "tokens=2*" %%a in ('reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" /v Path 2^>nul') do set "SYSPATH=%%b"
 for /f "tokens=2*" %%a in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "USRPATH=%%b"

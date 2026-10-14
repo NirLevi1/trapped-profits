@@ -122,18 +122,28 @@ class Api:
             open_path(str(p))
         return {"path": str(p) if p else None}
 
-    def import_rivhit(self):
-        """אברהם 20 / משימה 5: בחירת קובצי ריווחית (מאזן בוחן לפי חודשים, כרטסת הכנסות) → שדות לטופס."""
-        from trapped_profits.importers import import_files
+    def import_slots(self):
+        from trapped_profits.importers import SLOTS
+        from trapped_profits.annual_report import ocr_available
+        return {"slots": SLOTS, "ocr": bool(ocr_available())}
+
+    def import_file(self, slot: str):
+        """אברהם 20 / משימה 5: בחירת קובץ אחד לחריץ (דוח שנתי / מאזן בוחן / כרטסת) → שדות לטופס, מסומנים לאישור."""
+        from trapped_profits.importers import SLOTS, import_slot
+        if slot not in SLOTS:
+            return {"error": "חריץ לא מוכר"}
         try:
             win = webview.windows[0]
-            paths = win.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=True,
-                                           file_types=("קובצי ריווחית (*.csv;*.CSV;*.txt)", "כל הקבצים (*.*)"))
+            paths = win.create_file_dialog(webview.OPEN_DIALOG, allow_multiple=False,
+                                           file_types=SLOTS[slot]["types"] + ("כל הקבצים (*.*)",))
         except Exception as e:  # noqa: BLE001
             return {"error": f"לא נפתח חלון בחירת קבצים: {e}"}
         if not paths:
             return {"cancelled": True}
-        return import_files(list(paths))
+        try:
+            return import_slot(slot, paths[0])
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e), "file": Path(paths[0]).name}
 
     def open_data_folder(self):
         open_path(str(self.store.root))

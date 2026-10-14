@@ -199,3 +199,38 @@ def import_files(paths: list[str | Path]) -> dict[str, Any]:
         except Exception as e:  # noqa: BLE001
             out["errors"].append(f"{Path(p).name}: {e}")
     return out
+
+
+# ---------------------------------------------------------------------------
+# שלושה "חריצים" בטופס – כל קובץ בנפרד (אברהם 14.10: "אופציה להעלות את שלושתם, אפשר כל אחד בנפרד")
+# ---------------------------------------------------------------------------
+SLOTS = {
+    "annual_report": {"title": "דוח שנתי סגור (PDF)", "types": ("PDF (*.pdf;*.PDF)",),
+                      "desc": "מאזן + רווח והפסד מבוקרים לשנה הקודמת. דיגיטלי או סרוק (זיהוי תווים)."},
+    "trial_balance": {"title": "מאזן בוחן לפי חודשים (ריווחית)", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
+                      "desc": "ריווחית → דוחות → מאזן בוחן יתרות לפי חודשים → ייצוא. רווח והפסד של השנה הנבדקת."},
+    "ledger": {"title": "כרטסת הכנסות (ריווחית)", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
+               "desc": "ריווחית → כרטסת של כרטיס ההכנסות → ייצוא. לקוחות גדולים לריכוזיות."},
+}
+
+
+def import_slot(slot: str, path: str | Path) -> dict[str, Any]:
+    """קובץ אחד לחריץ אחד. מוודא שהקובץ מתאים לחריץ; מה שלא נמצא – לא מוחזר."""
+    if slot not in SLOTS:
+        raise ValueError("חריץ לא מוכר")
+    p = Path(path)
+    if slot == "annual_report":
+        if p.suffix.lower() != ".pdf":
+            raise ValueError("הדוח השנתי צריך להיות PDF")
+        from .annual_report import parse_annual_report
+        r = parse_annual_report(p)
+    else:
+        kind = detect(p)
+        if kind != slot:
+            names = {"trial_balance": "מאזן בוחן לפי חודשים", "ledger": "כרטסת", "unknown": "קובץ לא מזוהה"}
+            raise ValueError(f"זה נראה כמו {names.get(kind, kind)} – לא {SLOTS[slot]['title']}")
+        r = parse_trial_balance(p) if slot == "trial_balance" else parse_ledger(p)
+    r["file"] = p.name
+    r["slot"] = slot
+    r.setdefault("sources", {})
+    return r
