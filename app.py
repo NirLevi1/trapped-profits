@@ -162,15 +162,42 @@ class Api:
         except Exception as e:  # noqa: BLE001
             return {"error": str(e), "file": Path(paths[0]).name}
         try:
-            name = client_name or (r.get("fields") or {}).get("structure.name") or cid or "לקוח חדש"
-            safe = "".join(ch for ch in str(name) if ch not in '\\/:*?"<>|').strip() or "לקוח"
-            r["saved_copy"] = str(keep_copy(paths[0], self.store.root.parent / "files" / safe, SLOTS[slot]["title"]))
+            # לקוח קיים → ישר לתיקייה שלו; לקוח חדש → "_בהמתנה", ובשמירה עובר לתיקיית הלקוח (attach_copies)
+            folder = self._client_folder(client_name) if (cid and client_name) else self.store.root.parent / "files" / "_בהמתנה"
+            r["saved_copy"] = str(keep_copy(paths[0], folder, SLOTS[slot]["title"]))
         except Exception as e:  # noqa: BLE001
             r.setdefault("notes", []).append(f"לא נשמר עותק של הקובץ: {e}")
         return r
 
+    def _client_folder(self, name: str) -> Path:
+        safe = "".join(ch for ch in str(name) if ch not in '\\/:*?"<>|').strip() or "לקוח"
+        return self.store.root.parent / "files" / safe
+
+    def attach_copies(self, client_name: str, paths: list | None = None):
+        """אחרי שמירת לקוח חדש: מעביר את העותקים שהועלו בטופס מ-"_בהמתנה" לתיקיית הלקוח."""
+        import shutil
+        moved = []
+        for p in paths or []:
+            src = Path(p)
+            if not src.exists() or "_בהמתנה" not in src.parts:
+                continue
+            dst = self._client_folder(client_name) / src.parent.name / src.name
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src), str(dst))
+            moved.append(str(dst))
+        try:
+            pend = self.store.root.parent / "files" / "_בהמתנה"
+            for d in list(pend.glob("*")):
+                if d.is_dir() and not any(d.iterdir()):
+                    d.rmdir()
+            if pend.exists() and not any(pend.iterdir()):
+                pend.rmdir()
+        except OSError:
+            pass
+        return {"moved": moved}
+
     def open_data_folder(self):
-        open_path(str(self.store.root))
+        open_path(str(self.store.root.parent))      # data/ – לקוחות, קבצים שהועלו, דוחות
         return True
 
 

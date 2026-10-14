@@ -324,6 +324,7 @@
       case 'approve_fields': { const r = S.find(x => x.id === a); if (r){ Object.values(r.field_meta || {}).forEach(m => { if (m.state === 'file') m.state = 'approved'; }); r.pending_file_fields = []; } return r; }
       case 'apply_import': return {error: 'זמין רק בתוכנה'};
       case 'field_info': return {human_only: null};
+      case 'attach_copies': return {moved: []};
     }
   };
   /*MOCK_END*/
@@ -816,6 +817,7 @@
   // אברהם 20: שלושה חריצי ייבוא – דוח שנתי (PDF), מאזן בוחן לפי חודשים, כרטסת הכנסות
   const SLOT_ORDER = ['annual_report', 'trial_balance', 'ledger'];
   let slotMeta = null;
+  let pendingCopies = [];          // עותקי קבצים שהועלו בטופס "לקוח חדש" – עוברים לתיקיית הלקוח בשמירה
   let slotMode = 'form';          // 'form' – ממלא את הטופס; 'card' – מעדכן לקוח קיים ומחשב (עדכון רבעוני)
   const slotStatus = {};          // סטטוס אחרון לכל חריץ (נשמר בין רינדורים של הכרטיס)
   async function renderSlots(mode, containerId){
@@ -869,14 +871,15 @@
       toast('הלקוח עודכן מהקובץ וחושב מחדש');
       return;
     }
+    if (r.saved_copy) pendingCopies.push(r.saved_copy);
     const n = fillFields(r.fields, r.sources, slotMeta.slots[slot]?.title);
-    st.className = 'st ok'; st.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר: ${esc(r.saved_copy.split('/data/')[1] || r.saved_copy)}</div>` : '');
+    st.className = 'st ok'; st.innerHTML = `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר (יועבר לתיקיית הלקוח בשמירה)</div>` : '');
     toast(`${n} שדות מולאו – מסומנים בצהוב, לאישור`);
   }
   let slotsFor = null;
   async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ window._showPdfSlot = false; Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
   async function approveAllCard(id){ const r = await api('approve_fields', id, null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('השדות מהקובץ אושרו'); }
-  function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
+  function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); pendingCopies = []; editingId = null; $('formTitle').textContent = 'לקוח חדש'; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
   function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; editingId = id; $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
   function cancelForm(){ show(editingId ? 'client' : 'clients'); }
   async function saveForm(){
@@ -886,6 +889,7 @@
     if (inp.structure.company_id && !/^\d{5,9}$/.test(inp.structure.company_id)){ toast('מספר ח.פ. – ספרות בלבד (5–9)'); $(fid('structure.company_id')).focus(); return; }
     const rec = await api('save_client', inp, editingId, formMeta);
     if (!rec || rec.error && !rec.id){ toast('לא נשמר: ' + (rec?.error || '')); return; }
+    if (pendingCopies.length){ await api('attach_copies', inp.structure.name, pendingCopies); pendingCopies = []; }
     await reload();
     selectedId = rec.id; editingId = null;
     toast(rec.error ? 'נשמר, אך החישוב נכשל: ' + rec.error : 'נשמר וחושב');
