@@ -181,7 +181,7 @@
   table.tb td.c{cursor:pointer;min-width:62px} table.tb td.c:hover{outline:1px solid var(--line)} table.tb td.c.estimate{background:var(--warn-bg);color:#7a5a12} table.tb td.c.gap{background:var(--serious-bg);color:var(--serious);font-weight:600} table.tb td.c.manual{background:var(--info-bg);color:var(--info);font-weight:600} table.tb td.c.accepted{background:var(--good-bg);color:var(--good)} table.tb td.c.dismissed{background:var(--neutral-bg);color:var(--ink-3)} table.tb td.c.zero{color:var(--ink-3)}
   table.tb td.c input{width:84px;padding:2px 4px;font-size:12px;text-align:left} .tblegend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--ink-3);margin:6px 0 2px} .tblegend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-inline-end:4px;border:1px solid var(--line-soft)}
   .tbbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:8px 0 0;flex-wrap:wrap} .tbbar .okline{color:var(--good);font-weight:600}
-  table.tb tr.sum.gross td{background:var(--good-bg);color:var(--ink);font-weight:600;border-top:1px solid var(--line)} table.tb tr.sum.gross td.cat{color:var(--ink-2);font-weight:400}
+  table.tb tr.sum.gross td{background:var(--good-bg);color:var(--ink);font-weight:600;border-top:1px solid var(--line)} table.tb tr.sum.gross td.cat{color:var(--ink-2);font-weight:400} table.tb tr.sum.adj td{font-weight:400;color:var(--ink-2);border-top:0}
   table.tb button.cogs{font-size:10px;padding:1px 6px;border-radius:9px;border:1px dashed var(--line);background:transparent;color:var(--ink-3);margin-inline-end:4px} table.tb button.cogs.on{border-style:solid;border-color:var(--good);color:var(--good);background:var(--good-bg)}
   .gaplist{margin-top:10px;display:grid;gap:6px} .gapitem{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:8px 10px;border:1px solid var(--line-soft);border-radius:6px;background:var(--surface);color:var(--ink)} .gapitem.pending{border-color:var(--warn)} .gapitem .ga{display:flex;gap:4px;flex-wrap:wrap} .gapitem .gs{white-space:nowrap;font-size:12px;color:var(--ink-2)}
   tr.sup{opacity:.55}
@@ -1115,10 +1115,20 @@
     if (!grossDone) html += grossRow();
     const income = (sums.revenue || []).map((v, i) => v + (sums.fin_income?.[i] || 0) + (sums.other_income?.[i] || 0));
     html += sumRow('סה"כ הכנסות', income) + sumRow('עלות המכר', sums.cogs || []) + sumRow('סה"כ הוצאות', sums.expense || []) + sumRow('רווח לפני מס', sums.profit || [], 'profit');
+    // התאמות שנתיות (פחת / מלאי / סעיף שנעלם) – לא בתאים החודשיים אבל כן בחישוב החוק; מוצגות כאן כדי שהמספר הסופי יהיה שקוף
+    const annualAdj = (c.estimate_items || []).filter(it => !it.month && it.status !== 'dismissed');
+    if (annualAdj.length){
+      const adjSum = annualAdj.reduce((a, it) => a + (it.amount || 0), 0);
+      const blank = MONTHS_HE.map(() => '<td></td>').join('');
+      html += annualAdj.map(it => `<tr class="sum adj"><td title="${esc(it.label)}">${esc(it.key === 'מלאי' ? 'התאמת מלאי (עלות מכר לפי הרווח הגולמי בדוח)' : it.key === 'פחת' ? 'פחת שנתי לפי הדוח' : it.key.replace(':שנה', '') + ' – לפי השנה הקודמת')}</td>${blank}<td class="num">${fmtNum(Math.round(-it.amount))}</td><td class="cat">${esc(STATUS_HE[it.status] || '')}</td></tr>`).join('')
+        + `<tr class="sum profit"><td>רווח בחישוב החוק</td>${blank}<td class="num">${fmtNum(Math.round((an.profit || 0) - adjSum))}</td><td></td></tr>`;
+    }
     const legend = `<div class="tblegend"><span><i style="background:var(--surface)"></i>מהקובץ</span><span><i style="background:var(--warn-bg)"></i>אומדן (חודש שטרם הוזן) – ${esc(t.method)}</span><span><i style="background:var(--serious-bg)"></i>חור – חודש בלי תנועה</span><span><i style="background:var(--info-bg)"></i>תיקון של רואה החשבון</span><span><i style="background:var(--good-bg)"></i>אומדן שאושר</span><span>לחיצה על תא – עריכה; ההנחיה נשמרת ומחשבת מיד</span></div>`;
+    const inv = (c.estimate_items || []).find(it => it.key === 'מלאי' && it.status !== 'dismissed');
+    const invNote = inv ? `<div class="hint" style="margin-top:6px">חברה עם מלאי: הרווח בחישוב לא תלוי בקניות – עלות המכר נקבעת לפי הרווח הגולמי בדוח השנתי, וההפרש נכנס כ"התאמת מלאי". שינוי בקניות מתקזז בהתאמה. כדי שהקניות יקבעו – לסמן "לא חסר" על התאמת המלאי (ברשימה שמתחת לטבלה) או לתקן אותה לסכום אחר.</div>` : '';
     const ap = t.approved;
     const bar = `<div class="tbbar">${ap ? `<span class="okline">✓ מאזן הבוחן אושר – ${esc(ap.by || '')} ${when(ap.at).slice(0, 10)}. תיקון נוסף נשמר כרגיל.</span><button class="quiet" onclick="approveTb('${id}', true)">ביטול אישור</button>` : `<span class="hint">${t.approved_stale ? 'הגיע קובץ חדש מאז האישור הקודם – לעבור שוב. ' : ''}אחרי שעברת על הטבלה: אישור אחד לכל האומדנים (צהוב), החורים (אדום) והאומדנים השנתיים. התיקונים שלך נשמרים.</span><button onclick="approveTb('${id}', false)">✓ אשר הכל</button>`}</div>`;
-    return `${bar}<div class="tablewrap tbwrap"><table class="tb"><tr><th>סעיף</th>${MONTHS_HE.map((mm, i) => `<th class="num ${i + 1 > m ? 'est' : ''}">${mm}${i + 1 > m ? ' ◌' : ''}</th>`).join('')}<th class="num">שנה</th><th>משויך ל־ · שיטה</th></tr>${html}</table></div>${legend}`;
+    return `${bar}<div class="tablewrap tbwrap"><table class="tb"><tr><th>סעיף</th>${MONTHS_HE.map((mm, i) => `<th class="num ${i + 1 > m ? 'est' : ''}">${mm}${i + 1 > m ? ' ◌' : ''}</th>`).join('')}<th class="num">שנה</th><th>משויך ל־ · שיטה</th></tr>${html}</table></div>${legend}${invNote}`;
   }
   function tbEdit(td, id, key, month, cur, src, base){
     if (td.querySelector('input')) return;
