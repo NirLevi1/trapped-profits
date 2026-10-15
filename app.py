@@ -80,9 +80,9 @@ class Api:
         return self.store.get(cid)
 
     # ---- write
-    def save_client(self, inp: dict, cid: str | None = None, field_meta: dict | None = None):
+    def save_client(self, inp: dict, cid: str | None = None, field_meta: dict | None = None, sources: list | None = None):
         try:
-            return self.store.save(inp, cid, field_meta)
+            return self.store.save(inp, cid, field_meta, sources=sources)
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 
@@ -140,9 +140,9 @@ class Api:
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 
-    def apply_import(self, cid: str, fields: dict, sources: dict | None = None, label: str = "קובץ"):
+    def apply_import(self, cid: str, fields: dict, sources: dict | None = None, label: str = "קובץ", source: dict | None = None):
         try:
-            return self.store.apply_import(cid, fields, sources, label)
+            return self.store.apply_import(cid, fields, sources, label, source=source)
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 
@@ -214,15 +214,20 @@ class Api:
             r["saved_copy"] = str(keep_copy(paths[0], folder, SLOTS[slot]["title"]))
         except Exception as e:  # noqa: BLE001
             r.setdefault("notes", []).append(f"לא נשמר עותק של הקובץ: {e}")
+        # סבב 3: רשומת מקור – מה הועלה, מתי, כמה שדות, עד איזה חודש – לרשימת "מקורות" בכרטיס ולסימון "נבדק"
+        r["source"] = {"slot": slot, "title": SLOTS[slot]["title"], "year": r.get("year"), "file": Path(paths[0]).name,
+                       "path": r.get("saved_copy") or str(paths[0]), "fields": len(r.get("fields") or {}),
+                       "through_month": (r.get("fields") or {}).get("data_through_month")}
         return r
 
     def _client_folder(self, name: str) -> Path:
         return self.store.root.parent / "files" / self.store.safe_name(name)
 
-    def attach_copies(self, client_name: str, paths: list | None = None):
-        """אחרי שמירת לקוח חדש: מעביר את העותקים שהועלו בטופס מ-"_בהמתנה" לתיקיית הלקוח."""
+    def attach_copies(self, client_name: str, paths: list | None = None, cid: str | None = None):
+        """אחרי שמירת לקוח חדש: מעביר את העותקים שהועלו בטופס מ-"_בהמתנה" לתיקיית הלקוח (ומעדכן את רשומות המקור)."""
         import shutil
         moved = []
+        remap = {}
         for p in paths or []:
             src = Path(p)
             if not src.exists() or "_בהמתנה" not in src.parts:
@@ -231,6 +236,14 @@ class Api:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.move(str(src), str(dst))
             moved.append(str(dst))
+            remap[str(src)] = str(dst)
+        if cid and remap:
+            rec = self.store.get(cid)
+            if rec:
+                for sr in rec.get("sources") or []:
+                    if sr.get("path") in remap:
+                        sr["path"] = remap[sr["path"]]
+                self.store._write(cid, rec)
         try:
             pend = self.store.root.parent / "files" / "_בהמתנה"
             for d in list(pend.glob("*")):
@@ -295,6 +308,30 @@ class Api:
                 subprocess.Popen(["/bin/bash", str(root / "run.command")], cwd=str(root))
             os._exit(0)
         threading.Thread(target=go, daemon=True).start()
+
+    def open_source(self, cid: str, index: int):
+        """פתיחת הקובץ המקורי שהועלה (PDF בקורא, קובץ ריווחית באקסל)."""
+        rec = self.store.get(cid)
+        srcs = (rec or {}).get("sources") or []
+        if not (0 <= int(index) < len(srcs)):
+            return {"error": "קובץ לא נמצא"}
+        p = Path(srcs[int(index)].get("path") or "")
+        if not p.exists():
+            return {"error": f"הקובץ לא נמצא בדיסק: {p.name}"}
+        open_path(str(p))
+        return {"ok": True}
+
+    def adjust(self, cid: str, key: str, month=None, kind: str = "accepted", amount: float = 0.0, note: str = ""):
+        try:
+            return self.store.adjust(cid, key, month, kind, amount, note)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
+    def mark_reviewed(self, cid: str, index: int, accept_pending: bool = False):
+        try:
+            return self.store.mark_reviewed(cid, int(index), bool(accept_pending))
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
 
     def open_data_folder(self):
         open_path(str(self.store.root.parent))      # data/ – לקוחות, קבצים שהועלו, דוחות

@@ -242,6 +242,11 @@ class ClientInput:
     period_breakdown: dict = field(default_factory=dict)
     period_breakdown_prev_year: dict = field(default_factory=dict)
     months_without_revenue: list = field(default_factory=list)
+    # סבב 3 (אברהם): פירוט חודשי של הסעיפים ממאזן הבוחן – {סעיף: [12 חודשים]} – לאיתור חורים (חודש בלי שכר וכו׳)
+    period_breakdown_months: dict = field(default_factory=dict)
+    # תיקונים של רואה החשבון מעל הקבצים: [{"key","month","amount","kind","note","by","at","estimate"}]
+    # kind: manual (סכום שהוזן) / accepted (אומדן שאושר) / dismissed (לא חסר – בלי אומדן). תיקון תמיד גובר על אומדן
+    adjustments: list = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -269,4 +274,6 @@ class ClientInput:
             period_breakdown=dict(d.get("period_breakdown") or {}),
             period_breakdown_prev_year=dict(d.get("period_breakdown_prev_year") or {}),
             months_without_revenue=list(d.get("months_without_revenue") or []),
+            period_breakdown_months={k: list(v) for k, v in (d.get("period_breakdown_months") or {}).items()},
+            adjustments=[dict(a) for a in (d.get("adjustments") or [])],
         )

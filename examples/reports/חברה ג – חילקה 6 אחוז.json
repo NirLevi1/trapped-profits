@@ -150,6 +150,15 @@
     "profit_estimate": null
   },
   "estimate_notes": [],
+  "estimate_items": [],
+  "data_breakdown": {
+    "file": 3100000.0,
+    "estimates_monthly": 0,
+    "corrections_monthly": 0,
+    "estimates_annual": 0.0,
+    "factor": 1.0
+  },
+  "months_gap_table": {},
   "years_used": {
     "retained": "דוח 2025",
     "expenses_avg": "2024–2026",

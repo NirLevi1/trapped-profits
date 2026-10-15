@@ -33,7 +33,10 @@ def seed_records() -> list[dict]:
         out.append({"id": f"demo{i}", "input": inp, "result": res, "error": None,
                     "updated_at": "2026-10-13T12:00:00", "created_at": "2026-10-07T18:00:00",
                     "logic_version": res["logic_version"], "stale": i == 4,
-                    "handling": {"status": ["טרם טופל", "בשיחה", "הוחלט: חלוקה"][i % 3], "note": "", "at": None}})
+                    "handling": {"status": ["טרם טופל", "בשיחה", "הוחלט: חלוקה"][i % 3], "note": "", "at": None},
+                    "sources": ([{"slot": "annual_report", "title": "דוח שנתי סגור (PDF)", "year": 2025, "file": "דוחות כספיים 2025.pdf", "path": "", "at": "2026-10-01T10:00:00", "fields": 13, "reviewed": {"by": "אברהם", "at": "2026-10-02T09:00:00"}},
+                                 {"slot": "trial_balance", "title": "מאזן בוחן לפי חודשים (ריווחית)", "year": 2026, "file": "מאזן בוחן 2026.csv", "path": "", "at": "2026-10-13T12:00:00", "fields": 10, "through_month": 8, "reviewed": None}]
+                                if inp.get("period_breakdown_months") else [])})
     return out
 
 

@@ -170,6 +170,9 @@
   .notice.serious{background:var(--serious-bg);color:var(--serious)}
   .notice.info{background:var(--info-bg);color:var(--info)} .notice.neutral{background:var(--neutral-bg);color:var(--ink-2)}
   .flags{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+  table.gaps td.gap{background:var(--serious-bg);color:var(--serious);font-weight:600} table.gaps td.gap.accepted,table.gaps td.gap.corrected{background:var(--good-bg);color:var(--good)} table.gaps td.gap.dismissed{background:var(--neutral-bg);color:var(--ink-3);font-weight:400} table.gaps td.off{background:var(--canvas-2)} table.gaps td,table.gaps th{padding:3px 6px;border-bottom:1px solid var(--line-soft)}
+  .gaplist{margin-top:10px;display:grid;gap:6px} .gapitem{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:8px 10px;border:1px solid var(--line-soft);border-radius:6px;background:var(--surface);color:var(--ink)} .gapitem.pending{border-color:var(--warn)} .gapitem .ga{display:flex;gap:4px;flex-wrap:wrap} .gapitem .gs{white-space:nowrap;font-size:12px;color:var(--ink-2)}
+  tr.sup{opacity:.55}
   .status-card.upd{background:var(--info-bg);color:var(--info);border-color:transparent;margin-top:8px}
   .flag{border:1px solid transparent;border-radius:999px;padding:3px 10px;font-size:12px;line-height:18px;cursor:pointer;font-family:inherit}
   .flag.serious{background:var(--serious-bg);color:var(--serious)} .flag.warn{background:var(--warn-bg);color:var(--warn)} .flag.info{background:var(--info-bg);color:var(--info)} .flag.neutral{background:var(--neutral-bg);color:var(--ink-2)}
@@ -317,7 +320,7 @@
   /*MOCK_START*/
   // תצוגה בדפדפן בלבד: אחסון בזיכרון, בלי מנוע. הלקוחות הם דמו.
   window.__seed = /*SEED*/[]/*/SEED*/;
-  window.__mock = function(name, a, b){
+  window.__mock = function(name, a, b, c, d, e, f){
     const S = window.__seed;
     switch(name){
       case 'list_clients': return S;
@@ -346,6 +349,9 @@
       case 'revert_field': { const r = S.find(x => x.id === a); const m = r?.field_meta?.[b]; if (!m?.prev?.length) return {error:'אין ערך קודם לשדה הזה'}; const last = m.prev.pop(); const ps = b.split('.'); let x = r.input; ps.slice(0,-1).forEach(q => x = x[q]); x[ps.at(-1)] = last.value; m.state = last.state || 'manual'; return r; }
       case 'revert_today': return S.find(x => x.id === a);
       case 'check_update': return {unavailable: 'תצוגת דפדפן – אין גיט'};
+      case 'adjust': { const r = S.find(x => x.id === a); if (!r) return null; const [key, month, kind, amount, note] = [b, c, d, e, f]; r.input.adjustments = (r.input.adjustments || []).filter(x => !(x.key === key && (x.month || null) === (month || null))); if (kind !== 'clear') r.input.adjustments.push({key, month, kind, amount, note}); (r.result.estimate_items || []).forEach(it => { if (it.key === key && (it.month || null) === (month || null)){ it.status = kind === 'clear' ? 'pending' : kind === 'manual' ? 'corrected' : kind; if (kind === 'manual' || kind === 'accepted') it.amount = amount; if (kind === 'dismissed') it.amount = 0; it.note = note || ''; } }); return r; }
+      case 'mark_reviewed': { const r = S.find(x => x.id === a); if (r?.sources?.[b]) r.sources[b].reviewed = {by: 'אברהם', at: new Date().toISOString()}; return r; }
+      case 'open_source': return {ok: true};
       case 'rollover_year': { const r = S.find(x => x.id === a); if (!r) return null; const ty = r.input.structure.tax_year; r.input.structure.tax_year = ty + 1; (r.history = r.history || []).push({at:new Date().toISOString(), kind:'מעבר שנה', tax_year: ty + 1, text:'הדגמה', checklist:[`דיבידנד ${ty} הועבר לשנה קודמת`, `להעלות מאזן בוחן וכרטסת ${ty + 1}`]}); return r; }
       case 'approve_fields': { const r = S.find(x => x.id === a); if (r){ Object.values(r.field_meta || {}).forEach(m => { if (m.state === 'file') m.state = 'approved'; }); r.pending_file_fields = []; } return r; }
       case 'apply_import': return {error: 'זמין רק בתוכנה'};
@@ -436,7 +442,7 @@
   }
 
   let records = [], selectedId = null, editingId = null;
-  const results = () => records.filter(r => r.result).map(r => Object.assign(r.result, {_id: r.id, _updated: r.updated_at, _stale: !!r.stale, _handling: r.handling || {status:'טרם טופל'}, _owner: r.input?.structure?.controlling_owner_name || '', _cid: r.input?.structure?.company_id || '', _retained: r.input?.retained?.balance_sheet_retained_earnings ?? null, _history: r.history || [], _pending: (r.pending_file_fields || []).length, _missingHuman: (r.missing_human || []).length}));
+  const results = () => records.filter(r => r.result).map(r => Object.assign(r.result, {_id: r.id, _updated: r.updated_at, _stale: !!r.stale, _handling: r.handling || {status:'טרם טופל'}, _owner: r.input?.structure?.controlling_owner_name || '', _cid: r.input?.structure?.company_id || '', _retained: r.input?.retained?.balance_sheet_retained_earnings ?? null, _history: r.history || [], _pending: (r.pending_file_fields || []).length, _missingHuman: (r.missing_human || []).length, _unreviewed: (r.sources || []).some(x => !x.superseded && !x.reviewed), _pendingEst: (r.result.estimate_items || []).filter(x => x.status === 'pending').length}));
   let settings = null;
 
   // ── nav ──
@@ -455,7 +461,7 @@
   const handlingPill = h => { const st = h?.status || 'טרם טופל'; const k = st.startsWith('הוחלט') || st === 'טופל' ? 'good' : st === 'בשיחה' ? 'info' : ''; return `<span class="pill ${k}">${esc(st)}</span>`; };
   function row(c){
     return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
-      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c.manual_review?.length ? ` · <span style="color:var(--ink-3)" title="${esc(c.manual_review.join(' | '))}">⚠ ${c.manual_review.length} לבדיקה</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(fmtDate(c.data_as_of) || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(fmtDate(c.data_as_of))}` : '')}</div></td>
+      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.is_estimate ? 'אומדן (תרחיש ב׳) · ' : ''}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c.manual_review?.length ? ` · <span style="color:var(--ink-3)" title="${esc(c.manual_review.join(' | '))}">⚠ ${c.manual_review.length} לבדיקה</span>` : ''}${c._unreviewed ? ` · <span style="color:var(--warn)">קובץ לא נבדק</span>` : ''}${c._pendingEst ? ` · <span style="color:var(--warn)">${c._pendingEst} אומדנים</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(fmtDate(c.data_as_of) || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(fmtDate(c.data_as_of))}` : '')}</div></td>
       <td>${pill(c.dashboard.color_overall)}</td>
       <td>${pill(c.dashboard.color_81, short(c.dashboard.status_81))}</td>
       <td>${pill(c.dashboard.color_62a, short(c.dashboard.status_62a))}</td>
@@ -601,7 +607,10 @@
     { const items = [...(rec.missing_human || []).map(x => ({t: 'serious', x: x + ' – רק אברהם יודע'})), ...(c.missing_fields || []).map(x => ({t: 'warn', x: x + ' – חושב עם אפס'}))];
       if (items.length) addFlag('missing', 'serious', `חסרים ${items.length}`, `<ul style="margin:0;padding-inline-start:18px">${items.map(i => `<li style="color:var(--${i.t})">${esc(i.x)}</li>`).join('')}</ul><div class="hint" style="margin-top:6px"><button class="quiet" onclick="editClient('${esc(rec.id)}')">להשלים בעריכה</button></div>`); }
     if (rec.pending_file_fields?.length) addFlag('pending', 'warn', `לאישור ${rec.pending_file_fields.length}`, `<div style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
-    if (c.estimate_notes?.length) addFlag('est', 'warn', `אומדנים ${c.estimate_notes.length}`, `<b>אומדנים שהמערכת הוסיפה – לבדיקת אברהם:</b><ul style="margin:4px 0 0;padding-inline-start:18px">${c.estimate_notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`);
+    { const items = c.estimate_items || []; const pend = items.filter(i => i.status === 'pending').length;
+      if (items.length || Object.keys(c.months_gap_table || {}).length) addFlag('gaps', pend ? 'warn' : 'neutral', pend ? `חוסרים ${pend}` : 'חוסרים – טופלו', gapsHtml(rec, c)); }
+    { const srcs = (rec.sources || []); const live = srcs.filter(x => !x.superseded); const unrev = live.filter(x => !x.reviewed).length;
+      if (srcs.length) addFlag('sources', unrev ? 'warn' : 'neutral', unrev ? `מקורות · ${unrev} לבדיקה` : `מקורות ${live.length}`, sourcesHtml(rec)); }
     if (c.annualization_factor && c.annualization_factor !== 1){
       const a = c.actuals || {}, mth = a.through_month;
       const row = (l, from, to) => `<tr><td>${l}</td><td class="num">${ils(from)}</td><td class="num"><b>${ils(to)}</b></td></tr>`;
@@ -910,6 +919,7 @@
   const SLOT_ORDER = ['annual_report', 'trial_balance_prev', 'trial_balance', 'ledger', 'ledger_prev', 'ledger_prev2'];
   let showPrev = false;          // "הדוח הסגור ישן בשנה" – מציג חריצי השנה הקודמת
   let slotMeta = null;
+  let pendingSources = [];         // רשומות המקור של הקבצים שהועלו בטופס – נשמרות עם הלקוח
   let pendingCopies = [];          // עותקי קבצים שהועלו בטופס "לקוח חדש" – עוברים לתיקיית הלקוח בשמירה
   let slotMode = 'form';          // 'form' – ממלא את הטופס; 'card' – מעדכן לקוח קיים ומחשב (עדכון רבעוני)
   const slotStatus = {};          // סטטוס אחרון לכל חריץ (נשמר בין רינדורים של הכרטיס)
@@ -964,7 +974,7 @@
     if (r.error){ st.className = 'st err'; st.textContent = (r.file ? r.file + ': ' : '') + r.error; return; }
     if (slotMode === 'card'){
       const rec = records.find(x => x.id === selectedId); if (!rec) return;
-      const upd = await api('apply_import', rec.id, r.fields, r.sources, (slotMeta.slots[slot]?.title || slot) + ' – ' + r.file);
+      const upd = await api('apply_import', rec.id, r.fields, r.sources, (slotMeta.slots[slot]?.title || slot) + ' – ' + r.file, r.source || null);
       if (!upd || upd.error){ st.className = 'st err'; st.textContent = upd?.error || 'העדכון נכשל'; return; }
       slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${Object.keys(r.fields || {}).length} שדות עודכנו וחושבו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר: ${esc(r.saved_copy.split('/data/')[1] || r.saved_copy)}</div>` : '')};
       await reload(); renderClient();
@@ -973,6 +983,7 @@
       return;
     }
     if (r.saved_copy) pendingCopies.push(r.saved_copy);
+    if (r.source) pendingSources.push(r.source);
     const n = fillFields(r.fields, r.sources, slotMeta.slots[slot]?.title);
     if (slot === 'annual_report' && r.year && ty && r.year <= ty - 2 && !showPrev){ showPrev = true; slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${n} שדות מולאו<div class="notes">הדוח ישן בשנה – נפתחו חריצי השנה הקודמת (תרחיש ב׳)</div>`}; await renderSlots(slotMode, 'slots'); toast('הדוח ישן בשנה – להעלות גם מאזן בוחן מלא של השנה הקודמת'); return; }
     slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר (יועבר לתיקיית הלקוח בשמירה)</div>` : '')};
@@ -982,17 +993,18 @@
   let slotsFor = null;
   async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ window._showPdfSlot = false; Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
   async function approveAllCard(id){ const r = await api('approve_fields', id, null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('השדות מהקובץ אושרו'); }
-  function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); pendingCopies = []; showPrev = false; editingId = null; $('formTitle').textContent = 'לקוח חדש'; $('slotsBox').open = true; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
-  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; if (slotsFor !== id){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = id; } editingId = id; showPrev = !!(rec.input?.structure?.last_closed_report_year && rec.input.structure.last_closed_report_year < rec.input.structure.tax_year - 1); $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; $('slotsBox').open = false; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
+  function newClient(){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); pendingCopies = []; pendingSources = []; showPrev = false; editingId = null; $('formTitle').textContent = 'לקוח חדש'; $('slotsBox').open = true; renderForm({structure:{tax_year: settings?.default_tax_year || Y}}, {}); renderSlots('form'); show('form'); }
+  function editClient(id){ const rec = records.find(r => r.id === id); if (!rec) return; if (slotsFor !== id){ Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = id; } pendingSources = []; editingId = id; showPrev = !!(rec.input?.structure?.last_closed_report_year && rec.input.structure.last_closed_report_year < rec.input.structure.tax_year - 1); $('formTitle').textContent = rec.input?.structure?.name || 'עריכת לקוח'; $('slotsBox').open = false; renderForm(rec.input || {}, rec.field_meta || {}); renderSlots('form'); show('form'); }
   function cancelForm(){ show(editingId ? 'client' : 'clients'); }
   async function saveForm(){
     const inp = collectForm();
     if (!inp.structure.name){ toast('צריך שם חברה'); $(fid('structure.name')).focus(); return; }
     if (inp.data_through_month != null && (inp.data_through_month < 1 || inp.data_through_month > 12)){ toast('"עד חודש" חייב להיות בין 1 ל-12'); $(fid('data_through_month')).focus(); return; }
     if (inp.structure.company_id && !/^\d{5,9}$/.test(inp.structure.company_id)){ toast('מספר ח.פ. – ספרות בלבד (5–9)'); $(fid('structure.company_id')).focus(); return; }
-    const rec = await api('save_client', inp, editingId, formMeta);
+    const rec = await api('save_client', inp, editingId, formMeta, pendingSources);
     if (!rec || rec.error && !rec.id){ toast('לא נשמר: ' + (rec?.error || '')); return; }
-    if (pendingCopies.length){ await api('attach_copies', inp.structure.name, pendingCopies); pendingCopies = []; }
+    pendingSources = [];
+    if (pendingCopies.length){ await api('attach_copies', inp.structure.name, pendingCopies, rec.id); pendingCopies = []; }
     await reload();
     selectedId = rec.id; editingId = null;
     toast(rec.error ? 'נשמר, אך החישוב נכשל: ' + rec.error : 'נשמר וחושב');
@@ -1047,6 +1059,42 @@
 
   // ── export (החלטות 19–20) ──
   const openFlags = new Set();
+  const MONTHS_HE = ['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ'];
+  const STATUS_HE = {pending: 'ממתין', accepted: 'אושר', corrected: 'תוקן', dismissed: 'לא חסר'};
+  function gapsHtml(rec, c){
+    const tbl = c.months_gap_table || {}, items = c.estimate_items || [], bd = c.data_breakdown || {};
+    const cats = Object.keys(tbl);
+    const itemAt = (cat, m) => items.find(i => i.key === cat && i.month === m);
+    const grid = cats.length ? `<div class="tablewrap"><table class="mini gaps"><tr><th>סעיף</th>${MONTHS_HE.map((m, i) => `<th class="num">${m}</th>`).join('')}<th class="num">סה"כ</th></tr>${cats.map(cat => {
+      const row = tbl[cat]; const tot = row.reduce((a, v) => a + (v || 0), 0);
+      return `<tr><td>${esc(cat)}</td>${row.map((v, i) => { const it = itemAt(cat, i + 1); const cls = v === null ? 'off' : (it ? 'gap ' + it.status : ''); return `<td class="num ${cls}" title="${it ? esc(it.label) : ''}">${v === null ? '' : (v ? fmtNum(v) : '0')}</td>`; }).join('')}<td class="num"><b>${fmtNum(tot)}</b></td></tr>`; }).join('')}</table></div>` : '<div class="hint">אין פירוט חודשי – הסעיפים מגיעים ממאזן בוחן לפי חודשים.</div>';
+    const list = items.length ? `<div class="gaplist">${items.map(it => `<div class="gapitem ${it.status}"><div class="gl"><b>${esc(it.label)}</b>${it.note ? `<div class="hint">${esc(it.note)}</div>` : ''}</div><div class="gs">${it.status === 'pending' ? `אומדן <b>${fmtNum(Math.round(it.estimate))} ₪</b>` : `${STATUS_HE[it.status]}${it.status !== 'dismissed' ? ` · <b>${fmtNum(Math.round(it.amount))} ₪</b>` : ''}`}</div><div class="ga">${it.status === 'pending' ? `<button class="quiet" onclick="adjust('${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},'accepted',${Math.round(it.estimate)})">✓ אשר</button><button class="quiet" onclick="askAmount(this,'${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},${Math.round(it.estimate)})">תקן</button><button class="quiet" onclick="adjust('${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},'dismissed',0)">לא חסר</button>` : `<button class="quiet" onclick="askAmount(this,'${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},${Math.round(it.amount || it.estimate)})">שינוי</button><button class="quiet" onclick="adjust('${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},'clear',0)" title="חזרה לאומדן המערכת">↶</button>`}</div></div>`).join('')}</div>` : '';
+    const sum = `<div class="hint" style="margin-top:8px">הוצאות השנה (לפני הכפלה): מהקבצים ${fmtNum(Math.round(bd.file || 0))} · אומדנים חודשיים ${fmtNum(Math.round(bd.estimates_monthly || 0))} · תיקוני רו"ח ${fmtNum(Math.round(bd.corrections_monthly || 0))}${bd.estimates_annual ? ` · התאמות שנתיות (פחת/מלאי/סעיף חסר) ${fmtNum(Math.round(bd.estimates_annual))}` : ''}. סדר עדיפויות: קובץ ← אומדן ← תיקון.</div>`;
+    return `<b>חוסרים במאזן הבוחן</b> – תא אדום = חודש בלי תנועה כשבשאר החודשים יש. האומדן נכנס לחישוב עד שמחליטים: אשר / תקן / לא חסר.${grid}${list}${sum}`;
+  }
+  function sourcesHtml(rec){
+    const srcs = rec.sources || [];
+    return `<b>הקבצים שהלקוח מבוסס עליהם</b><table class="mini" style="margin-top:6px;width:100%"><tr><th>קובץ</th><th>שנה</th><th>הועלה</th><th>שדות</th><th>נבדק</th><th></th></tr>${srcs.map((x, i) => `<tr class="${x.superseded ? 'sup' : ''}"><td>${esc(x.title)}<div class="hint">${esc(x.file)}${x.superseded ? ' · הוחלף' : ''}</div></td><td class="num">${x.year || ''}</td><td class="num">${when(x.at).slice(0,10)}</td><td class="num">${x.fields || ''}</td><td>${x.reviewed ? `<span style="color:var(--good)">✓ ${esc(x.reviewed.by || '')} ${when(x.reviewed.at).slice(0,10)}</span>` : (x.superseded ? '' : `<button class="quiet" onclick="markReviewed(this,'${esc(rec.id)}',${i})">עברתי – נבדק</button>`)}</td><td><button class="quiet" onclick="api('open_source','${esc(rec.id)}',${i}).then(r => { if (r?.error) toast(r.error); })">פתיחה</button></td></tr>`).join('')}</table>`;
+  }
+  async function adjust(id, key, month, kind, amount, note){
+    const r = await api('adjust', id, key, month, kind, amount, note || ''); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
+    openFlags.add('gaps'); const top = document.querySelector('main').scrollTop; await reload(); renderClient(); document.querySelector('main').scrollTop = top;
+    toast(kind === 'accepted' ? 'האומדן אושר' : kind === 'manual' ? 'התיקון נשמר וחושב' : kind === 'dismissed' ? 'סומן: לא חסר' : 'חזרה לאומדן המערכת');
+  }
+  function askAmount(btn, id, key, month, cur){
+    const box = btn.parentElement;
+    box.innerHTML = `<input type="text" inputmode="numeric" dir="ltr" value="${fmtNum(cur)}" style="width:110px" oninput="fmtInput(this)" onkeydown="if(event.key==='Enter'){adjust('${id}','${key}',${month},'manual',parseNum(this.value)||0,this.nextElementSibling.value)}"><input type="text" placeholder="הערה" style="width:120px"><button onclick="const i=this.parentElement.querySelectorAll('input');adjust('${id}','${key}',${month},'manual',parseNum(i[0].value)||0,i[1].value)">שמירה</button>`;
+    box.querySelector('input').focus();
+  }
+  async function markReviewed(btn, id, i){
+    const rec = records.find(r => r.id === id); const pend = (rec?.result?.estimate_items || []).filter(x => x.status === 'pending').length;
+    if (pend && !btn.dataset.asked){ btn.dataset.asked = '1'; btn.outerHTML = `<span class="hint" style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap">נשארו ${pend} אומדנים בלי החלטה. <button class="quiet" onclick="doReviewed('${id}',${i},true)">לאשר את כולם ולסמן נבדק</button><button class="quiet" onclick="doReviewed('${id}',${i},false)">לסמן נבדק בלי לאשר</button></span>`; return; }
+    doReviewed(id, i, false);
+  }
+  async function doReviewed(id, i, acceptAll){
+    const r = await api('mark_reviewed', id, i, acceptAll); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
+    openFlags.add('sources'); const top = document.querySelector('main').scrollTop; await reload(); renderClient(); document.querySelector('main').scrollTop = top; toast('סומן כנבדק');
+  }
   function toggleFlag(k){ if (openFlags.has(k)) openFlags.delete(k); else openFlags.add(k); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
   document.addEventListener('click', e => { const m = $('exportMenu'); if (m && !m.contains(e.target)) m.classList.remove('open'); });
   async function exportDoc(id, kind, fmt){

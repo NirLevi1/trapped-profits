@@ -118,6 +118,7 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
     rev_months = [0.0] * 12
     hints: dict[str, float] = defaultdict(float)
     breakdown: dict[str, float] = defaultdict(float)
+    breakdown_m: dict[str, list[float]] = defaultdict(lambda: [0.0] * 12)
     for a in accounts:
         sec, tot = a["section"], a["total"]
         for i, v in enumerate(a["months"]):
@@ -144,6 +145,8 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
             cat = categorize(nm)
             if cat:
                 breakdown[cat] += tot
+                for i, mv in enumerate(a["months"]):
+                    breakdown_m[cat][i] += mv
     last_rev_month = max((i + 1 for i, v in enumerate(rev_months) if abs(v) > 0.5), default=0)
     last_any_month = max((i + 1 for i, v in enumerate(months_activity) if v > 0.5), default=0)
     profit = revenue + fin_income + other_income - expenses
@@ -163,6 +166,7 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
         "distributions.current_year_profit_estimate": round(profit),
         "s62a.purchases_current_year": round(breakdown["קניות"]) if breakdown.get("קניות") else None,
         "period_breakdown": {k: round(v) for k, v in breakdown.items()},
+        "period_breakdown_months": {k: [round(x) for x in v] for k, v in breakdown_m.items()},
         "months_without_revenue": months_without,
     }
     if months_without:

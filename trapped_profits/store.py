@@ -99,8 +99,8 @@ def _diff(prev: dict | None, cur: dict) -> list[dict]:
 # אברהם 14.10 (3): מצב לכל שדה – מהקובץ (לאישור) / אושר / ידני; ושדות שרק אדם יודע
 FIELD_STATES = ("file", "approved", "manual", "carried", "estimate")
 # carried = הועבר ממעבר שנה (ערך מהשנה הקודמת שאינו בקבצים); estimate = אומדן של המערכת (לבדיקת אברהם)
-FIELD_SKIP = ("flags", "data_as_of", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue")
-TOP_LEVEL_FIELDS = ("data_as_of", "data_through_month", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue")                 # לא נרשמת להם היסטוריית ערכים
+FIELD_SKIP = ("flags", "data_as_of", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments")
+TOP_LEVEL_FIELDS = ("data_as_of", "data_through_month", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments")                 # לא נרשמת להם היסטוריית ערכים
 
 
 def _flatten(d: dict, prefix: str = "") -> dict:
@@ -163,6 +163,21 @@ def _missing_human(meta: dict, inp: dict | None = None) -> list[str]:
         fields["distributions.dividends_prev_year"] = "דיבידנד שחולק בשנה הקודמת (לגלגול)"
     return [label for path, label in fields.items()
             if (meta.get(path) or {}).get("state") not in ("manual", "approved")]
+
+
+def _merge_sources(prev: list | None, new: list | None) -> list:
+    """רשימת הקבצים שהועלו: קובץ חדש לאותו חריץ מסמן את הקודם כ"הוחלף" (נשאר לתיעוד, עם סימון הבדיקה שלו)."""
+    out = [dict(x) for x in (prev or [])]
+    for src in new or []:
+        if not isinstance(src, dict) or not src.get("slot"):
+            continue
+        for old in out:
+            if old.get("slot") == src["slot"] and not old.get("superseded"):
+                old["superseded"] = True
+        out.append({"slot": src["slot"], "title": src.get("title", ""), "year": src.get("year"), "file": src.get("file", ""),
+                    "path": src.get("path", ""), "at": src.get("at") or datetime.now().isoformat(timespec="seconds"),
+                    "fields": int(src.get("fields") or 0), "through_month": src.get("through_month"), "reviewed": None})
+    return out[-40:]
 
 
 def _merge_meta(prev: dict | None, new: dict | None) -> dict:
@@ -261,7 +276,7 @@ class ClientStore:
         return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
     # ---- write
-    def save(self, inp: dict[str, Any], cid: str | None = None, field_meta: dict | None = None, reset_paths: tuple = ()) -> dict[str, Any]:
+    def save(self, inp: dict[str, Any], cid: str | None = None, field_meta: dict | None = None, reset_paths: tuple = (), sources: list | None = None) -> dict[str, Any]:
         inp = dict(inp)
         inp["flags"] = {**(inp.get("flags") or {}), **self.settings.load()["flags"]}   # הדגלים מההגדרות גוברים
         inp["data_as_of"] = _normalize_date(inp.get("data_as_of") or "")
@@ -284,6 +299,7 @@ class ClientStore:
             "history": (prev or {}).get("history") or [],
             "field_meta": _merge_meta((prev or {}).get("field_meta"), field_meta),
             "years": (prev or {}).get("years") or {},            # תמונות של שנים שנסגרו (מעבר שנה)
+            "sources": _merge_sources((prev or {}).get("sources"), sources),   # סבב 3: הקבצים שהלקוח מבוסס עליהם
         }
         rec["field_meta"] = _record_changes((prev or {}).get("input"), rec["input"], rec["field_meta"], self._by(), reset_paths)
         rec["missing_human"] = _missing_human(rec["field_meta"], rec["input"])
@@ -407,7 +423,7 @@ class ClientStore:
         self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
         return rec
 
-    def apply_import(self, cid: str, fields: dict, sources: dict | None, label: str) -> dict[str, Any]:
+    def apply_import(self, cid: str, fields: dict, sources: dict | None, label: str, source: dict | None = None) -> dict[str, Any]:
         """אברהם 14.10 (2): עדכון רבעוני מקובץ בכרטיס לקוח קיים – דורס רק את השדות שבקובץ, מחשב, ורושם בהיסטוריה."""
         rec = self.get(cid)
         if not rec:
@@ -424,7 +440,7 @@ class ClientStore:
                 continue
             target[parts[-1]] = value
             meta[path] = {"state": "file", "source": (sources or {}).get(path, label), "at": now}
-        new = self.save(inp, cid, field_meta=meta)
+        new = self.save(inp, cid, field_meta=meta, sources=[source] if source else None)
         self._log(new, "עדכון מקובץ", f"{label} – {len(meta)} שדות")
         self._path(cid).write_text(json.dumps(new, ensure_ascii=False, indent=2), encoding="utf-8")
         return new
@@ -545,6 +561,47 @@ class ClientStore:
         new["rollover_checklist"] = checklist
         self._log(new, "מעבר שנה", f"{tag}: " + " · ".join(checklist), checklist=checklist)
         return self._write(cid, new)
+
+    # ---- סבב 3: תיקונים מעל הקבצים, מקורות, סימון "נבדק"
+    def adjust(self, cid: str, key: str, month, kind: str, amount: float = 0.0, note: str = "") -> dict[str, Any]:
+        """אשר (accepted) / תקן (manual) / לא חסר (dismissed) / clear – לפריט אומדן או לחודש. תיקון תמיד גובר על האומדן."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        if kind not in ("accepted", "manual", "dismissed", "clear"):
+            raise ValueError("סוג תיקון לא מוכר")
+        inp = rec["input"]
+        month = int(month) if month else None
+        adj = [a for a in (inp.get("adjustments") or []) if not (a.get("key") == key and (a.get("month") or None) == month)]
+        label = f"{key}" + (f" · חודש {month}" if month else "")
+        if kind != "clear":
+            adj.append({"key": key, "month": month, "kind": kind, "amount": float(amount or 0), "note": note or "",
+                        "by": self._by(), "at": datetime.now().isoformat(timespec="seconds")})
+        inp["adjustments"] = adj
+        new = self.save(inp, cid)
+        txt = {"accepted": f"אומדן אושר: {label} – {float(amount or 0):,.0f} ₪", "manual": f"תיקון: {label} – {float(amount or 0):,.0f} ₪",
+               "dismissed": f"לא חסר: {label}", "clear": f"בוטל תיקון: {label}"}[kind] + (f" ({note})" if note else "")
+        self._log(new, "תיקון", txt)
+        return self._write(cid, new)
+
+    def mark_reviewed(self, cid: str, index: int, accept_pending: bool = False) -> dict[str, Any]:
+        """אברהם עבר על קובץ: וי עם שם ותאריך. אופציונלי – לאשר בבת אחת את כל האומדנים שעוד ממתינים."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        srcs = rec.get("sources") or []
+        if not (0 <= index < len(srcs)):
+            raise ValueError("קובץ לא נמצא")
+        if accept_pending:
+            for it in (rec.get("result") or {}).get("estimate_items") or []:
+                if it.get("status") == "pending":
+                    rec = self.adjust(cid, it["key"], it.get("month"), "accepted", it.get("amount") or 0, "אושר בסימון 'נבדק'")
+            srcs = rec.get("sources") or srcs
+        srcs[index]["reviewed"] = {"by": self._by(), "at": datetime.now().isoformat(timespec="seconds"),
+                                   "through_month": srcs[index].get("through_month")}
+        rec["sources"] = srcs
+        self._log(rec, "נבדק", f"{srcs[index].get('title', '')} {srcs[index].get('year') or ''} – נבדק")
+        return self._write(cid, rec)
 
     def set_handling(self, cid: str, status: str, note: str = "") -> dict[str, Any] | None:
         rec = self.get(cid)
