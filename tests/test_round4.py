@@ -104,7 +104,8 @@ def test_rollover_moves_rows_to_prev_year(tmp_path, monkeypatch):
 def test_cycle_detection_semi_annual_and_quarterly():
     from trapped_profits.engine import _cycle_of
     assert _cycle_of([0, 6], [0, 6]) == 6                    # שניים השנה + אישור מהשנה הקודמת
-    assert _cycle_of([0, 6], []) is None                     # שניים בלי אישור – לא מספיק
+    assert _cycle_of([0, 6], []) == 6                        # חצי-שנתי – שניים מספיקים
+    assert _cycle_of([0, 3], []) is None                     # רבעוני – שניים בלי אישור לא מספיק
     assert _cycle_of([2, 5], [2, 5, 8, 11]) == 3
     assert _cycle_of([0, 3, 6], []) == 3                     # שלושה במרווח זהה
     assert _cycle_of([0, 2, 5], []) is None                  # מרווחים שונים

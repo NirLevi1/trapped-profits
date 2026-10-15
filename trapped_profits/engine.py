@@ -906,7 +906,7 @@ def _monthly_gaps(ci: ClientInput) -> tuple[ClientInput, list[dict], dict]:
 
 def _cycle_of(filled: list[int], prev_filled: list[int]) -> int | None:
     """זיהוי מחזור תשלום: חודשים עם תנועה במרווח קבוע k (2/3/4/6).
-    נדרשים שלושה תשלומים במרווח זהה השנה, או שניים אם השנה הקודמת מראה אותו מרווח, או אחד השנה כשהשנה הקודמת מחזורית באותו שלב."""
+    נדרשים שלושה תשלומים במרווח זהה השנה, או שניים אם השנה הקודמת מראה אותו מרווח (או שניים במרווח 6 כשאין שנה קודמת), או אחד השנה כשהשנה הקודמת מחזורית באותו שלב."""
     def gaps_of(idx):
         return [b - a for a, b in zip(idx, idx[1:])]
     g = gaps_of(filled)
@@ -916,6 +916,8 @@ def _cycle_of(filled: list[int], prev_filled: list[int]) -> int | None:
     prev_k = pg[0] if len(prev_filled) >= 2 and len(set(pg)) == 1 and pg[0] in (2, 3, 4, 6) else None
     if len(filled) == 2 and g[0] in (2, 3, 4, 6) and prev_k == g[0]:
         return g[0]
+    if len(filled) == 2 and g[0] == 6 and not prev_filled:                 # חצי-שנתי (חשמל, ארנונה): שני תשלומים במרווח 6 מספיקים כשאין שנה קודמת
+        return 6
     if len(filled) == 1 and prev_k and (filled[0] % prev_k) == (prev_filled[0] % prev_k):
         return prev_k
     return None
