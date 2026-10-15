@@ -152,6 +152,7 @@
   .cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
   @media (max-width:1100px){.cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .cols .card{margin:0}
+  .card.fold>h3{margin:0;cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap} .card.fold>h3 .tog{margin-inline-start:auto;font-size:11px;color:var(--ink-3);white-space:nowrap} .card.fold>.fold-sum{font-size:12px;color:var(--ink-3);margin-top:8px} .card.fold>.fold-body{display:none} .card.fold.open>.fold-body{display:block;margin-top:10px} .card.fold.open>.fold-sum{display:none}
   .kv{display:grid;grid-template-columns:minmax(150px,1fr) auto;gap:6px 14px;font-size:13px}
   .kv .k{color:var(--ink-2)} .kv .v{text-align:end}
   .kv .hl{font-weight:600;color:var(--ink)}
@@ -467,7 +468,7 @@
   }
   function bind(el){
     el.querySelectorAll('tr.rowlink').forEach(tr => {
-      const pick = () => { selectedId = tr.dataset.id; show('client'); };
+      const pick = () => { if (selectedId !== tr.dataset.id) openCards.clear(); selectedId = tr.dataset.id; show('client'); };
       tr.onclick = e => { if (e.target.closest('button[data-act]') || e.target.closest('td.edit')) return; pick(); };
       tr.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } };
     });
@@ -636,7 +637,7 @@
     if (c.years_used) notices.push(`<div class="hint" style="margin:2px 0 8px">שנים בחישוב: עודפים – ${esc(c.years_used.retained)} · ממוצע הוצאות – ${esc(c.years_used.expenses_avg)} · השנה הנבדקת – ${esc(c.years_used.current_year)} · ריכוזיות – ${esc(c.years_used.concentration)}</div>`);
     el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall)) + notices.join('') + `
       <div class="cols">
-        <div class="card"><h3>סעיף 81 · תוספת מס 2% &nbsp;${pill(c.dashboard.color_81, strip(c.dashboard.status_81))}</h3>${kv([
+        ${foldCard('c81', !m.action_required, `סעיף 81 · תוספת מס 2% &nbsp;${pill(c.dashboard.color_81, strip(c.dashboard.status_81))}`, `${esc(k.status_label || '')} · רווחים נצברים ${ils(r.retained_for_81a)} · אין תוספת מס השנה`, kv([
           ['רווחים נצברים לתום ' + c.previous_year + (c.is_estimate ? ' <span class="hint" style="display:inline">(אומדן)</span>' : ''), ils(r.retained_for_81a)],
           ...(r.rollover_note ? [[`<span class="hint">${esc(r.rollover_note)}</span>`, '']] : []),
           ...(k.alternative_relevant ? [[`חלופת הרווחים הפטורים – נבחרה חלופה ${k.chosen_alternative}`, `(1) מקורות פטורים ${ils(r.exempt_alt1)} · (2) 7 שנים ${ils(r.exempt_alt2)}`]] : []),
@@ -648,8 +649,8 @@
           null,
           ['מצב', esc(k.status_label || (tests.length ? 'פטור – ' + tests.join('; ') : ''))],
           ['תוספת מס לתשלום', ils(k.surtax), true],
-        ])}</div>
-        <div class="card"><h3>סימולטור · לחלק דיבידנד או לשלם 2%?</h3>${m.action_required ? '' : `<div class="hint" style="margin:-4px 0 8px">${esc(k.status_label)} – אין תוספת מס השנה. הסימולטור נשאר פתוח: אפשר לתקן את "כבר חולק השנה" או לבדוק "מה אם".</div>`}${kv([
+        ]))}
+        ${foldCard('csim', !m.action_required, `סימולטור · לחלק דיבידנד או לשלם 2%?`, `לא נדרש השנה – פתח כדי לתקן "כבר חולק" או לבדוק "מה אם"`, `${m.action_required ? '' : `<div class="hint" style="margin:-4px 0 8px">${esc(k.status_label)} – אין תוספת מס השנה. הסימולטור נשאר פתוח: אפשר לתקן את "כבר חולק השנה" או לבדוק "מה אם".</div>`}${kv([
           [`${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`, ils(m.option_6pct)],
           ['50% מהרווחים העודפים', m.option_50pct > 0 ? ils(m.option_50pct) : '—'],
           ...(m.option_20pct_start_day != null ? [['20% מרווחי יום התחילה', ils(m.option_20pct_start_day)]] : []),
@@ -679,8 +680,8 @@
           </div>
           <div id="wi_out" class="hint">הסימולציה לא נשמרת. ${MOCK ? 'בתצוגת הדפדפן אין מנוע – זמין בתוכנה.' : ''}</div>
         </div>
-        <div class="rec"><b>המלצה</b>${recHtml(m.recommendation_text || m.recommendation)}</div></div>
-        <div class="card"><h3>סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}</h3>${kv([
+        <div class="rec"><b>המלצה</b>${recHtml(m.recommendation_text || m.recommendation)}</div>`)}
+        ${foldCard('c62', !(c.applies_62a && s.attributed_income > 0), `סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}`, `${c.applies_62a ? 'חל, אין שכר לתיקון' : 'לא חל'} · רווחיות ${pct(s.governing_profitability)}${s.concentration_share_36m >= 0.55 ? ' · ריכוזיות ' + (s.concentration_share_36m*100).toFixed(0) + '%' : ''}`, `${kv([
           ['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)],
           ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)],
           ['שיעור רווחיות', pct(s.governing_profitability)],
@@ -695,7 +696,7 @@
           ['עלות מס נוספת מוערכת', ils(s.extra_tax_cost)],
         ])}<div class="hint" style="margin-top:6px">${esc(s.extra_tax_cost_method || '')}</div>
         ${pieHtml(s)}
-        ${c.applies_62a && !s.concentration_test_met && s.attributed_if_concentration > 0 ? `<div class="notice ${s.concentration_share >= 0.7 ? 'serious' : s.concentration_share >= 0.55 ? 'warn' : ''}" style="margin-top:10px;background:${s.concentration_share >= 0.55 ? '' : 'var(--neutral-bg)'}"><b>אם מבחן הריכוזיות מתקיים</b> (לקוח אחד ≥70% מסך 36 חודשים): ייחוס מלא – שכר לתיקון ${ils(s.attributed_if_concentration)}, עלות מס נוספת ${ils(s.extra_tax_if_concentration)} – גם עם פטור 750 אלף וגם מתחת ל-25%. ${s.concentration_share >= 0.7 && (s.concentration_years?.length || 0) < 3 ? 'השנה הלקוח הגדול מעל 70% – להעלות כרטסות של שנתיים אחורה.' : ''}</div>` : ''}</div>
+        ${c.applies_62a && !s.concentration_test_met && s.attributed_if_concentration > 0 ? `<div class="notice ${s.concentration_share >= 0.7 ? 'serious' : s.concentration_share >= 0.55 ? 'warn' : ''}" style="margin-top:10px;background:${s.concentration_share >= 0.55 ? '' : 'var(--neutral-bg)'}"><b>אם מבחן הריכוזיות מתקיים</b> (לקוח אחד ≥70% מסך 36 חודשים): ייחוס מלא – שכר לתיקון ${ils(s.attributed_if_concentration)}, עלות מס נוספת ${ils(s.extra_tax_if_concentration)} – גם עם פטור 750 אלף וגם מתחת ל-25%. ${s.concentration_share >= 0.7 && (s.concentration_years?.length || 0) < 3 ? 'השנה הלקוח הגדול מעל 70% – להעלות כרטסות של שנתיים אחורה.' : ''}</div>` : ''}`)}
         </div>
       `;
     $('cardLead').textContent = `שנת מס ${c.tax_year} · בסיס לתום ${c.previous_year}${c.is_estimate ? ' · אומדן (תרחיש ב׳)' : ''} · עודכן ${when(rec.updated_at)}`;
@@ -1052,6 +1053,10 @@
 
   // ── export (החלטות 19–20) ──
   const openFlags = new Set();
+  const openCards = new Set();
+  function toggleCard(k){ if (openCards.has(k)) openCards.delete(k); else openCards.add(k); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
+  // כרטיס שאינו מעניין כרגע (מוגן / פטור / לא חל) מוצג מקופל – כותרת, מצב ושורת סיכום; לחיצה פותחת
+  function foldCard(key, quiet, title, summary, body){ if (!quiet) return `<div class="card"><h3>${title}</h3>${body}</div>`; const o = openCards.has(key); return `<div class="card fold ${o ? 'open' : ''}"><h3 onclick="toggleCard('${key}')">${title}<span class="tog">${o ? 'הסתר ▴' : 'הצג ▾'}</span></h3><div class="fold-sum">${summary}</div><div class="fold-body">${body}</div></div>`; }
   const MONTHS_HE = ['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ'];
   const STATUS_HE = {pending: 'ממתין', accepted: 'אושר', corrected: 'תוקן', dismissed: 'לא חסר'};
   function gapsHtml(rec, c){
