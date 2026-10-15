@@ -444,6 +444,8 @@ class ClientStore:
                     continue
                 keep.append(a)
             inp["adjustments"] = keep
+        if "retained.balance_sheet_retained_earnings" in (fields or {}):
+            inp.setdefault("retained", {})["retained_as_of_year"] = None      # דוח סגור חדש – העודפים שוב "מהדוח", לא אומדן מגולגל
         for path, value in (fields or {}).items():
             parts = path.split(".")
             target = inp
@@ -521,6 +523,10 @@ class ClientStore:
         carry("retained.balance_sheet_retained_earnings", rolled, "retained.balance_sheet_retained_earnings",
               f"עודפים לתום {ty - 1}" + (f" לפי גלגול מדוח {st.get('last_closed_report_year')}" if ci.structure.is_scenario_b else " מהדוח הסגור"))
         carried["retained.balance_sheet_retained_earnings"]["state"] = "estimate" if ci.structure.is_scenario_b else "carried"
+        # העודפים עכשיו לתום ty−1 (גם אם הדוח הסגור ישן יותר) – הגלגול הבא רק שנה אחת; שלב השנתיים (תרחיש ג׳) כבר בפנים
+        self._set_path(inp, "retained.retained_as_of_year", ty - 1)
+        self._set_path(inp, "retained.prev2_year_profit_for_rollover", None)
+        self._set_path(inp, "distributions.dividends_prev2_year", 0.0)
         carry("retained.prev_year_profit_for_rollover", profit_est, "distributions.current_year_profit_estimate", f"רווח {ty} (אומדן שנתי) לגלגול")
         checklist.append(f"עודפים: הבסיס לתום {ty} הוא אומדן (עודפי הדוח הסגור + רווח {ty} אחרי מס − דיבידנד {ty}). כשייסגר דוח {ty} – להעלות אותו והאומדן יוחלף.")
 

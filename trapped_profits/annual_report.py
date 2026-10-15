@@ -446,7 +446,7 @@ def map_annual_fields(by_year: dict, report_year: int, tax_year: int | None, raw
     ret, exp, div = by_year.get("retained", {}), by_year.get("expenses", {}), by_year.get("dividend", {})
     if report_year in ret:
         f["retained.balance_sheet_retained_earnings"] = ret[report_year]
-        src["retained.balance_sheet_retained_earnings"] = raw_src.get("retained", "") + (f" (דוח {report_year} – ישן בשנה: אומדן, תרחיש ב׳)" if gap >= 2 else "")
+        src["retained.balance_sheet_retained_earnings"] = raw_src.get("retained", "") + (f" (דוח {report_year} – ישן בשנתיים: אומדן, תרחיש ג׳)" if gap >= 3 else f" (דוח {report_year} – ישן בשנה: אומדן, תרחיש ב׳)" if gap >= 2 else "")
     if 2024 in ret:
         f["distributions.retained_at_start_day"] = ret[2024]
         src["distributions.retained_at_start_day"] = raw_src.get("retained", "") + " (עודפים לתום 2024 = יתרה ליום התחילה 1.1.2025)"
@@ -464,7 +464,12 @@ def map_annual_fields(by_year: dict, report_year: int, tax_year: int | None, raw
         if report_year in by_year.get(key, {}):
             f[path] = by_year[key][report_year]
             src[path] = raw_src.get(key, "")
-    if gap >= 2:
+    if gap >= 4:
+        notes.append(f"הדוח הוא ל-{report_year} ושנת המס {ty} – ישן ביותר משנתיים; המערכת מגלגלת עד שנתיים בלבד – להעלות דוח עדכני יותר")
+    elif gap == 3:
+        notes.append(f"הדוח הוא ל-{report_year} ושנת המס {ty} – תרחיש ג׳: מגלגלים שנתיים ({report_year + 1}, {report_year + 2}) ממאזני בוחן מלאים; "
+                     f"העודפים ורווחי יום התחילה הם אומדן; דיבידנדים של השנים האלה – ידני")
+    elif gap >= 2:
         notes.append(f"הדוח הוא ל-{report_year} ושנת המס {ty} – תרחיש ב׳: העודפים הם אומדן עד שיש דוח {report_year + 1}; "
                      f"הוצאות {report_year + 1} ודיבידנד 2025 אינם בדוח – להזין ידנית")
     elif gap <= 0:

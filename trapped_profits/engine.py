@@ -183,6 +183,7 @@ class ClientResult:
     data_breakdown: dict = field(default_factory=dict)      # {"file": …, "estimates": …, "corrections": …} – הוצאות השנה (לפני הכפלה)
     months_gap_table: dict = field(default_factory=dict)    # {סעיף: [12]} עם None בחודשים שאחרי הנתונים – לטבלת החוסרים
     years_used: dict = field(default_factory=dict)            # {"retained": "דוח 2025", "expenses_avg": "2024–2026", "concentration": "2024–2026"}
+    scenario_label: str = ""                                  # "" / "אומדן (תרחיש ב׳)" / "אומדן (תרחיש ג׳ – גלגול שנתיים)"
     months_table: dict | None = None                          # סבב 4: מאזן הבוחן המלא – כל שורה × 12 חודשים (קובץ / אומדן / תיקון) – כשיש tb_rows
 
     def to_dict(self) -> dict[str, Any]:
@@ -192,27 +193,70 @@ class ClientResult:
 # ---------------------------------------------------------------------------
 # לשונית «רווחים_נצברים» – חלק א-ב (בסיס). חלקים ג-ה אחרי המגנים.
 # ---------------------------------------------------------------------------
+def _roll_lag(ci: ClientInput) -> int:
+    """כמה שנים צריך לגלגל מהעודפים שבטופס לתום השנה הקודמת: 0 רגיל, 1 תרחיש ב׳, 2 תרחיש ג׳ (דוח ישן בשנתיים)."""
+    st = ci.structure
+    base = ci.retained.retained_as_of_year or st.last_closed_report_year
+    if not base:
+        return 0
+    return max(0, min(2, st.previous_year - int(base)))
+
+
+def scenario_label(ci: ClientInput) -> str:
+    lag = _roll_lag(ci)
+    if lag >= 2:
+        return "אומדן (תרחיש ג׳ – גלגול שנתיים)"
+    if lag == 1 or ci.structure.is_scenario_b or ci.is_estimate:
+        return "אומדן (תרחיש ב׳)"
+    return ""
+
+
+def _roll_steps(ci: ClientInput) -> list[dict]:
+    """שלבי הגלגול: [{"year", "from", "profit", "after_tax", "dividend", "to"}]. שנה בלי רווח לגלגול – עוצר שם."""
+    r, d, t = ci.retained, ci.distributions, ci.s62a.corporate_tax_rate
+    lag = _roll_lag(ci)
+    steps = []
+    cur = r.balance_sheet_retained_earnings
+    plan = []
+    if lag >= 2:
+        plan.append((ci.structure.previous_year - 1, r.prev2_year_profit_for_rollover, d.dividends_prev2_year))
+    if lag >= 1:
+        plan.append((ci.structure.previous_year, r.prev_year_profit_for_rollover, d.dividends_prev_year))
+    for year, p, div in plan:
+        if p is None:
+            break
+        after_tax = p * (1 - t) if p > 0 else p
+        nxt = cur + after_tax - div
+        steps.append({"year": year, "from": cur, "profit": p, "after_tax": after_tax, "dividend": div, "to": nxt})
+        cur = nxt
+    return steps
+
+
 def _rolled_retained(ci: ClientInput) -> float:
-    """תרחיש ב׳: הדוח הסגור ישן בשנה → עודפים לתום השנה הקודמת = עודפי הדוח + רווח השנה הקודמת × (1 − מס חברות)
-    − דיבידנד השנה הקודמת. בלי רווח לגלגול – העודפים כמו שהוזנו (אומדן ידני של אברהם)."""
-    r = ci.retained
-    p = r.prev_year_profit_for_rollover
-    if ci.structure.is_scenario_b and p is not None:
-        after_tax = p * (1 - ci.s62a.corporate_tax_rate) if p > 0 else p
-        return r.balance_sheet_retained_earnings + after_tax - ci.distributions.dividends_prev_year
-    return r.balance_sheet_retained_earnings
+    """תרחיש ב׳/ג׳: הדוח הסגור ישן → עודפים לתום השנה הקודמת = עודפי הדוח + רווח כל שנה פתוחה × (1 − מס חברות) − הדיבידנד שלה.
+    בלי רווח לגלגול – העודפים כמו שהוזנו (אומדן ידני של אברהם)."""
+    steps = _roll_steps(ci)
+    return steps[-1]["to"] if steps else ci.retained.balance_sheet_retained_earnings
+
+
+def _rolled_start_day(ci: ClientInput) -> float | None:
+    """תרחיש ג׳: עודפים לתום 2024 (= רווחי יום התחילה) אינם בדוח – אומדן מהשלב הראשון של הגלגול."""
+    if _roll_lag(ci) < 2:
+        return None
+    steps = [x for x in _roll_steps(ci) if x["year"] == 2024]
+    return steps[0]["to"] if steps else None
 
 
 def _rollover_note(ci: ClientInput) -> str:
-    r = ci.retained
-    p = r.prev_year_profit_for_rollover
-    if not (ci.structure.is_scenario_b and p is not None):
+    steps = _roll_steps(ci)
+    if not steps:
         return ""
     t = ci.s62a.corporate_tax_rate
-    after_tax = p * (1 - t) if p > 0 else p
-    return (f"גלגול (תרחיש ב׳): עודפי הדוח הסגור {ci.structure.last_closed_report_year} {r.balance_sheet_retained_earnings:,.0f} "
-            f"+ רווח {ci.structure.previous_year} {p:,.0f} × (1 − {t:.0%}) = {after_tax:,.0f} − דיבידנד {ci.structure.previous_year} "
-            f"{ci.distributions.dividends_prev_year:,.0f} = {_rolled_retained(ci):,.0f}")
+    base = ci.retained.retained_as_of_year or ci.structure.last_closed_report_year
+    parts = [f"גלגול ({'תרחיש ג׳' if _roll_lag(ci) >= 2 else 'תרחיש ב׳'}): עודפי {'הדוח הסגור ' if not ci.retained.retained_as_of_year else ''}{base} {steps[0]['from']:,.0f}"]
+    for x in steps:
+        parts.append(f"+ רווח {x['year']} {x['profit']:,.0f} × (1 − {t:.0%}) = {x['after_tax']:,.0f} − דיבידנד {x['year']} {x['dividend']:,.0f} → עודפי {x['year']} {x['to']:,.0f}")
+    return " ".join(parts)
 
 
 def _retained_base(ci: ClientInput) -> tuple[float, float, bool, float, float]:
@@ -447,8 +491,9 @@ def _transition(ci: ClientInput) -> TransitionResult:
     remaining = max(0.0, d.start_day_excess_profits - d.start_day_dividends_taxed)  # B14
     rule20 = f.enable_20pct_current_year_rule and remaining > 0 \
         and d.dividends_taxed_current_year >= 0.2 * remaining                        # B15
-    rate = d.dividend_in_determining_period / d.retained_at_start_day \
-        if d.retained_at_start_day else 0.0                                          # B21
+    start_ret = d.retained_at_start_day or (_rolled_start_day(ci) or 0.0)        # תרחיש ג׳: עודפי 2024 מהגלגול (אומדן)
+    rate = d.dividend_in_determining_period / start_ret \
+        if start_ret else 0.0                                                        # B21
     if not d.determining_period_paid_and_taxed:                                      # B22
         until = 0
     elif rate >= 0.90:
@@ -682,7 +727,13 @@ def _manual_review(ci: ClientInput, ret: RetainedResult, s62: Section62AResult, 
             out.append("דיבידנד בין-חברתי ללא שיעור החזקה בחברה המחלקת – להשלים (62א(א3))")
     if ret.exempt_sources_total > 0 and sh.special_assets_net > 0:
         out.append("חלופה (1) לרווחים פטורים: עלות הנכסים המיוחדים נלקחת לתום השנה הנבדקת (פישוט) – לאמת")
-    if ci.is_estimate or ci.structure.is_scenario_b:
+    if _roll_lag(ci) >= 2:
+        need = [y for y, v in ((ci.structure.previous_year - 1, ci.retained.prev2_year_profit_for_rollover), (ci.structure.previous_year, ci.retained.prev_year_profit_for_rollover)) if v is None]
+        out.append(f"תרחיש ג׳ – הדוח הסגור האחרון הוא {ci.structure.last_closed_report_year}: העודפים לתום {ci.structure.previous_year} ורווחי יום התחילה (תום 2024) הם אומדן גלגול שנתיים"
+                   + (f" ({_rolled_start_day(ci):,.0f})" if _rolled_start_day(ci) is not None and not ci.distributions.retained_at_start_day else "")
+                   + ("; " + ret.rollover_note if ret.rollover_note else "")
+                   + (f"; חסר רווח {', '.join(map(str, need))} (מאזן בוחן מלא) לגלגול" if need else ""))
+    elif ci.is_estimate or ci.structure.is_scenario_b:
         out.append("תרחיש ב׳ – נתוני הבסיס הם אומדן גלגול, לא דוח סגור" + ("; " + ret.rollover_note if ret.rollover_note else "; להזין רווח השנה הקודמת (מאזן בוחן) לגלגול אוטומטי"))
     if s62.concentration_met_by_data and not ci.s62a.concentration_test_met:
         out.append(f"ריכוזיות: לפי כרטסות {s62.concentration_years[0]}–{s62.concentration_years[-1]} – {s62.concentration_top_name} {s62.concentration_share_36m:.0%} "
@@ -1181,7 +1232,7 @@ def _years_used(ci: ClientInput, s62) -> dict:
     st = ci.structure
     closed = st.last_closed_report_year or st.previous_year
     return {
-        "retained": f"דוח {closed}" + (f" מגולגל ל-{st.previous_year} (אומדן)" if st.is_scenario_b else ""),
+        "retained": f"דוח {closed}" + (f" מגולגל ל-{st.previous_year} (אומדן{', שנתיים' if _roll_lag(ci) >= 2 else ''})" if st.is_scenario_b else ""),
         "expenses_avg": f"{st.tax_year - 2}–{st.tax_year}",
         "current_year": f"{st.tax_year}" + (f" עד חודש {ci.data_through_month} (אומדן שנתי)" if ci.data_through_month and ci.data_through_month < 12 else ""),
         "concentration": (f"{s62.concentration_years[0]}–{s62.concentration_years[-1]}" if len(s62.concentration_years) > 1 else (str(s62.concentration_years[0]) if s62.concentration_years else "אין כרטסת")) + f" ({len(s62.concentration_years)} מתוך 3 שנים)",
@@ -1258,4 +1309,5 @@ def compute(ci: ClientInput) -> ClientResult:
         months_gap_table=gap_table,
         years_used=_years_used(ci, s62),
         months_table=months_table,
+        scenario_label=scenario_label(ci),
     )

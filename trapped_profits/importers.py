@@ -268,6 +268,9 @@ SLOTS = {
     # תרחיש ב׳ – הדוח הסגור ישן בשנה: השנה הקודמת מגיעה ממאזן בוחן מלא (וכרטסת לריכוזיות על פני שנתיים)
     "trial_balance_prev": {"title": "מאזן בוחן לפי חודשים – השנה הקודמת (מלא)", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
                            "desc": "רק כשאין דוח סגור לשנה הקודמת: רווח השנה הקודמת לגלגול העודפים, והוצאות השנה הקודמת למגן.", "prev": True},
+    # תרחיש ג׳ – הדוח הסגור ישן בשנתיים: גם השנה שלפני הקודמת מגיעה ממאזן בוחן מלא
+    "trial_balance_prev2": {"title": "מאזן בוחן לפי חודשים – שנתיים אחורה (מלא)", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
+                            "desc": "רק כשהדוח הסגור האחרון ישן בשנתיים: רווח השנה לגלגול העודפים (גם רווחי יום התחילה), והוצאות השנה למגן.", "prev2": True},
     "ledger_prev": {"title": "כרטסת הכנסות – השנה הקודמת", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
                     "desc": "ריכוזיות על פני 36 חודשים: 70% מלקוח אחד על סך שלוש השנים.", "conc": True},
     "ledger_prev2": {"title": "כרטסת הכנסות – שנתיים אחורה", "types": ("קובץ ריווחית (*.csv;*.CSV;*.txt)",),
@@ -313,6 +316,13 @@ def import_slot(slot: str, path: str | Path, tax_year: int | None = None) -> dic
                            "tb_rows_prev_year": f.get("tb_rows", [])}
             r["sources"] = {"shields.expenses_prev_year": f"מאזן בוחן {r.get('year')}: סך הוצאות (כולל פחת)",
                             "retained.prev_year_profit_for_rollover": f"מאזן בוחן {r.get('year')}: רווח לפני מס – המנוע מגלגל: עודפי הדוח + רווח × (1 − 23%) − דיבידנד השנה הקודמת (ידני)"}
+            r["notes"] = [n for n in r["notes"] if "הכנסות עד" not in n] + [f"גלגול: דיבידנד {r.get('year')} אינו במאזן בוחן – להזין ידנית אם חולק"]
+        elif slot == "trial_balance_prev2":
+            f = r["fields"]
+            r["fields"] = {"shields.expenses_prev2_year": f.get("shields.expenses_current_year", 0) + r.get("hints", {}).get("depreciation", 0),
+                           "retained.prev2_year_profit_for_rollover": f.get("distributions.current_year_profit_estimate", 0)}
+            r["sources"] = {"shields.expenses_prev2_year": f"מאזן בוחן {r.get('year')}: סך הוצאות (כולל פחת)",
+                            "retained.prev2_year_profit_for_rollover": f"מאזן בוחן {r.get('year')}: רווח לפני מס – גלגול ראשון: עודפי הדוח + רווח × (1 − 23%) − דיבידנד {r.get('year')} (ידני)"}
             r["notes"] = [n for n in r["notes"] if "הכנסות עד" not in n] + [f"גלגול: דיבידנד {r.get('year')} אינו במאזן בוחן – להזין ידנית אם חולק"]
         elif slot == "ledger_prev":
             r["fields"] = {"s62a.top_customers_prev_year": r["fields"]["s62a.top_customers"],
