@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime
 import sys
 from pathlib import Path
 
@@ -267,25 +268,50 @@ class Api:
         return {"moved": moved}
 
     # ---- עדכונים מרחוק (ניר דוחף לגיטהאב → אצל אברהם "עדכון והפעלה מחדש")
+    @staticmethod
+    def _git_exe() -> str | None:
+        """איפה גיט: בנתיב, או במקומות המוכרים בווינדוס (אחרי התקנה טרייה הנתיב של המערכת עוד לא תמיד מעודכן בתוכנה שרצה)."""
+        import shutil
+        g = shutil.which("git")
+        if g:
+            return g
+        if sys.platform.startswith("win"):
+            for c in (Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "cmd" / "git.exe",
+                      Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")) / "Git" / "cmd" / "git.exe",
+                      Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Git" / "cmd" / "git.exe"):
+                if c.exists():
+                    return str(c)
+        return None
+
     def _git(self, *args, timeout=25):
         import subprocess
         root = app_dir()
         if not (root / ".git").exists():
             return None
+        exe = self._git_exe()
+        log = root / "update.log"
+        if not exe:
+            log.open("a", encoding="utf-8").write(f"{datetime.now():%d.%m.%Y %H:%M:%S} git not found (PATH={os.environ.get('PATH','')[:300]})\n")
+            return None
         try:
             kw = {"creationflags": 0x08000000} if sys.platform.startswith("win") else {}   # בלי חלון שחור
-            r = subprocess.run(["git", *args], cwd=str(root), capture_output=True, text=True, timeout=timeout, **kw)
+            env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"}   # לא לתקוע על חלון סיסמה – המפתח בכתובת המאגר
+            r = subprocess.run([exe, *args], cwd=str(root), capture_output=True, text=True, timeout=timeout, env=env, **kw)
+            log.open("a", encoding="utf-8").write(f"{datetime.now():%d.%m.%Y %H:%M:%S} git {' '.join(args)} -> {r.returncode} {(r.stderr or r.stdout).strip()[-200:]}\n")
             return r
-        except Exception:  # noqa: BLE001 – אין גיט / אין רשת
+        except Exception as e:  # noqa: BLE001 – אין גיט / אין רשת
+            log.open("a", encoding="utf-8").write(f"{datetime.now():%d.%m.%Y %H:%M:%S} git {' '.join(args)} failed: {e}\n")
             return None
 
     def check_update(self):
         """כמה גרסאות אחורה אנחנו מול גיטהאב. {"behind": n, "notes": [...]} ; {"behind": 0}; {"unavailable": סיבה}."""
         if not (app_dir() / ".git").exists():
             return {"unavailable": "התוכנה לא הותקנה מגיטהאב – עדכון ידני"}
+        if not self._git_exe():
+            return {"unavailable": "גיט לא נמצא במחשב – להפעיל מחדש את המחשב אחרי ההתקנה, או להריץ update.bat"}
         r = self._git("fetch", "--quiet", timeout=30)
         if r is None or r.returncode != 0:
-            return {"unavailable": "אין חיבור לגיטהאב כרגע"}
+            return {"unavailable": "אין חיבור לגיטהאב כרגע" + (f" ({(r.stderr or '').strip()[-120:]})" if r is not None and (r.stderr or '').strip() else "")}
         br = self._git("rev-parse", "--abbrev-ref", "HEAD")
         branch = (br.stdout.strip() if br and br.returncode == 0 else "main") or "main"
         c = self._git("rev-list", "--count", f"HEAD..origin/{branch}")

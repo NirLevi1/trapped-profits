@@ -16,10 +16,15 @@ echo using %PY% >> setup.log
 
 REM ---- Auto-update: pull the latest code from GitHub when online (data\ is never touched). Offline -> just runs.
 if exist .git (
-  where git >nul 2>nul && (
+  set GIT=
+  where git >nul 2>nul && set GIT=git
+  if not defined GIT if exist "%ProgramFiles%\Git\cmd\git.exe" set "GIT=%ProgramFiles%\Git\cmd\git.exe"
+  if not defined GIT if exist "%LOCALAPPDATA%\Programs\Git\cmd\git.exe" set "GIT=%LOCALAPPDATA%\Programs\Git\cmd\git.exe"
+  if defined GIT (
     echo checking for updates... >> setup.log
-    git pull --ff-only --quiet >> setup.log 2>&1 && echo up to date >> setup.log || echo update skipped (offline or local change) >> setup.log
-  )
+    set GIT_TERMINAL_PROMPT=0
+    "%GIT%" pull --ff-only --quiet >> setup.log 2>&1 && echo up to date >> setup.log || echo update skipped (offline or local change) >> setup.log
+  ) else (echo git not found - no auto update >> setup.log)
 )
 
 if not exist .venv (
