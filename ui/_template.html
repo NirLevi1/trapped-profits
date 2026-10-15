@@ -183,6 +183,7 @@
   .status-card.upd{background:var(--info-bg);color:var(--info);border-color:transparent;margin-top:8px}
   .flag{border:1px solid transparent;border-radius:999px;padding:3px 10px;font-size:12px;line-height:18px;cursor:pointer;font-family:inherit}
   .flag.serious{background:var(--serious-bg);color:var(--serious)} .flag.warn{background:var(--warn-bg);color:var(--warn)} .flag.info{background:var(--info-bg);color:var(--info)} .flag.neutral{background:var(--neutral-bg);color:var(--ink-2)}
+  .flags.sub{margin-top:-4px;padding-inline-start:12px} .flags.sub .flag{font-size:11px} .menu .pop h3{font-size:12px;font-weight:500;color:var(--ink-3);margin:0 0 10px}
   .flag.on{border-color:currentColor} .flagsep{width:1px;height:18px;background:var(--line);margin:3px 4px} .flag::before{content:'▸ ';opacity:.7} .flag.on::before{content:'▾ '}
   .menu{position:relative} .menu .pop{display:none;position:absolute;top:calc(100% + 4px);inset-inline-end:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.08);padding:10px 12px;z-index:6;min-width:260px;max-width:calc(100vw - 32px)} .menu.open .pop{display:block}
   .pop table{font-size:13px} .pop td{padding:4px 8px;border:0;white-space:nowrap} .pop td:first-child{color:var(--ink-2);padding-inline-end:16px}
@@ -587,7 +588,7 @@
   function renderClient(){
     const el = $('clientView'); const rec = records.find(r => r.id === selectedId);
     if (!rec){ el.innerHTML = `<h1>כרטיס לקוח</h1><div class="empty"><b>לא נבחר לקוח.</b>לחיצה על שורה בתור העבודה פותחת את הכרטיס שלה כאן.</div>`; return; }
-    const head = (title, status) => `<div class="toolbar" style="margin-bottom:6px">
+    const head = (title, status, handlingMenu = '') => `<div class="toolbar" style="margin-bottom:6px">
         <div><div class="detail-head"><h1>${esc(title)}</h1>${status}</div>
         <p class="lead" style="margin:0" id="cardLead"></p></div>
         <div class="spacer"></div>
@@ -597,6 +598,7 @@
             <tr><td>דוח לרואה החשבון</td><td><button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','accountant','pdf')">PDF</button> <button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','accountant','docx')">וורד</button></td></tr>
             <tr><td>מכתב ללקוח</td><td><button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','client','pdf')">PDF</button> <button type="button" class="quiet" onclick="exportDoc('${esc(rec.id)}','client','docx')">וורד</button></td></tr>
           </table></div></div>
+        ${handlingMenu}
         <button class="quiet" onclick="show('queue')">חזרה לתור</button>
       </div>`;
     const c = rec.result;
@@ -636,7 +638,7 @@
     const bottom = [];
           if (c.next_year_notes?.length) bottom.push({key:'actions', label:`פעולות שאפשר להתחיל כבר ב-${c.tax_year}`, html: `<div class="card"><h3>פעולות שאפשר להתחיל כבר ב-${c.tax_year} <small class="hint" style="display:inline">– על בסיס עודפי ${c.previous_year} ורווח ${c.tax_year}</small></h3><ul class="rev">${c.next_year_notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`});
           if (c.manual_review.length) bottom.push({key:'review', label:`לבדיקה ידנית ${c.manual_review.length}`, html: `<div class="card"><h3>לבדיקה ידנית</h3><ul class="rev">${c.manual_review.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`});
-          bottom.push({key:'handling', label:`טיפול · ${esc(rec.handling?.status || 'טרם טופל')}`, html: `        <div class="card"><h3>טיפול &nbsp;${handlingPill(rec.handling)}</h3>
+    const handlingMenu = `<div class="menu" id="handlingMenu"><button type="button" onclick="$('handlingMenu').classList.toggle('open')" title="סטטוס הטיפול, הערה למכתב, מעבר שנה">עדכון סטטוס ▾</button><div class="pop" style="min-width:460px;text-align:right"><h3 style="margin-top:0">עדכון סטטוס &nbsp;${handlingPill(rec.handling)}</h3>
           <div class="row">
             <label class="field"><span>סטטוס</span><select id="h_status">${(settings?.handling_statuses || ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל']).map(x => `<option ${rec.handling?.status === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
             <label class="field" style="flex:2"><span>הערה</span><input type="text" id="h_note" value="${esc(rec.handling?.note || '')}" placeholder="מה סוכם עם הלקוח"></label>
@@ -644,14 +646,23 @@
           <label class="field" style="margin-top:8px"><span>הערה מהשיחה – מצטרפת למכתב ללקוח ("בהמשך לשיחתנו")</span><textarea id="letter_note" placeholder="טקסט חופשי שייכנס למכתב">${esc(rec.letter_note || '')}</textarea></label>
           <div class="toolbar" style="margin:0"><span class="hint">${rec.handling?.at ? 'עודכן ' + when(rec.handling.at) : ''}</span><div class="spacer"></div><button onclick="saveHandling('${esc(rec.id)}')">שמירה</button></div>
           <div class="toolbar" style="margin:14px 0 0;padding-top:10px;border-top:1px solid var(--line-soft)"><span class="hint">סוף שנה: סגירת ${c.tax_year} ופתיחת ${c.tax_year + 1}</span><div class="spacer"></div><button class="quiet" id="rollBtn" onclick="askRollover('${esc(rec.id)}', ${c.tax_year})" title="הדיבידנד, ההוצאות והכרטסת של השנה הופכים ל'שנה קודמת' ונשמרים; העודפים מגולגלים כאומדן">מעבר לשנת ${c.tax_year + 1}</button></div>
-        </div>`});
+        </div></div>`;
           bottom.push({key:'history', label:`היסטוריה ${(rec.history || []).length}`, html: `<div class="card" style="grid-column:1/-1"><h3>היסטוריה <span class="hint" style="display:inline">· ${(rec.history || []).length} רשומות</span></h3>${historyHtml(rec.history || [])}</div>`});
     const notices = [];
     notices.push(`<div class="card" id="cardSlots" style="display:none;margin-bottom:12px"><h3 style="margin-top:0">עדכון מקבצים</h3><div class="slots" id="cardSlotsBody"></div></div>`);
-    notices.push(`<div class="flags">${flags.map(f => `<button type="button" class="flag ${f.tone} ${openFlags.has(f.key) ? 'on' : ''}" onclick="toggleFlag('${f.key}')">${esc(f.label)}</button>`).join('')}${flags.length ? '<span class="flagsep"></span>' : ''}${bottom.map(f => `<button type="button" class="flag neutral ${openFlags.has(f.key) ? 'on' : ''}" onclick="toggleFlag('${f.key}')">${f.label}</button>`).join('')}</div>` +
-      flags.filter(f => openFlags.has(f.key)).map(f => `<div class="notice ${f.tone}">${f.html}</div>`).join('') + bottom.filter(f => openFlags.has(f.key)).map(f => f.html).join(''));
+    // אברהם 15.10: למעלה רק מה שדורש תשומת לב (חסרים, לאישור, מאזן בוחן, מקורות, מיושן, מעבר שנה, השתנה); השאר תחת "מידע נוסף"
+    const MORE = new Set(['annual', 'today', 'actions', 'review', 'history']);
+    const topFlags = flags.filter(f => !MORE.has(f.key));
+    const more = [...flags.filter(f => MORE.has(f.key)).map(f => ({...f, notice: true})), ...bottom];
+    const openMore = more.some(f => openFlags.has(f.key));
+    if (openMore) openFlags.add('more');
+    const btn = f => `<button type="button" class="flag ${f.tone || 'neutral'} ${openFlags.has(f.key) ? 'on' : ''}" onclick="toggleFlag('${f.key}')">${esc(f.label)}</button>`;
+    notices.push(`<div class="flags">${topFlags.map(btn).join('')}${more.length ? `${topFlags.length ? '<span class="flagsep"></span>' : ''}<button type="button" class="flag neutral ${openFlags.has('more') ? 'on' : ''}" onclick="toggleMore()">מידע נוסף${openMore ? '' : ` (${more.length})`}</button>` : ''}</div>` +
+      (openFlags.has('more') && more.length ? `<div class="flags sub">${more.map(btn).join('')}</div>` : '') +
+      topFlags.filter(f => openFlags.has(f.key)).map(f => `<div class="notice ${f.tone}">${f.html}</div>`).join('') +
+      (openFlags.has('more') ? more.filter(f => openFlags.has(f.key)).map(f => f.notice ? `<div class="notice ${f.tone}">${f.html}</div>` : f.html).join('') : ''));
     if (c.years_used) notices.push(`<div class="hint" style="margin:2px 0 8px">שנים בחישוב: עודפים – ${esc(c.years_used.retained)} · ממוצע הוצאות – ${esc(c.years_used.expenses_avg)} · השנה הנבדקת – ${esc(c.years_used.current_year)} · ריכוזיות – ${esc(c.years_used.concentration)}</div>`);
-    el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall)) + notices.join('') + `
+    el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall), handlingMenu) + notices.join('') + `
       <div class="cols">
         ${foldCard('c81', !m.action_required, `סעיף 81 · תוספת מס 2% &nbsp;${pill(c.dashboard.color_81, strip(c.dashboard.status_81))}`, `${esc(k.status_label || '')} · רווחים נצברים ${ils(r.retained_for_81a)} · אין תוספת מס השנה`, kv([
           ['רווחים נצברים לתום ' + c.previous_year + (c.is_estimate ? ' <span class="hint" style="display:inline">(אומדן)</span>' : ''), ils(r.retained_for_81a)],
@@ -1146,8 +1157,9 @@
     const r = await api('mark_reviewed', id, i, acceptAll); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
     openFlags.add('sources'); const top = document.querySelector('main').scrollTop; await reload(); renderClient(); document.querySelector('main').scrollTop = top; toast('סומן כנבדק');
   }
+  function toggleMore(){ if (openFlags.has('more')){ openFlags.delete('more'); for (const k of ['annual', 'today', 'actions', 'review', 'history']) openFlags.delete(k); } else openFlags.add('more'); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
   function toggleFlag(k){ if (openFlags.has(k)) openFlags.delete(k); else openFlags.add(k); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
-  document.addEventListener('click', e => { const m = $('exportMenu'); if (m && !m.contains(e.target)) m.classList.remove('open'); });
+  document.addEventListener('click', e => { for (const id of ['exportMenu', 'handlingMenu']){ const m = $(id); if (m && !m.contains(e.target)) m.classList.remove('open'); } });
   async function exportDoc(id, kind, fmt){
     $('exportMenu')?.classList.remove('open');
     const r = await api('export_document', id, kind, fmt);
