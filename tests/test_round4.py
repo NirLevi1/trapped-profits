@@ -132,3 +132,50 @@ def test_run_rate_for_non_key_rows_and_average_for_key_rows():
     assert car["method"] == "קצב" and car["cells"][8]["v"] == 7350                            # 58,800 ÷ 8, לא 9,800
     sal = next(x for x in r["months_table"]["rows"] if x["id"] == "35")
     assert sal["method"] == "ממוצע" and sal["cells"][4]["src"] == "gap" and sal["cells"][8]["v"] == 10000
+
+
+def test_past_correction_moves_future_estimates():
+    d = _base()
+    d["data_through_month"] = 8
+    d["tb_rows"].append(_row("16", "קניות סחורה", [100000] * 8 + [0] * 4, category="קניות", section="עלויות ייצור"))
+    r0 = compute(ClientInput.from_dict(d)).to_dict()
+    row0 = next(x for x in r0["months_table"]["rows"] if x["id"] == "16")
+    assert row0["method"] == "קצב" and row0["cells"][8]["v"] == 100000
+    d["adjustments"] = [{"key": "tb:16", "month": 3, "kind": "manual", "amount": 1_100_000, "note": "", "by": "א", "at": "x"}]   # +מיליון במרץ
+    r1 = compute(ClientInput.from_dict(d)).to_dict()
+    row1 = next(x for x in r1["months_table"]["rows"] if x["id"] == "16")
+    assert row1["cells"][2]["src"] == "manual" and row1["cells"][8]["v"] == 225000            # (800K + 1M) ÷ 8
+    assert row1["total"] == 1_800_000 + 4 * 225000
+    assert r0["months_table"]["annual"]["profit"] - r1["months_table"]["annual"]["profit"] == 1_500_000   # 1M + 4 × 125K
+
+
+def test_approve_all_and_gross_profit(tmp_path, monkeypatch):
+    root = tmp_path / "root"; root.mkdir()
+    monkeypatch.setattr(S, "data_root", lambda: root)
+    st = S.ClientStore()
+    d = _base()
+    d["tb_rows"].append(_row("16", "קניות סחורה", [40000] * 6 + [0] * 6, category="קניות", section="עלויות ייצור"))
+    d["s62a"]["gross_profit_history"] = [{"year": 2025, "revenue": 1_000_000, "gross_profit": 550_000, "rate": 0.55}]
+    rec = st.save(d, None)
+    cid = rec["id"]
+    t = rec["result"]["months_table"]
+    assert any(i["status"] == "pending" for i in rec["result"]["estimate_items"])          # חור בשכירות במאי
+    pur = next(x for x in t["rows"] if x["id"] == "16")
+    assert pur["cogs"] is True and next(x for x in t["rows"] if x["id"] == "35")["cogs"] is False
+    assert t["annual"]["cogs"] == 480000 and t["annual"]["gross"] == 1_200_000 - 480000
+    assert t["gross_history"][0]["rate"] == 0.55
+    st.adjust(cid, "tb:35", 2, "manual", 15000, "")
+    new = st.approve_tb(cid)
+    t2 = new["result"]["months_table"]
+    assert t2["approved"] and not any(i["status"] == "pending" for i in new["result"]["estimate_items"])
+    sal = next(x for x in t2["rows"] if x["id"] == "35")
+    assert sal["cells"][1]["src"] == "manual" and sal["cells"][8]["src"] == "accepted"
+    assert any("מאזן בוחן אושר" in h["text"] for h in new["history"])
+    new = st.set_tb_cogs(cid, "35", True)
+    assert new["result"]["months_table"]["annual"]["cogs"] > 480000
+    # קובץ חדש עם חודש אחר – האישור פג
+    rows = new["input"]["tb_rows"]
+    new = st.apply_import(cid, {"data_through_month": 7, "tb_rows": rows}, {}, "מאזן בוחן")
+    assert new["result"]["months_table"]["approved"] is None and new["result"]["months_table"]["approved_stale"]
+    new = st.approve_tb(cid, undo=True)
+    assert new["input"]["tb_approved"] == {}

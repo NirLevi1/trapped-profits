@@ -99,8 +99,8 @@ def _diff(prev: dict | None, cur: dict) -> list[dict]:
 # אברהם 14.10 (3): מצב לכל שדה – מהקובץ (לאישור) / אושר / ידני; ושדות שרק אדם יודע
 FIELD_STATES = ("file", "approved", "manual", "carried", "estimate")
 # carried = הועבר ממעבר שנה (ערך מהשנה הקודמת שאינו בקבצים); estimate = אומדן של המערכת (לבדיקת אברהם)
-FIELD_SKIP = ("flags", "data_as_of", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year")
-TOP_LEVEL_FIELDS = ("data_as_of", "data_through_month", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year")                 # לא נרשמת להם היסטוריית ערכים
+FIELD_SKIP = ("flags", "data_as_of", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year", "tb_approved", "tb_cogs", "gp_checked")
+TOP_LEVEL_FIELDS = ("data_as_of", "data_through_month", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year", "tb_approved", "tb_cogs", "gp_checked")                 # לא נרשמת להם היסטוריית ערכים
 
 
 def _flatten(d: dict, prefix: str = "") -> dict:
@@ -550,6 +550,7 @@ class ClientStore:
         inp["months_without_revenue"] = []
         inp["tb_rows_prev_year"] = inp.get("tb_rows") or []
         inp["tb_rows"] = []
+        inp["tb_approved"] = {}
         inp["period_breakdown_months"] = {}
         inp["adjustments"] = [a for a in (inp.get("adjustments") or []) if not a.get("month")]   # תיקוני חודשים שייכים לשנה שנסגרה
         carry("s62a.top_customers_prev2_year", s62.get("top_customers_prev_year") or [], "s62a.top_customers_prev_year", f"כרטסת {ty - 1}")
@@ -580,6 +581,42 @@ class ClientStore:
         return self._write(cid, new)
 
     # ---- סבב 3: תיקונים מעל הקבצים, מקורות, סימון "נבדק"
+    def approve_tb(self, cid: str, undo: bool = False) -> dict[str, Any]:
+        """אברהם 15.10: "אשר הכל" במאזן הבוחן – כל האומדנים, החורים והאומדנים השנתיים (פחת/מלאי) מאושרים;
+        התיקונים הידניים נשארים כמו שהם; קובץ מאזן הבוחן מסומן "עברתי – נבדק". קובץ חדש (חודש אחר) – האישור פג מעצמו."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        inp = rec["input"]
+        now = datetime.now().isoformat(timespec="seconds")
+        if undo:
+            inp["tb_approved"] = {}
+        else:
+            inp["tb_approved"] = {"by": self._by(), "at": now, "through_month": int(inp.get("data_through_month") or 12)}
+        new = self.save(inp, cid)
+        if not undo:
+            for s in new.get("sources") or []:
+                if s.get("slot") == "trial_balance" and not s.get("superseded") and not s.get("reviewed"):
+                    s["reviewed"] = {"by": self._by(), "at": now}
+        n_manual = sum(1 for a in inp.get("adjustments") or [] if str(a.get("key", "")).startswith("tb:") and a.get("kind") == "manual")
+        self._log(new, "נבדק", "בוטל אישור מאזן הבוחן" if undo else
+                  f"מאזן בוחן אושר (עד חודש {inp['tb_approved']['through_month']}) – כל האומדנים מאושרים" + (f"; {n_manual} תיקונים ידניים נשמרו" if n_manual else ""))
+        return self._write(cid, new)
+
+    def set_tb_cogs(self, cid: str, row_id: str, on: bool) -> dict[str, Any]:
+        """אילו שורות במאזן הבוחן נכנסות לעלות המכר (שורת הרווח הגולמי)."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        inp = rec["input"]
+        m = dict(inp.get("tb_cogs") or {})
+        m[str(row_id)] = bool(on)
+        inp["tb_cogs"] = m
+        new = self.save(inp, cid)
+        name = next((r.get("name") for r in inp.get("tb_rows") or [] if str(r.get("id")) == str(row_id)), row_id)
+        self._log(new, "תיקון", f"{name}: {'נכנס לעלות המכר' if on else 'הוצא מעלות המכר'} (רווח גולמי)")
+        return self._write(cid, new)
+
     def adjust(self, cid: str, key: str, month, kind: str, amount: float = 0.0, note: str = "") -> dict[str, Any]:
         """אשר (accepted) / תקן (manual) / לא חסר (dismissed) / clear – לפריט אומדן או לחודש. תיקון תמיד גובר על האומדן."""
         rec = self.get(cid)
@@ -660,6 +697,32 @@ class ClientStore:
                 (dst / "reports").mkdir(exist_ok=True)
                 shutil.move(str(f), str(dst / "reports" / f.name))
         return True
+
+    def backfill_gross_history(self) -> int:
+        """אברהם 15.10: לקוחות שנקלטו לפני שהוספנו את הרווח הגולמי של שנות הדוח – קוראים אותו מהדוח השנתי שכבר הועלה (פעם אחת)."""
+        from .annual_report import parse_annual_report
+        n = 0
+        for rec in self.list():
+            inp = rec.get("input") or {}
+            s62 = inp.get("s62a") or {}
+            if s62.get("gross_profit_history") or inp.get("gp_checked"):
+                continue
+            src = next((x for x in reversed(rec.get("sources") or []) if x.get("slot") == "annual_report" and not x.get("superseded")), None)
+            p = Path(src.get("path") or "") if src else None
+            hist = []
+            if p and p.exists():
+                try:
+                    hist = parse_annual_report(p).get("fields", {}).get("s62a.gross_profit_history") or []
+                except Exception:  # noqa: BLE001
+                    hist = []
+            full = self.get(rec["id"])
+            if not full:
+                continue
+            full["input"].setdefault("s62a", {})["gross_profit_history"] = hist
+            full["input"]["gp_checked"] = True
+            self.save(full["input"], rec["id"])
+            n += 1
+        return n
 
     def recompute_all(self, only_outdated: bool = False) -> int:
         """מחשב מחדש את כל הלקוחות. only_outdated=True – רק מי שחושב בגרסת לוגיקה ישנה (אחרי update.bat)."""

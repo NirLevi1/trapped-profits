@@ -904,6 +904,22 @@ def _monthly_gaps(ci: ClientInput) -> tuple[ClientInput, list[dict], dict]:
     return ci, items, table
 
 
+COGS_SECTIONS = ("עלויות ייצור", "עלות המכירות", "עלות המכר", "עלות מכירות", "עלות ההכנסות")
+
+
+def _tb_is_approved(ci: ClientInput) -> bool:
+    """אברהם 15.10: "אשר הכל" במאזן הבוחן תקף כל עוד חודש הנתונים לא השתנה (קובץ חדש = אומדנים חדשים לבדיקה)."""
+    a = ci.tb_approved or {}
+    m = ci.data_through_month if ci.data_through_month and 1 <= ci.data_through_month <= 12 else 12
+    return bool(ci.tb_rows) and bool(a) and int(a.get("through_month") or 0) == m
+
+
+def _is_cogs_default(r: dict) -> bool:
+    if r.get("income") or r.get("kind") != "expense":
+        return False
+    return any(k in (r.get("section") or "") for k in COGS_SECTIONS) or r.get("category") == "קניות"
+
+
 def _cycle_of(filled: list[int], prev_filled: list[int], m_last: int = 12) -> int | None:
     """זיהוי מחזור תשלום: חודשים עם תנועה במרווח קבוע k (2/3/4/6).
     שלושה תשלומים במרווח זהה; או שניים במרווח זהה כשהתשלום הבא במחזור עוד לא הגיע (אין פעימה שהוחמצה) – אברהם 15.10;
@@ -938,21 +954,31 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
     out_rows: list[dict] = []
     items: list[dict] = []
     stats = {"file": 0.0, "estimate": 0.0, "correction": 0.0, "season_rows": 0, "avg_rows": 0}
+    approved = _tb_is_approved(ci)
+    cogs_over = {str(k): bool(v) for k, v in (ci.tb_cogs or {}).items()}
     for r in rows:
         inc = bool(r.get("income"))
         raw = [float(x or 0) for x in list(r.get("months") or [])[:12]] + [0.0] * (12 - len(r.get("months") or []))
         disp = [(-v if inc else v) for v in raw]                           # הכנסות בזכות – מוצגות חיוביות
-        filled = [i for i in range(m_last) if abs(disp[i]) > 0.5]
+        key = f"tb:{r.get('id')}"
+        # אברהם 15.10: תיקון על חודש שכבר עבר (ינואר–אוגוסט) משנה גם את הבסיס לאומדן החודשים הבאים
+        eff = list(disp)
+        for i in range(12):
+            if i < m_last or abs(disp[i]) > 0.5:
+                a0 = _adj_for(ci, key, i + 1)
+                if a0 and a0.get("kind") == "manual":
+                    eff[i] = float(a0.get("amount") or 0)
+        filled = [i for i in range(m_last) if abs(eff[i]) > 0.5]
         # "חור" (0 בחודש כשהשאר מלאים) נבדק רק בשורות שאמורות להיות כל חודש: הכנסות וסעיפי השלמות (שכר, עלויות מעסיק, שכירות…)
         regular = len(filled) >= max(2, round(0.6 * m_last)) and (inc or r.get("category") not in (None, "קניות"))
-        avg = (sum(disp[i] for i in filled) / len(filled)) if filled else 0.0
-        linear = sum(disp[:m_last]) / m_last if m_last else 0.0
+        avg = (sum(eff[i] for i in filled) / len(filled)) if filled else 0.0
+        linear = sum(eff[:m_last]) / m_last if m_last else 0.0
         prev = prev_by_id.get(str(r.get("id"))) or prev_by_name.get(str(r.get("name")))
         season = None
         if prev:
             pr = [float(x or 0) for x in list(prev.get("months") or [])[:12]] + [0.0] * 12
             pd = [(-v if inc else v) for v in pr[:12]]
-            base_prev, base_cur = sum(pd[:m_last]), sum(disp[:m_last])
+            base_prev, base_cur = sum(pd[:m_last]), sum(eff[:m_last])
             if base_prev > 0.5 and base_cur > 0.5 and any(abs(x) > 0.5 for x in pd[m_last:]):
                 ratio = base_cur / base_prev
                 season = [x * ratio for x in pd]
@@ -978,7 +1004,6 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
             while m < 12:
                 cyc_months.add(m)
                 m += k
-        key = f"tb:{r.get('id')}"
         cells = []
         for i in range(12):
             file_v = disp[i]
@@ -1006,6 +1031,8 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
                     v, src = 0.0, "dismissed"
                 elif adj.get("kind") == "accepted" and src in ("gap", "estimate"):
                     src = "accepted"
+            elif approved and src in ("gap", "estimate"):
+                src = "accepted"
             cells.append({"v": round(v), "src": src, "base": round(base), "note": note, "by": by, "at": at})
             if not inc and r.get("kind") == "expense":
                 if src == "file":
@@ -1022,6 +1049,8 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
         out_rows.append({"id": r.get("id"), "code": r.get("code", ""), "name": r.get("name"), "section": r.get("section", ""), "group": r.get("group", ""),
                          "income": inc, "kind": r.get("kind", ""), "category": r.get("category"), "cells": cells, "total": round(total),
                          "file_total": round(sum(disp[:m_last])),
+                         "cogs": cogs_over.get(str(r.get("id")), _is_cogs_default(r)) if r.get("kind") == "expense" else False,
+                         "cogs_default": _is_cogs_default(r),
                          "method": "עונתיות" if season else (f"מחזורי · כל {cycle} חודשים" if cycle else ("ממוצע" if regular else "קצב"))})
     def tot(kind):
         return sum(r["total"] for r in out_rows if r["kind"] == kind)
@@ -1042,8 +1071,19 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
     for kind in ("revenue", "fin_income", "other_income", "expense"):
         sums[kind] = [round(sum(r["cells"][i]["v"] for r in out_rows if r["kind"] == kind)) for i in range(12)]
     sums["profit"] = [sums["revenue"][i] + sums["fin_income"][i] + sums["other_income"][i] - sums["expense"][i] for i in range(12)]
+    # אברהם 15.10: רווח גולמי = הכנסות ממכירות − עלות המכר (השורות המסומנות "בעלות המכר")
+    sums["cogs"] = [round(sum(r["cells"][i]["v"] for r in out_rows if r.get("cogs"))) for i in range(12)]
+    sums["gross"] = [sums["revenue"][i] - sums["cogs"][i] for i in range(12)]
+    cogs_total = sum(sums["cogs"])
+    gross = revenue - cogs_total
+    a = ci.tb_approved or {}
     table = {"through_month": m_last, "rows": out_rows, "sums": sums,
-             "annual": {"revenue": round(revenue), "fin_income": round(fin), "other_income": round(other), "expenses": round(expenses), "profit": round(profit)},
+             "annual": {"revenue": round(revenue), "fin_income": round(fin), "other_income": round(other), "expenses": round(expenses), "profit": round(profit),
+                        "cogs": round(cogs_total), "gross": round(gross), "gross_rate": (gross / revenue) if revenue else None},
+             "gross_history": list(ci.s62a.gross_profit_history or []),
+             "gross_margin_report": ci.s62a.gross_margin_rate,
+             "approved": dict(a) if approved else None,
+             "approved_stale": bool(a) and not approved,
              "method": ("לפי מאזן הבוחן של השנה הקודמת (עונתיות)" if stats["season_rows"] and not stats["avg_rows"] else
                         "לפי השנה הקודמת כשיש התאמה, אחרת קצב השנה" if stats["season_rows"] else "קצב השנה – סכום עד היום ÷ חודשים (אין מאזן בוחן של השנה הקודמת)")
                        + (f"; {stats.get('cycle_rows', 0)} סעיפים מחזוריים (תשלום כל כמה חודשים)" if stats.get("cycle_rows") else ""),
@@ -1069,6 +1109,8 @@ def _estimates(ci: ClientInput) -> tuple[ClientInput, list[str]]:
             return 0.0
         if adj and adj.get("kind") in ("manual", "accepted"):
             return float(adj.get("amount") or 0)
+        if _tb_is_approved(ci):                                # "אשר הכל" במאזן הבוחן – האומדן מאושר
+            return est
         notes.append(label)
         return est
 
@@ -1116,6 +1158,8 @@ def _annual_item_keys(ci: ClientInput, notes: list[str]) -> list:
             st, amt = "dismissed", 0.0
         elif adj and adj.get("kind") in ("manual", "accepted"):
             st, amt = ("corrected" if adj["kind"] == "manual" else "accepted"), float(adj.get("amount") or 0)
+        elif _tb_is_approved(ci):
+            st = "accepted"
         return (key, {"key": key, "month": None, "label": label, "amount": amt, "estimate": est, "status": st, "note": (adj or {}).get("note", "")})
 
     if sh.depreciation_annual_estimate and not bd.get("פחת"):

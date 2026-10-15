@@ -289,7 +289,7 @@ def import_slot(slot: str, path: str | Path, tax_year: int | None = None) -> dic
         if tax_year and r.get("year"):
             notes = [n for n in r["notes"] if "תרחיש ב" not in n and "אינו מוקדם" not in n]
             f, src = map_annual_fields(r["by_year"], r["year"], int(tax_year), r.get("raw_sources", {}), notes)
-            keep = ("structure.", "shields.total_assets_cost", "shields.depreciation_annual_estimate", "s62a.has_inventory", "s62a.gross_margin_rate")
+            keep = ("structure.", "shields.total_assets_cost", "shields.depreciation_annual_estimate", "s62a.has_inventory", "s62a.gross_margin_rate", "s62a.gross_profit_history")
             base = {k: v for k, v in r["fields"].items() if k.startswith(keep)}
             f.update(base)
             src.update({k: v for k, v in r.get("sources", {}).items() if k in base})

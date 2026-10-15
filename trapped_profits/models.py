@@ -200,6 +200,7 @@ class Section62AInput:
     # אברהם (סבב 2, 14): חברה עם מלאי – מאזן בוחן באמצע שנה בלי ספירת מלאי; אומדן רווח לפי רווח גולמי מהדוח השנתי
     has_inventory: bool = False
     gross_margin_rate: Optional[float] = None                  # רווח גולמי ÷ מכירות, ממוצע שתי השנים שבדוח
+    gross_profit_history: list = field(default_factory=list)   # [{"year","revenue","gross_profit","rate"}] מהדוח השנתי
     purchases_current_year: Optional[float] = None             # קניות סחורה ממאזן הבוחן (במקום עלות מכר)
 
     # ה. מבחנים משלימים (סימון ידני)
@@ -252,6 +253,10 @@ class ClientInput:
     # כשיש שורות – השנה מחושבת מסכום 12 התאים (קובץ / אומדן / תיקון), לא מהכפלה לינארית
     tb_rows: list = field(default_factory=list)
     tb_rows_prev_year: list = field(default_factory=list)
+    # אברהם 15.10: "אשר הכל" על מאזן הבוחן – {"by","at","through_month"}; כל עוד חודש הנתונים זהה, אומדנים וחורים = מאושרים
+    tb_approved: dict = field(default_factory=dict)
+    # אילו שורות נכנסות לעלות המכר (רווח גולמי) – {row_id: true/false}; ברירת מחדל לפי סעיף הקובץ ("עלויות ייצור" / "עלות המכירות")
+    tb_cogs: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -283,4 +288,6 @@ class ClientInput:
             adjustments=[dict(a) for a in (d.get("adjustments") or [])],
             tb_rows=[dict(r) for r in (d.get("tb_rows") or [])],
             tb_rows_prev_year=[dict(r) for r in (d.get("tb_rows_prev_year") or [])],
+            tb_approved=dict(d.get("tb_approved") or {}),
+            tb_cogs=dict(d.get("tb_cogs") or {}),
         )

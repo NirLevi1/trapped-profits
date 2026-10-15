@@ -412,6 +412,7 @@ def _assets_and_margin(P: list, bs, pl, year: int, prev_year: int, notes: list[s
     if pl:
         rates = []
         used = []
+        hist = []
         for y in (year, prev_year):
             if not y or (y != year and len(pl.year_cols) < 2):
                 continue
@@ -420,6 +421,9 @@ def _assets_and_margin(P: list, bs, pl, year: int, prev_year: int, notes: list[s
             if g is not None and r:
                 rates.append(abs(g) / abs(r))
                 used.append(f"{y}: {glab} {abs(g):,.0f} ÷ {rlab} {abs(r):,.0f} = {abs(g) / abs(r):.1%}")
+                hist.append({"year": int(y), "revenue": round(abs(r)), "gross_profit": round(abs(g)), "rate": round(abs(g) / abs(r), 4)})
+        if hist:
+            f["s62a.gross_profit_history"] = sorted(hist, key=lambda h: h["year"])      # אברהם 15.10: רווח גולמי של שנות הדוח – להשוואה לשנה
         if rates:
             f["s62a.gross_margin_rate"] = round(sum(rates) / len(rates), 4)
             src["s62a.gross_margin_rate"] = "; ".join(used)

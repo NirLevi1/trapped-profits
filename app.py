@@ -83,6 +83,10 @@ class Api:
             self.store.recompute_all(only_outdated=True)
         except Exception:  # noqa: BLE001 – לא מפיל את התוכנה; המשתמש יכול "חישוב מחדש לכולם"
             pass
+        try:
+            self.store.backfill_gross_history()          # רווח גולמי של שנות הדוח ללקוחות קיימים – מהדוח השנתי שכבר הועלה
+        except Exception:  # noqa: BLE001
+            pass
 
     # ---- read
     def list_clients(self):
@@ -361,6 +365,18 @@ class Api:
     def adjust(self, cid: str, key: str, month=None, kind: str = "accepted", amount: float = 0.0, note: str = ""):
         try:
             return self.store.adjust(cid, key, month, kind, amount, note)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
+    def approve_tb(self, cid: str, undo: bool = False):
+        try:
+            return self.store.approve_tb(cid, bool(undo))
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
+    def set_tb_cogs(self, cid: str, row_id: str, on: bool):
+        try:
+            return self.store.set_tb_cogs(cid, str(row_id), bool(on))
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 

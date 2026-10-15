@@ -182,11 +182,14 @@
   table.tb tr.sec td{background:var(--canvas-2);font-weight:600;color:var(--ink-2);padding-top:6px} table.tb tr.grp td{color:var(--ink-3);font-size:11px;padding-top:4px} table.tb tr.sum td{font-weight:600;border-top:1px solid var(--line)} table.tb tr.sum.profit td{background:var(--canvas-2)}
   table.tb td.c{cursor:pointer;min-width:62px} table.tb td.c:hover{outline:1px solid var(--line)} table.tb td.c.estimate{background:var(--warn-bg);color:#7a5a12} table.tb td.c.gap{background:var(--serious-bg);color:var(--serious);font-weight:600} table.tb td.c.manual{background:var(--info-bg);color:var(--info);font-weight:600} table.tb td.c.accepted{background:var(--good-bg);color:var(--good)} table.tb td.c.dismissed{background:var(--neutral-bg);color:var(--ink-3)} table.tb td.c.zero{color:var(--ink-3)}
   table.tb td.c input{width:84px;padding:2px 4px;font-size:12px;text-align:left} .tblegend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--ink-3);margin:6px 0 2px} .tblegend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-inline-end:4px;border:1px solid var(--line-soft)}
+  .tbbar{display:flex;gap:10px;align-items:center;justify-content:space-between;margin:8px 0 0;flex-wrap:wrap} .tbbar .okline{color:var(--good);font-weight:600}
+  table.tb tr.sum.gross td{background:var(--good-bg);color:var(--ink);font-weight:600;border-top:1px solid var(--line)} table.tb tr.sum.gross td.cat{color:var(--ink-2);font-weight:400}
+  table.tb button.cogs{font-size:10px;padding:1px 6px;border-radius:9px;border:1px dashed var(--line);background:transparent;color:var(--ink-3);margin-inline-end:4px} table.tb button.cogs.on{border-style:solid;border-color:var(--good);color:var(--good);background:var(--good-bg)}
   .gaplist{margin-top:10px;display:grid;gap:6px} .gapitem{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:8px 10px;border:1px solid var(--line-soft);border-radius:6px;background:var(--surface);color:var(--ink)} .gapitem.pending{border-color:var(--warn)} .gapitem .ga{display:flex;gap:4px;flex-wrap:wrap} .gapitem .gs{white-space:nowrap;font-size:12px;color:var(--ink-2)}
   tr.sup{opacity:.55}
   .status-card.upd{background:var(--info-bg);color:var(--info);border-color:transparent;margin-top:8px}
   .flag{border:1px solid transparent;border-radius:999px;padding:3px 10px;font-size:12px;line-height:18px;cursor:pointer;font-family:inherit}
-  .flag.serious{background:var(--serious-bg);color:var(--serious)} .flag.warn{background:var(--warn-bg);color:var(--warn)} .flag.info{background:var(--info-bg);color:var(--info)} .flag.neutral{background:var(--neutral-bg);color:var(--ink-2)}
+  .flag.serious{background:var(--serious-bg);color:var(--serious)} .flag.warn{background:var(--warn-bg);color:var(--warn)} .flag.info{background:var(--info-bg);color:var(--info)} .flag.neutral{background:var(--neutral-bg);color:var(--ink-2)} .flag.good{background:var(--good-bg);color:var(--good)} .notice.good{background:var(--neutral-bg)}
   .flags.sub{margin-top:-4px;padding-inline-start:12px} .flags.sub .flag{font-size:11px} .menu .pop h3{font-size:12px;font-weight:500;color:var(--ink-3);margin:0 0 10px}
   .flag.on{border-color:currentColor} .flagsep{width:1px;height:18px;background:var(--line);margin:3px 4px} .flag::before{content:'▸ ';opacity:.7} .flag.on::before{content:'▾ '}
   .menu{position:relative} .menu .pop{display:none;position:absolute;top:calc(100% + 4px);inset-inline-end:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.08);padding:10px 12px;z-index:6;min-width:260px;max-width:calc(100vw - 32px)} .menu.open .pop{display:block}
@@ -366,6 +369,7 @@
       case 'adjust': { const r = S.find(x => x.id === a); if (!r) return null; const [key, month, kind, amount, note] = [b, c, d, e, f]; r.input.adjustments = (r.input.adjustments || []).filter(x => !(x.key === key && (x.month || null) === (month || null))); if (kind !== 'clear') r.input.adjustments.push({key, month, kind, amount, note}); (r.result.estimate_items || []).forEach(it => { if (it.key === key && (it.month || null) === (month || null)){ it.status = kind === 'clear' ? 'pending' : kind === 'manual' ? 'corrected' : kind; if (kind === 'manual' || kind === 'accepted') it.amount = amount; if (kind === 'dismissed') it.amount = 0; it.note = note || ''; } }); return r; }
       case 'mark_reviewed': { const r = S.find(x => x.id === a); if (r?.sources?.[b]) r.sources[b].reviewed = {by: 'אברהם', at: new Date().toISOString()}; return r; }
       case 'open_source': return {ok: true};
+      case 'approve_tb': case 'set_tb_cogs': return {error: 'זמין רק בתוכנה המותקנת'};
       case 'rollover_year': { const r = S.find(x => x.id === a); if (!r) return null; const ty = r.input.structure.tax_year; r.input.structure.tax_year = ty + 1; (r.history = r.history || []).push({at:new Date().toISOString(), kind:'מעבר שנה', tax_year: ty + 1, text:'הדגמה', checklist:[`דיבידנד ${ty} הועבר לשנה קודמת`, `להעלות מאזן בוחן וכרטסת ${ty + 1}`]}); return r; }
       case 'approve_fields': { const r = S.find(x => x.id === a); if (r){ Object.values(r.field_meta || {}).forEach(m => { if (m.state === 'file') m.state = 'approved'; }); r.pending_file_fields = []; } return r; }
       case 'apply_import': return {error: 'זמין רק בתוכנה'};
@@ -623,7 +627,7 @@
       if (items.length) addFlag('missing', 'serious', `חסרים ${items.length}`, `<ul style="margin:0;padding-inline-start:18px">${items.map(i => `<li style="color:var(--${i.t})">${esc(i.x)}</li>`).join('')}</ul><div class="hint" style="margin-top:6px"><button class="quiet" onclick="editClient('${esc(rec.id)}')">להשלים בעריכה</button></div>`); }
     if (rec.pending_file_fields?.length) addFlag('pending', 'warn', `לאישור ${rec.pending_file_fields.length}`, `<div style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
     { const items = c.estimate_items || []; const pend = items.filter(i => i.status === 'pending').length;
-      if (c.months_table) addFlag('gaps', pend ? 'warn' : 'neutral', pend ? `מאזן בוחן · ${pend} לבדיקה` : 'מאזן בוחן', gapsHtml(rec, c));
+      if (c.months_table) addFlag('gaps', pend ? 'warn' : (c.months_table.approved ? 'good' : 'neutral'), pend ? `מאזן בוחן · ${pend} לבדיקה` : (c.months_table.approved ? 'מאזן בוחן ✓' : 'מאזן בוחן'), gapsHtml(rec, c));
       else if (items.length || Object.keys(c.months_gap_table || {}).length) addFlag('gaps', pend ? 'warn' : 'neutral', pend ? `חוסרים ${pend}` : 'חוסרים – טופלו', gapsHtml(rec, c)); }
     { const srcs = (rec.sources || []); const live = srcs.filter(x => !x.superseded); const unrev = live.filter(x => !x.reviewed).length;
       if (srcs.length) addFlag('sources', unrev ? 'warn' : 'neutral', unrev ? `מקורות · ${unrev} לבדיקה` : `מקורות ${live.length}`, sourcesHtml(rec)); }
@@ -1100,25 +1104,51 @@
       return `<td class="num c ${cl.src} ${cl.v === 0 && cl.src === 'file' ? 'zero' : ''}" title="${esc(tip)}" onclick="tbEdit(this,'${id}','tb:${esc(String(r.id))}',${i + 1},${cl.v},'${cl.src}',${cl.base})">${fmtNum(cl.v)}</td>`;
     };
     const rows = t.rows;                               // סדר הקובץ – כמו במסמך
-    let lastSec = null, lastGrp = null, html = '';
+    const sums = t.sums || {}, an = t.annual || {};
+    const pct1 = v => v == null ? '' : (v * 100).toFixed(1) + '%';
+    const hist = t.gross_history || [];
+    const grossRow = () => `<tr class="sum gross"><td title="הכנסות ממכירות פחות עלות המכר (השורות המסומנות &quot;עלות מכר&quot;)">רווח גולמי</td>${(sums.gross || []).map((v, i) => `<td class="num">${fmtNum(v)}</td>`).join('')}<td class="num">${fmtNum(an.gross)}</td><td class="cat"><b>${pct1(an.gross_rate)}</b>${hist.length ? ' · בדוח: ' + hist.map(h => `${h.year} ${pct1(h.rate)}`).join(', ') : ''}</td></tr>`;
+    let lastSec = null, lastGrp = null, html = '', grossDone = false;
     for (const r of rows){
+      if (!grossDone && r.kind !== 'revenue' && rows.some(x => x.kind === 'revenue')){ html += grossRow(); grossDone = true; }
       if (r.section !== lastSec){ html += `<tr class="sec"><td colspan="15">${esc(r.section || (r.income ? 'הכנסות' : 'הוצאות'))}</td></tr>`; lastSec = r.section; lastGrp = null; }
       if (r.group && r.group !== lastGrp){ html += `<tr class="grp"><td colspan="15">${esc(r.group)}</td></tr>`; lastGrp = r.group; }
-      html += `<tr><td class="name" title="${esc((r.code ? r.code + ' ' : '') + r.name)}">${esc(r.name)}</td>${r.cells.map((cl, i) => cell(r, cl, i)).join('')}<td class="num"><b>${fmtNum(r.total)}</b></td><td class="cat" title="${r.method === 'עונתיות' ? 'אומדן לפי אותו חודש בשנה הקודמת, מותאם לקצב השנה' : r.method === 'ממוצע' ? 'סעיף שאמור להיות כל חודש – ממוצע החודשים שיש בהם סכום (חודש 0 מסומן כחור)' : r.method.startsWith('מחזורי') ? 'תשלום כל כמה חודשים – המערכת ממשיכה את המחזור (סכום ממוצע של תשלום, אפס בין לבין)' : 'קצב השנה: הסכום עד היום ÷ מספר החודשים – לכל חודש עתידי'}">${esc(r.category || '')}${r.category ? ' · ' : ''}${esc(r.method)}</td></tr>`;
+      html += `<tr><td class="name" title="${esc((r.code ? r.code + ' ' : '') + r.name)}">${esc(r.name)}</td>${r.cells.map((cl, i) => cell(r, cl, i)).join('')}<td class="num"><b>${fmtNum(r.total)}</b></td><td class="cat" title="${r.method === 'עונתיות' ? 'אומדן לפי אותו חודש בשנה הקודמת, מותאם לקצב השנה' : r.method === 'ממוצע' ? 'סעיף שאמור להיות כל חודש – ממוצע החודשים שיש בהם סכום (חודש 0 מסומן כחור)' : r.method.startsWith('מחזורי') ? 'תשלום כל כמה חודשים – המערכת ממשיכה את המחזור (סכום ממוצע של תשלום, אפס בין לבין)' : 'קצב השנה: הסכום עד היום ÷ מספר החודשים – לכל חודש עתידי'}">${r.kind === 'expense' ? `<button type="button" class="cogs ${r.cogs ? 'on' : ''}" title="${r.cogs ? 'נכנס לעלות המכר (רווח גולמי) – לחיצה מוציאה' : 'לא בעלות המכר – לחיצה מכניסה לחישוב הרווח הגולמי'}" onclick="setCogs('${id}','${esc(String(r.id))}',${r.cogs ? 'false' : 'true'})">עלות מכר</button> ` : ''}${esc(r.category || '')}${r.category ? ' · ' : ''}${esc(r.method)}</td></tr>`;
     }
     const sumRow = (label, arr, cls = '') => `<tr class="sum ${cls}"><td>${label}</td>${arr.map(v => `<td class="num">${fmtNum(v)}</td>`).join('')}<td class="num">${fmtNum(arr.reduce((a, b) => a + b, 0))}</td><td></td></tr>`;
-    const sums = t.sums || {};
+    if (!grossDone) html += grossRow();
     const income = (sums.revenue || []).map((v, i) => v + (sums.fin_income?.[i] || 0) + (sums.other_income?.[i] || 0));
-    html += sumRow('סה"כ הכנסות', income) + sumRow('סה"כ הוצאות', sums.expense || []) + sumRow('רווח לפני מס', sums.profit || [], 'profit');
+    html += sumRow('סה"כ הכנסות', income) + sumRow('עלות המכר', sums.cogs || []) + sumRow('סה"כ הוצאות', sums.expense || []) + sumRow('רווח לפני מס', sums.profit || [], 'profit');
     const legend = `<div class="tblegend"><span><i style="background:var(--surface)"></i>מהקובץ</span><span><i style="background:var(--warn-bg)"></i>אומדן (חודש שטרם הוזן) – ${esc(t.method)}</span><span><i style="background:var(--serious-bg)"></i>חור – חודש בלי תנועה</span><span><i style="background:var(--info-bg)"></i>תיקון של רואה החשבון</span><span><i style="background:var(--good-bg)"></i>אומדן שאושר</span><span>לחיצה על תא – עריכה; ההנחיה נשמרת ומחשבת מיד</span></div>`;
-    return `<div class="tablewrap tbwrap"><table class="tb"><tr><th>סעיף</th>${MONTHS_HE.map((mm, i) => `<th class="num ${i + 1 > m ? 'est' : ''}">${mm}${i + 1 > m ? ' ◌' : ''}</th>`).join('')}<th class="num">שנה</th><th>משויך ל־ · שיטה</th></tr>${html}</table></div>${legend}`;
+    const ap = t.approved;
+    const bar = `<div class="tbbar">${ap ? `<span class="okline">✓ מאזן הבוחן אושר – ${esc(ap.by || '')} ${when(ap.at).slice(0, 10)}. תיקון נוסף נשמר כרגיל.</span><button class="quiet" onclick="approveTb('${id}', true)">ביטול אישור</button>` : `<span class="hint">${t.approved_stale ? 'הגיע קובץ חדש מאז האישור הקודם – לעבור שוב. ' : ''}אחרי שעברת על הטבלה: אישור אחד לכל האומדנים (צהוב), החורים (אדום) והאומדנים השנתיים. התיקונים שלך נשמרים.</span><button onclick="approveTb('${id}', false)">✓ אשר הכל</button>`}</div>`;
+    return `${bar}<div class="tablewrap tbwrap"><table class="tb"><tr><th>סעיף</th>${MONTHS_HE.map((mm, i) => `<th class="num ${i + 1 > m ? 'est' : ''}">${mm}${i + 1 > m ? ' ◌' : ''}</th>`).join('')}<th class="num">שנה</th><th>משויך ל־ · שיטה</th></tr>${html}</table></div>${legend}`;
   }
   function tbEdit(td, id, key, month, cur, src, base){
     if (td.querySelector('input')) return;
-    const undo = (src === 'manual' || src === 'accepted' || src === 'dismissed') ? `<button class="quiet" title="חזרה לערך מהקובץ / לאומדן" onclick="event.stopPropagation();adjust('${id}','${key}',${month},'clear',0)">↶</button>` : '';
-    const acc = (src === 'estimate' || src === 'gap') ? `<button class="quiet" title="אישור האומדן" onclick="event.stopPropagation();adjust('${id}','${key}',${month},'accepted',${base})">✓</button>` : '';
-    td.innerHTML = `<span style="display:inline-flex;gap:3px;align-items:center"><input type="text" inputmode="numeric" dir="ltr" value="${fmtNum(cur)}" oninput="fmtInput(this)" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'){adjust('${id}','${key}',${month},'manual',parseNum(this.value)||0,'')}else if(event.key==='Escape'){renderClient()}" onblur="setTimeout(()=>{if(document.activeElement?.closest&&!document.activeElement.closest('td.c'))renderClient()},150)">${acc}${undo}</span>`;
+    // הכפתורים לא לוקחים פוקוס (mousedown) – כדי שהיציאה מהשדה לא תשמור לפני שהם פועלים
+    const undo = (src === 'manual' || src === 'accepted' || src === 'dismissed') ? `<button class="quiet" title="חזרה לערך מהקובץ / לאומדן" onmousedown="event.preventDefault()" onclick="event.stopPropagation();tbDone(this);adjust('${id}','${key}',${month},'clear',0)">↶</button>` : '';
+    const acc = (src === 'estimate' || src === 'gap') ? `<button class="quiet" title="אישור האומדן" onmousedown="event.preventDefault()" onclick="event.stopPropagation();tbDone(this);adjust('${id}','${key}',${month},'accepted',${base})">✓</button>` : '';
+    td.innerHTML = `<span style="display:inline-flex;gap:3px;align-items:center"><input type="text" inputmode="numeric" dir="ltr" value="${fmtNum(cur)}" data-cur="${cur}" oninput="fmtInput(this)" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'){tbSave(this,'${id}','${key}',${month})}else if(event.key==='Escape'){tbDone(this);renderClient()}" onblur="tbSave(this,'${id}','${key}',${month})">${acc}${undo}</span>`;
     td.onclick = null; const inp = td.querySelector('input'); inp.focus(); inp.select();
+  }
+  function tbDone(el){ const i = el.closest('td')?.querySelector('input'); if (i) i.dataset.done = '1'; }
+  // אברהם 15.10: Enter או יציאה מהתא – שומר ומחשב (אם הערך השתנה); אחרת חוזר לתצוגה
+  function tbSave(inp, id, key, month){
+    if (inp.dataset.done) return; inp.dataset.done = '1';
+    const v = parseNum(inp.value);
+    if (v == null || Math.round(v) === Math.round(Number(inp.dataset.cur))){ renderClient(); return; }
+    adjust(id, key, month, 'manual', v, '');
+  }
+  async function approveTb(id, undo){
+    const r = await api('approve_tb', id, !!undo); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
+    openFlags.add('gaps'); const top = document.querySelector('main').scrollTop; await reload(); renderClient(); document.querySelector('main').scrollTop = top;
+    toast(undo ? 'האישור בוטל' : 'מאזן הבוחן אושר – כל האומדנים מאושרים');
+  }
+  async function setCogs(id, rowId, on){
+    const r = await api('set_tb_cogs', id, rowId, on); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
+    openFlags.add('gaps'); const top = document.querySelector('main').scrollTop; await reload(); renderClient(); document.querySelector('main').scrollTop = top;
+    toast(on ? 'נכנס לעלות המכר' : 'הוצא מעלות המכר');
   }
   function gapsHtml(rec, c){
     const tbl = c.months_gap_table || {}, items = c.estimate_items || [], bd = c.data_breakdown || {};
