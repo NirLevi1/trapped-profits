@@ -46,6 +46,10 @@
   main{flex:1;min-width:0;overflow:auto;padding:24px 28px 40px}
   .screen{display:none;max-width:1040px}
   #s-queue,#s-clients,#s-client{max-width:1180px}
+  /* מסכים רחבים ברזולוציה מלאה (1920 ומעלה, כמו אצל אברהם): מגדילים את כל הממשק כדי שלא יישאר חצי מסך ריק */
+  @media (min-width:1600px){ body{zoom:1.15} }
+  @media (min-width:1900px){ body{zoom:1.25} #s-queue,#s-clients,#s-client{max-width:1280px} .screen{max-width:1100px} }
+  @media (min-width:2400px){ body{zoom:1.5} }
   @media (max-width:1360px){ table.qtable th:nth-child(9),table.qtable td:nth-child(9){display:none} }
   @media (max-width:1200px){ table.qtable th:nth-child(8),table.qtable td:nth-child(8){display:none} }
   .screen.active{display:block}
