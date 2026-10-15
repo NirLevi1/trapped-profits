@@ -4,6 +4,8 @@ cd "$(dirname "$0")"
 LOG=setup.log
 {
   echo "=== $(date) ==="
+  # עדכון אוטומטי: אם זו תיקיית גיט ויש רשת – מושך את הגרסה האחרונה (data/ לא נוגעים). בלי רשת – פשוט רץ
+  if [ -d .git ] && command -v git >/dev/null 2>&1; then git pull --ff-only --quiet && echo "up to date" || echo "update skipped (offline or local change)"; fi
   if [ ! -d .venv ]; then python3 -m venv .venv || exit 1; fi
   source .venv/bin/activate
   python3 -m pip install --upgrade pip -q

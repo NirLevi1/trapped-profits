@@ -242,6 +242,60 @@ class Api:
             pass
         return {"moved": moved}
 
+    # ---- עדכונים מרחוק (ניר דוחף לגיטהאב → אצל אברהם "עדכון והפעלה מחדש")
+    def _git(self, *args, timeout=25):
+        import subprocess
+        root = app_dir()
+        if not (root / ".git").exists():
+            return None
+        try:
+            kw = {"creationflags": 0x08000000} if sys.platform.startswith("win") else {}   # בלי חלון שחור
+            r = subprocess.run(["git", *args], cwd=str(root), capture_output=True, text=True, timeout=timeout, **kw)
+            return r
+        except Exception:  # noqa: BLE001 – אין גיט / אין רשת
+            return None
+
+    def check_update(self):
+        """כמה גרסאות אחורה אנחנו מול גיטהאב. {"behind": n, "notes": [...]} ; {"behind": 0}; {"unavailable": סיבה}."""
+        if not (app_dir() / ".git").exists():
+            return {"unavailable": "התוכנה לא הותקנה מגיטהאב – עדכון ידני"}
+        r = self._git("fetch", "--quiet", timeout=30)
+        if r is None or r.returncode != 0:
+            return {"unavailable": "אין חיבור לגיטהאב כרגע"}
+        br = self._git("rev-parse", "--abbrev-ref", "HEAD")
+        branch = (br.stdout.strip() if br and br.returncode == 0 else "main") or "main"
+        c = self._git("rev-list", "--count", f"HEAD..origin/{branch}")
+        n = int(c.stdout.strip() or 0) if c and c.returncode == 0 else 0
+        notes = []
+        if n:
+            lg = self._git("log", "--format=%s", f"HEAD..origin/{branch}")
+            notes = [x for x in (lg.stdout.splitlines() if lg else []) if x][:8]
+        return {"behind": n, "notes": notes, "version": APP_VERSION}
+
+    def apply_update(self):
+        """מושך את הגרסה האחרונה ומפעיל מחדש. הנתונים (data/) לא בגיט ולא נוגעים בהם."""
+        r = self._git("pull", "--ff-only", timeout=90)
+        if r is None or r.returncode != 0:
+            return {"error": "העדכון נכשל: " + ((r.stderr or r.stdout).strip()[-300:] if r else "אין גיט/רשת")}
+        self._restart()
+        return {"ok": True}
+
+    @staticmethod
+    def _restart():
+        import subprocess
+        import threading
+        root = app_dir()
+
+        def go():
+            import time
+            time.sleep(0.8)
+            if sys.platform.startswith("win"):
+                subprocess.Popen(["cmd", "/c", "start", "", str(root / "run.bat")], cwd=str(root), creationflags=0x08000000)
+            else:
+                subprocess.Popen(["/bin/bash", str(root / "run.command")], cwd=str(root))
+            os._exit(0)
+        threading.Thread(target=go, daemon=True).start()
+
     def open_data_folder(self):
         open_path(str(self.store.root.parent))      # data/ – לקוחות, קבצים שהועלו, דוחות
         return True

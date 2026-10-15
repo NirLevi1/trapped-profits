@@ -4,7 +4,11 @@ REM Installs Python and Git if missing (via winget), clones the code to %USERPRO
 REM Safe to run again: if the folder already exists it just updates and starts.
 setlocal
 set TARGET=%USERPROFILE%\trapped-profits
+REM The repo is private. Put a read-only GitHub token (fine-grained, this repo only, Contents: read) here
+REM so the office PC can pull updates by itself. Leave empty to be asked for GitHub login when cloning.
+set TOKEN=
 set REPO=https://github.com/NirLevi1/trapped-profits
+if not "%TOKEN%"=="" set REPO=https://%TOKEN%@github.com/NirLevi1/trapped-profits
 
 echo.
 echo  ==== Fortera - Trapped Profits - install ====

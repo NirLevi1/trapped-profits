@@ -170,6 +170,7 @@
   .notice.serious{background:var(--serious-bg);color:var(--serious)}
   .notice.info{background:var(--info-bg);color:var(--info)} .notice.neutral{background:var(--neutral-bg);color:var(--ink-2)}
   .flags{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
+  .status-card.upd{background:var(--info-bg);color:var(--info);border-color:transparent;margin-top:8px}
   .flag{border:1px solid transparent;border-radius:999px;padding:3px 10px;font-size:12px;line-height:18px;cursor:pointer;font-family:inherit}
   .flag.serious{background:var(--serious-bg);color:var(--serious)} .flag.warn{background:var(--warn-bg);color:var(--warn)} .flag.info{background:var(--info-bg);color:var(--info)} .flag.neutral{background:var(--neutral-bg);color:var(--ink-2)}
   .flag.on{border-color:currentColor} .flagsep{width:1px;height:18px;background:var(--line);margin:3px 4px} .flag::before{content:'▸ ';opacity:.7} .flag.on::before{content:'▾ '}
@@ -211,6 +212,7 @@
   </nav>
   <div class="bottom">
     <div class="status-card" id="statusCard"><b>—</b><span id="statusText"></span></div>
+    <div class="status-card upd" id="updCard" style="display:none;cursor:pointer" onclick="show('settings')"><b>יש גרסה חדשה</b><span id="updCardText"></span></div>
     <button class="quiet" onclick="api('open_data_folder')">פתיחת תיקיית הנתונים</button>
   </div>
 </aside>
@@ -265,6 +267,11 @@
         <div class="pathbox"><span id="st_dir" dir="ltr"></span><button type="button" class="quiet" onclick="api('open_data_folder')">פתיחה</button><button type="button" class="quiet" onclick="chooseDataFolder()">שינוי…</button></div>
         <div class="hint">הלקוחות, הקבצים שהועלו והדוחות. אפשר להפנות לתיקייה משותפת במשרד; הקבצים הקיימים לא עוברים לבד.</div>
       </div>
+    </div>
+    <h2>עדכונים</h2>
+    <div class="card">
+      <div class="toolbar" style="margin:0"><div><b id="upd_title">גרסה —</b><div class="hint" id="upd_text">לחיצה על "בדיקת עדכונים" בודקת מול גיטהאב. עדכון מושך את הגרסה האחרונה ומפעיל מחדש; הנתונים לא נוגעים.</div></div><div class="spacer"></div><button type="button" onclick="checkUpdate(true)">בדיקת עדכונים</button><button type="button" class="primary" id="upd_btn" style="display:none" onclick="applyUpdate()">עדכון והפעלה מחדש</button></div>
+      <ul class="rev" id="upd_notes" style="display:none;margin-top:8px"></ul>
     </div>
     <h2>נקודות פתוחות לאישור אברהם (דגלים)</h2>
     <div class="card">
@@ -338,6 +345,7 @@
       case 'import_file': return {error: 'ייבוא קבצים זמין רק בתוכנה המותקנת'};
       case 'revert_field': { const r = S.find(x => x.id === a); const m = r?.field_meta?.[b]; if (!m?.prev?.length) return {error:'אין ערך קודם לשדה הזה'}; const last = m.prev.pop(); const ps = b.split('.'); let x = r.input; ps.slice(0,-1).forEach(q => x = x[q]); x[ps.at(-1)] = last.value; m.state = last.state || 'manual'; return r; }
       case 'revert_today': return S.find(x => x.id === a);
+      case 'check_update': return {unavailable: 'תצוגת דפדפן – אין גיט'};
       case 'rollover_year': { const r = S.find(x => x.id === a); if (!r) return null; const ty = r.input.structure.tax_year; r.input.structure.tax_year = ty + 1; (r.history = r.history || []).push({at:new Date().toISOString(), kind:'מעבר שנה', tax_year: ty + 1, text:'הדגמה', checklist:[`דיבידנד ${ty} הועבר לשנה קודמת`, `להעלות מאזן בוחן וכרטסת ${ty + 1}`]}); return r; }
       case 'approve_fields': { const r = S.find(x => x.id === a); if (r){ Object.values(r.field_meta || {}).forEach(m => { if (m.state === 'file') m.state = 'approved'; }); r.pending_file_fields = []; } return r; }
       case 'apply_import': return {error: 'זמין רק בתוכנה'};
@@ -1079,7 +1087,30 @@
     records = (await api('list_clients')) || [];
     renderQueue(); renderReview(); renderClients();
   }
-  function boot(){ MOCK = isMock(); api('field_info').then(r => { if (r?.human_only) humanOnly = r.human_only; }); loadSettings().then(reload); }
+  function boot(){ MOCK = isMock(); api('field_info').then(r => { if (r?.human_only) humanOnly = r.human_only; }); loadSettings().then(reload); if (!MOCK) setTimeout(() => checkUpdate(false), 4000); }
+  let updInfo = null;
+  async function checkUpdate(manual){
+    const r = await api('check_update'); updInfo = r;
+    const t = $('upd_title'), x = $('upd_text'), btn = $('upd_btn'), notes = $('upd_notes'), card = $('updCard');
+    if (t) t.textContent = `גרסה ${settings?.app_version || '1.0'}`;
+    if (!r || r.unavailable){ if (x && manual) x.textContent = r?.unavailable || 'בדיקת עדכונים זמינה רק בתוכנה המותקנת'; if (manual) toast(r?.unavailable || 'לא זמין'); return; }
+    if (r.behind > 0){
+      if (x) x.textContent = `יש גרסה חדשה (${r.behind} שינויים). העדכון לוקח כחצי דקה ומפעיל מחדש.`;
+      if (btn) btn.style.display = '';
+      if (notes){ notes.style.display = ''; notes.innerHTML = r.notes.map(n => `<li>${esc(n)}</li>`).join(''); }
+      if (card){ card.style.display = ''; $('updCardText').textContent = `${r.behind} שינויים – לחיצה לעדכון`; }
+      if (manual) toast(`יש גרסה חדשה – ${r.behind} שינויים`);
+    } else {
+      if (x) x.textContent = 'התוכנה מעודכנת.'; if (btn) btn.style.display = 'none'; if (notes) notes.style.display = 'none'; if (card) card.style.display = 'none';
+      if (manual) toast('התוכנה מעודכנת');
+    }
+  }
+  async function applyUpdate(){
+    const btn = $('upd_btn'); if (btn){ btn.disabled = true; btn.textContent = 'מעדכן…'; }
+    toast('מושך את הגרסה החדשה… התוכנה תיסגר ותיפתח מחדש');
+    const r = await api('apply_update');
+    if (!r || r.error){ toast(r?.error || 'העדכון נכשל'); if (btn){ btn.disabled = false; btn.textContent = 'עדכון והפעלה מחדש'; } }
+  }
   window.addEventListener('pywebviewready', boot);   // התוכנה: נטען שוב מהמנוע ברגע שהגשר מוכן
   boot();                                            // דפדפן / לפני שהגשר מוכן: דמו או ריק
 </script>

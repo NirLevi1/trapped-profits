@@ -14,6 +14,14 @@ if "%PY%"=="" (
 )
 echo using %PY% >> setup.log
 
+REM ---- Auto-update: pull the latest code from GitHub when online (data\ is never touched). Offline -> just runs.
+if exist .git (
+  where git >nul 2>nul && (
+    echo checking for updates... >> setup.log
+    git pull --ff-only --quiet >> setup.log 2>&1 && echo up to date >> setup.log || echo update skipped (offline or local change) >> setup.log
+  )
+)
+
 if not exist .venv (
   echo Creating virtual environment...
   %PY% -m venv .venv >> setup.log 2>&1 || (echo venv failed - see setup.log & pause & exit /b 1)
