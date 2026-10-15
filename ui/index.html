@@ -177,7 +177,7 @@
   .flag{border:1px solid transparent;border-radius:999px;padding:3px 10px;font-size:12px;line-height:18px;cursor:pointer;font-family:inherit}
   .flag.serious{background:var(--serious-bg);color:var(--serious)} .flag.warn{background:var(--warn-bg);color:var(--warn)} .flag.info{background:var(--info-bg);color:var(--info)} .flag.neutral{background:var(--neutral-bg);color:var(--ink-2)}
   .flag.on{border-color:currentColor} .flagsep{width:1px;height:18px;background:var(--line);margin:3px 4px} .flag::before{content:'▸ ';opacity:.7} .flag.on::before{content:'▾ '}
-  .menu{position:relative} .menu .pop{display:none;position:absolute;top:calc(100% + 4px);inset-inline-start:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.08);padding:10px 12px;z-index:6;min-width:260px} .menu.open .pop{display:block}
+  .menu{position:relative} .menu .pop{display:none;position:absolute;top:calc(100% + 4px);inset-inline-end:0;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.08);padding:10px 12px;z-index:6;min-width:260px;max-width:calc(100vw - 32px)} .menu.open .pop{display:block}
   .pop table{font-size:13px} .pop td{padding:4px 8px;border:0;white-space:nowrap} .pop td:first-child{color:var(--ink-2);padding-inline-end:16px}
   .toast{position:fixed;inset-inline-start:24px;bottom:20px;background:var(--ink);color:var(--canvas);padding:10px 14px;border-radius:6px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
   .toast.show{opacity:1}
@@ -604,7 +604,7 @@
     // אברהם (ממשק 3): ההתראות בטוגלים – שורת צ'יפים עם מונים, לחיצה פותחת את הפירוט
     const flags = [];
     const addFlag = (key, tone, label, html) => flags.push({key, tone, label, html});
-    { const items = [...(rec.missing_human || []).map(x => ({t: 'serious', x: x + ' – רק אברהם יודע'})), ...(c.missing_fields || []).map(x => ({t: 'warn', x: x + ' – חושב עם אפס'}))];
+    { const items = [...(rec.missing_human || []).map(x => ({t: 'serious', x})), ...(c.missing_fields || []).map(x => ({t: 'warn', x: x + ' – חושב עם אפס'}))];
       if (items.length) addFlag('missing', 'serious', `חסרים ${items.length}`, `<ul style="margin:0;padding-inline-start:18px">${items.map(i => `<li style="color:var(--${i.t})">${esc(i.x)}</li>`).join('')}</ul><div class="hint" style="margin-top:6px"><button class="quiet" onclick="editClient('${esc(rec.id)}')">להשלים בעריכה</button></div>`); }
     if (rec.pending_file_fields?.length) addFlag('pending', 'warn', `לאישור ${rec.pending_file_fields.length}`, `<div style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
     { const items = c.estimate_items || []; const pend = items.filter(i => i.status === 'pending').length;
