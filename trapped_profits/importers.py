@@ -58,7 +58,7 @@ def detect(path: str | Path) -> str:
 # ---------------------------------------------------------------------------
 _INCOME_SECTIONS = ("הכנסות",)
 _FIN_INCOME = ("הכנסות מימון",)
-_OTHER_INCOME = ("הכנסות אחרות", "רווחים אחרים")
+_OTHER_INCOME = ("הכנסות אחרות", "רווחים אחרים", "מענק", "החזר", "פיצוי")
 # אברהם (סבב 2, 5–7): סעיפי הוצאה לבדיקת שלמות בין שנים
 CATEGORIES = (
     ("שכר", ("שכר עבודה", "משכורת", "משכורות")),
@@ -137,7 +137,7 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
             if any(k in sec for k in _FIN_INCOME) or any(k in grp for k in _FIN_INCOME) or "ריבית" in a["name"]:
                 fin_income += v
                 row["kind"] = "fin_income"
-            elif any(k in sec for k in _OTHER_INCOME):
+            elif any(k in f"{sec} {grp} {a['name']}" for k in _OTHER_INCOME):     # גם לפי הקבוצה והשם (מענקים, החזרים) – 15.10
                 other_income += v
                 row["kind"] = "other_income"
             else:
@@ -173,9 +173,10 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
     fields = {
         "structure.tax_year": year,
         "data_through_month": last_rev_month or None,
-        "s62a.total_revenue": round(revenue),
+        "s62a.total_revenue": round(revenue + fin_income + other_income),       # סך ההכנסות; מימון ואחרות יורדות ממנו ב-62א
         "s62a.other_interest": round(fin_income),
-        "s62a.taxable_income_personal_effort": round(max(0.0, profit)),
+        "s62a.other_misc_income": round(other_income),
+        "s62a.taxable_income_personal_effort": round(max(0.0, revenue - expenses)),   # מפעילות זו בלבד
         "shields.expenses_current_year": round(expenses - hints.get("depreciation", 0.0)),
         "distributions.current_year_profit_estimate": round(profit),
         "s62a.purchases_current_year": round(breakdown["קניות"]) if breakdown.get("קניות") else None,

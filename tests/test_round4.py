@@ -179,3 +179,26 @@ def test_approve_all_and_gross_profit(tmp_path, monkeypatch):
     assert new["result"]["months_table"]["approved"] is None and new["result"]["months_table"]["approved_stale"]
     new = st.approve_tb(cid, undo=True)
     assert new["input"]["tb_approved"] == {}
+
+
+def test_grants_refunds_and_cogs_default():
+    d = _base()
+    d["data_through_month"] = 9
+    d["tb_rows"] = [
+        _row("4", "הכנסות/מכירות", [-100000] * 9 + [0] * 3, income=True, kind="revenue", section="הכנסות ממכירות ומתן שירותים", group="מכירות - 70"),
+        _row("5", "הכנסות ממענקים", [0] * 5 + [-55355, -25169, 0, 0, 0, 0, 0], income=True, kind="revenue", section="הכנסות ממכירות ומתן שירותים", group="הכנסות אחרות - 1090"),
+        _row("35", "שכר עבודה", [50000] * 9 + [0] * 3, category="שכר", section="עלויות ייצור"),
+        _row("99", "החזר מילואים ביטוח לאומי", [-3554, -2367, -1113, -28306, -10748, -7782, -7782, -601, 0, 0, 0, 0], category="עלויות מעסיק", section="עלויות ייצור"),
+        _row("71", "הקמת פרויקטים", [1000] * 9 + [0] * 3, section="עלויות ייצור"),
+    ]
+    r = compute(ClientInput.from_dict(d)).to_dict()
+    rows = {x["id"]: x for x in r["months_table"]["rows"]}
+    g = rows["5"]
+    assert g["kind"] == "other_income" and g["method"] == "ללא אומדן" and all(c["v"] == 0 for c in g["cells"][9:])
+    d2 = dict(d); d2["tb_rows"] = [x for x in d["tb_rows"] if x["id"] != "5"]
+    r2 = compute(ClientInput.from_dict(d2)).to_dict()
+    assert round(r["s62a"]["personal_effort_income"]) == round(r2["s62a"]["personal_effort_income"])   # המענק לא בהכנסה מעתירת יגיעה
+    assert round(r["s62a"]["taxable_income_personal_effort"]) == round(r2["s62a"]["taxable_income_personal_effort"])
+    ref = rows["99"]
+    assert not any(c["src"] == "gap" for c in ref["cells"]) and ref["method"] == "קצב"
+    assert rows["71"]["cogs"] and not rows["35"]["cogs"]                         # שכר לא בעלות המכר כברירת מחדל

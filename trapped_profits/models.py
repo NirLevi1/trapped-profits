@@ -187,6 +187,8 @@ class Section62AInput:
     other_asset_sale: float = 0.0                      # B9
     other_securities_inventory_sale: float = 0.0       # B10
     other_real_estate_sale: float = 0.0                # B11
+    # 15.10: הכנסות אחרות ממאזן הבוחן (מענקים, החזרים, "הכנסות אחרות") – לא מעתירת יגיעה אישית. לאישור אברהם
+    other_misc_income: float = 0.0
 
     taxable_income_personal_effort: float = 0.0        # B16 – אחרי ייחוס הוצאות לפי 62א(ג1)
     related_company_payments: float = 0.0              # B17

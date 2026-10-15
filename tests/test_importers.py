@@ -52,7 +52,9 @@ def test_detect_and_trial_balance():
     f, s = r["fields"], r["summary"]
     assert s["revenue"] == 300_000 and s["fin_income"] == 1_000 and s["expenses"] == 111_000
     assert abs(s["profit"] - 190_000) < 1e-6
-    assert f["s62a.total_revenue"] == 300_000 and f["s62a.other_interest"] == 1_000
+    # 15.10: סך ההכנסות כולל מימון (62א מפחית אותו ב-B12); הכנסה חייבת מפעילות זו = מכירות − הוצאות, בלי ריבית
+    assert f["s62a.total_revenue"] == 301_000 and f["s62a.other_interest"] == 1_000
+    assert f["s62a.taxable_income_personal_effort"] == 300_000 - 111_000
     assert f["shields.expenses_current_year"] == 99_000            # בלי פחת
     assert f["data_through_month"] == 3 and f["structure.tax_year"] == 2026
     assert r["hints"]["salaries"] == 30_000 and r["hints"]["management_fees"] == 9_000

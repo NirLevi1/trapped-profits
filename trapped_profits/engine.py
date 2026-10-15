@@ -327,7 +327,8 @@ def _conc_met_by_data(ci: ClientInput) -> bool:
 def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
     s, st = ci.s62a, ci.structure
     other = s.other_interest + s.other_dividend + s.other_rent + s.other_asset_sale \
-        + s.other_securities_inventory_sale + s.other_real_estate_sale          # B12
+        + s.other_securities_inventory_sale + s.other_real_estate_sale \
+        + s.other_misc_income                                                   # B12 (+ הכנסות אחרות ממאזן הבוחן – 15.10)
     personal = max(0.0, s.total_revenue - other)                                # B13
     profitability = (s.taxable_income_personal_effort + s.related_company_payments) / personal \
         if personal else 0.0                                                    # B18 (IFERROR → 0)
@@ -822,6 +823,7 @@ def _annualize(ci: ClientInput, tb_based: bool = False) -> tuple[ClientInput, fl
                 other_asset_sale=ci.s62a.other_asset_sale * f,
                 other_securities_inventory_sale=ci.s62a.other_securities_inventory_sale * f,
                 other_real_estate_sale=ci.s62a.other_real_estate_sale * f,
+                other_misc_income=keep(ci.s62a.other_misc_income),
                 taxable_income_personal_effort=keep(ci.s62a.taxable_income_personal_effort),
                 related_company_payments=ci.s62a.related_company_payments * f,
                 top_customers=[{**c, "amount": float(c.get("amount") or 0) * f} for c in (ci.s62a.top_customers or [])])
@@ -965,10 +967,26 @@ def _tb_is_approved(ci: ClientInput) -> bool:
     return bool(ci.tb_rows) and bool(a) and int(a.get("through_month") or 0) == m
 
 
+COGS_NAME_KEYS = ("עלות", "פרויקט", "חומרי", "יבוא", "קניות")
+OTHER_INCOME_KEYS = ("הכנסות אחרות", "רווחים אחרים", "מענק", "החזר", "פיצוי")
+
+
 def _is_cogs_default(r: dict) -> bool:
+    """15.10: עלות המכר כברירת מחדל = קניות, קבלני משנה ושורות שבשמן עלות/פרויקט/חומרים/יבוא. לא לפי הסעיף בריווחית –
+    ריווחית שמה שם גם שכר, רכב ואחזקה (אצל לקוח שירותים הרווח הגולמי יצא 38% מול 97% בדוח). אברהם מוסיף/מוריד בכפתור."""
     if r.get("income") or r.get("kind") != "expense":
         return False
-    return any(k in (r.get("section") or "") for k in COGS_SECTIONS) or r.get("category") == "קניות"
+    return r.get("category") in ("קניות", "קבלני משנה") or any(k in (r.get("name") or "") for k in COGS_NAME_KEYS)
+
+
+def _row_kind(r: dict) -> str:
+    """סיווג הכנסה מחדש (גם ללקוחות שכבר נקלטו): "הכנסות אחרות" לפי הקבוצה/השם – מענקים, החזרים – אינן הכנסה מהעסק."""
+    k = r.get("kind") or ""
+    if r.get("income") and k == "revenue":
+        txt = " ".join(str(r.get(x) or "") for x in ("section", "group", "name"))
+        if any(w in txt for w in OTHER_INCOME_KEYS):
+            return "other_income"
+    return k
 
 
 def _cycle_of(filled: list[int], prev_filled: list[int], m_last: int = 12) -> int | None:
@@ -1008,6 +1026,7 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
     approved = _tb_is_approved(ci)
     cogs_over = {str(k): bool(v) for k, v in (ci.tb_cogs or {}).items()}
     for r in rows:
+        r = {**r, "kind": _row_kind(r)}
         inc = bool(r.get("income"))
         raw = [float(x or 0) for x in list(r.get("months") or [])[:12]] + [0.0] * (12 - len(r.get("months") or []))
         disp = [(-v if inc else v) for v in raw]                           # הכנסות בזכות – מוצגות חיוביות
@@ -1021,7 +1040,9 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
                     eff[i] = float(a0.get("amount") or 0)
         filled = [i for i in range(m_last) if abs(eff[i]) > 0.5]
         # "חור" (0 בחודש כשהשאר מלאים) נבדק רק בשורות שאמורות להיות כל חודש: הכנסות וסעיפי השלמות (שכר, עלויות מעסיק, שכירות…)
-        regular = len(filled) >= max(2, round(0.6 * m_last)) and (inc or r.get("category") not in (None, "קניות"))
+        # שורה שלילית (החזרים, למשל "החזר מילואים") – אינה סעיף חודשי; בלי חורים, אומדן לפי קצב
+        regular = len(filled) >= max(2, round(0.6 * m_last)) and (inc or r.get("category") not in (None, "קניות")) and sum(eff[:m_last]) > 0
+        one_off = r.get("kind") == "other_income"                          # מענקים / הכנסות אחרות – בלי אומדן לחודשים הבאים
         avg = (sum(eff[i] for i in filled) / len(filled)) if filled else 0.0
         linear = sum(eff[:m_last]) / m_last if m_last else 0.0
         prev = prev_by_id.get(str(r.get("id"))) or prev_by_name.get(str(r.get("name")))
@@ -1065,7 +1086,9 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
                     base = season[i] if season else avg
                     src, v = "gap", base
             else:
-                if season:
+                if one_off:
+                    base = 0.0
+                elif season:
                     base = season[i]
                 elif cycle:
                     base = avg if i in cyc_months else 0.0
@@ -1102,7 +1125,7 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
                          "file_total": round(sum(disp[:m_last])),
                          "cogs": cogs_over.get(str(r.get("id")), _is_cogs_default(r)) if r.get("kind") == "expense" else False,
                          "cogs_default": _is_cogs_default(r),
-                         "method": "עונתיות" if season else (f"מחזורי · כל {cycle} חודשים" if cycle else ("ממוצע" if regular else "קצב"))})
+                         "method": "ללא אומדן" if one_off else ("עונתיות" if season else (f"מחזורי · כל {cycle} חודשים" if cycle else ("ממוצע" if regular else "קצב")))})
     def tot(kind):
         return sum(r["total"] for r in out_rows if r["kind"] == kind)
     revenue, fin, other, expenses = tot("revenue"), tot("fin_income"), tot("other_income"), tot("expense")
@@ -1112,8 +1135,11 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
             bd[r["category"]] = bd.get(r["category"], 0.0) + r["total"]
     dep = bd.get("פחת", 0.0)
     profit = revenue + fin + other - expenses
+    # 62א: "סך ההכנסות" כולל הכל; מימון והכנסות אחרות יורדות ממנו (B12) – ההכנסה מעתירת יגיעה = מכירות בלבד.
+    # הכנסה חייבת "מפעילות זו" = מכירות פחות הוצאות, בלי הכנסות מימון/אחרות (15.10; קודם נכללו)
     ci2 = replace(ci,
-                  s62a=replace(ci.s62a, total_revenue=revenue, other_interest=fin, taxable_income_personal_effort=max(0.0, profit),
+                  s62a=replace(ci.s62a, total_revenue=revenue + fin + other, other_interest=fin, other_misc_income=other,
+                               taxable_income_personal_effort=max(0.0, revenue - expenses),
                                purchases_current_year=(bd.get("קניות") if "קניות" in bd else ci.s62a.purchases_current_year)),
                   shields=replace(ci.shields, expenses_current_year=expenses - dep),
                   distributions=replace(ci.distributions, current_year_profit_estimate=profit),
