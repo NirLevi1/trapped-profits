@@ -99,3 +99,22 @@ def test_rollover_moves_rows_to_prev_year(tmp_path, monkeypatch):
     assert inp["tb_rows"] == [] and len(inp["tb_rows_prev_year"]) == 4
     assert not any(a.get("month") for a in inp["adjustments"])
     assert new["result"]["months_table"] is None
+
+
+def test_cycle_detection_semi_annual_and_quarterly():
+    from trapped_profits.engine import _cycle_of
+    assert _cycle_of([0, 6], [0, 6]) == 6                    # שניים השנה + אישור מהשנה הקודמת
+    assert _cycle_of([0, 6], []) is None                     # שניים בלי אישור – לא מספיק
+    assert _cycle_of([2, 5], [2, 5, 8, 11]) == 3
+    assert _cycle_of([0, 3, 6], []) == 3                     # שלושה במרווח זהה
+    assert _cycle_of([0, 2, 5], []) is None                  # מרווחים שונים
+    assert _cycle_of([6], [0, 6]) == 6                       # אחד השנה, שלב תואם לשנה קודמת
+    assert _cycle_of([5], [0, 6]) is None                    # שלב לא תואם
+    d = _base()
+    d["data_through_month"] = 8
+    d["tb_rows"].append(_row("50", "חשמל", [3000, 0, 0, 3000, 0, 0, 3000, 0, 0, 0, 0, 0]))   # ינו/אפר/יול → אוק
+    r = compute(ClientInput.from_dict(d)).to_dict()
+    row = next(x for x in r["months_table"]["rows"] if x["id"] == "50")
+    assert row["method"] == "מחזורי · כל 3 חודשים"
+    assert [c["v"] for c in row["cells"][8:]] == [0, 3000, 0, 0]
+    assert row["total"] == 12000

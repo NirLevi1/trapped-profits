@@ -904,6 +904,23 @@ def _monthly_gaps(ci: ClientInput) -> tuple[ClientInput, list[dict], dict]:
     return ci, items, table
 
 
+def _cycle_of(filled: list[int], prev_filled: list[int]) -> int | None:
+    """זיהוי מחזור תשלום: חודשים עם תנועה במרווח קבוע k (2/3/4/6).
+    נדרשים שלושה תשלומים במרווח זהה השנה, או שניים אם השנה הקודמת מראה אותו מרווח, או אחד השנה כשהשנה הקודמת מחזורית באותו שלב."""
+    def gaps_of(idx):
+        return [b - a for a, b in zip(idx, idx[1:])]
+    g = gaps_of(filled)
+    if len(filled) >= 3 and len(set(g)) == 1 and g[0] in (2, 3, 4, 6):
+        return g[0]
+    pg = gaps_of(prev_filled)
+    prev_k = pg[0] if len(prev_filled) >= 2 and len(set(pg)) == 1 and pg[0] in (2, 3, 4, 6) else None
+    if len(filled) == 2 and g[0] in (2, 3, 4, 6) and prev_k == g[0]:
+        return g[0]
+    if len(filled) == 1 and prev_k and (filled[0] % prev_k) == (prev_filled[0] % prev_k):
+        return prev_k
+    return None
+
+
 def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, dict]:
     """סבב 4 (אברהם, 15.10): מאזן הבוחן המלא – כל שורה × 12 חודשים.
     תא = קובץ / אומדן (חודש שטרם הוזן) / חור (0 בחודש כשהשאר מלאים) / תיקון של רואה החשבון.
@@ -936,10 +953,28 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
             if base_prev > 0.5 and base_cur > 0.5 and any(abs(x) > 0.5 for x in pd[m_last:]):
                 ratio = base_cur / base_prev
                 season = [x * ratio for x in pd]
+        # מחזורי (אברהם 15.10): תשלום כל k חודשים (חשמל כל חצי שנה, ביטוח רבעוני) – ממשיכים את המחזור במקום ממוצע/חלק יחסי
+        cycle = None
+        if not season:
+            prev_filled = []
+            if prev:
+                pr0 = [float(x or 0) for x in list(prev.get("months") or [])[:12]] + [0.0] * 12
+                prev_filled = [i for i in range(12) if abs(pr0[i]) > 0.5]
+            cycle = _cycle_of(filled, prev_filled)
         if season:
             stats["season_rows"] += 1
+        elif cycle:
+            stats["cycle_rows"] = stats.get("cycle_rows", 0) + 1
         else:
             stats["avg_rows"] += 1
+        cyc_months = set()
+        if cycle:
+            k = cycle
+            last = max(filled) if filled else -1
+            m = last + k
+            while m < 12:
+                cyc_months.add(m)
+                m += k
         key = f"tb:{r.get('id')}"
         cells = []
         for i in range(12):
@@ -951,7 +986,12 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
                     base = season[i] if season else avg
                     src, v = "gap", base
             else:
-                base = season[i] if season else (avg if len(filled) >= max(2, round(0.6 * m_last)) else linear)
+                if season:
+                    base = season[i]
+                elif cycle:
+                    base = avg if i in cyc_months else 0.0
+                else:
+                    base = avg if len(filled) >= max(2, round(0.6 * m_last)) else linear
                 src, v = "estimate", base
             adj = _adj_for(ci, key, i + 1)
             note = by = at = ""
@@ -978,7 +1018,8 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
         total = sum(c["v"] for c in cells)
         out_rows.append({"id": r.get("id"), "code": r.get("code", ""), "name": r.get("name"), "section": r.get("section", ""), "group": r.get("group", ""),
                          "income": inc, "kind": r.get("kind", ""), "category": r.get("category"), "cells": cells, "total": round(total),
-                         "file_total": round(sum(disp[:m_last])), "method": "עונתיות" if season else ("ממוצע" if regular else "יחסי")})
+                         "file_total": round(sum(disp[:m_last])),
+                         "method": "עונתיות" if season else (f"מחזורי · כל {cycle} חודשים" if cycle else ("ממוצע" if len(filled) >= max(2, round(0.6 * m_last)) else "יחסי"))})
     def tot(kind):
         return sum(r["total"] for r in out_rows if r["kind"] == kind)
     revenue, fin, other, expenses = tot("revenue"), tot("fin_income"), tot("other_income"), tot("expense")
@@ -1001,7 +1042,8 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
     table = {"through_month": m_last, "rows": out_rows, "sums": sums,
              "annual": {"revenue": round(revenue), "fin_income": round(fin), "other_income": round(other), "expenses": round(expenses), "profit": round(profit)},
              "method": ("לפי מאזן הבוחן של השנה הקודמת (עונתיות)" if stats["season_rows"] and not stats["avg_rows"] else
-                        "לפי השנה הקודמת כשיש התאמה, אחרת ממוצע החודשים שיש" if stats["season_rows"] else "ממוצע החודשים שיש (אין מאזן בוחן של השנה הקודמת)"),
+                        "לפי השנה הקודמת כשיש התאמה, אחרת ממוצע החודשים שיש" if stats["season_rows"] else "ממוצע החודשים שיש (אין מאזן בוחן של השנה הקודמת)")
+                       + (f"; {stats.get('cycle_rows', 0)} סעיפים מחזוריים (תשלום כל כמה חודשים)" if stats.get("cycle_rows") else ""),
              "stats": {k: round(v) if isinstance(v, float) else v for k, v in stats.items()}}
     return ci2, items, table, stats
 
