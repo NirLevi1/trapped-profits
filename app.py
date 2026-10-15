@@ -300,7 +300,8 @@ class Api:
         try:
             kw = {"creationflags": 0x08000000} if sys.platform.startswith("win") else {}   # בלי חלון שחור
             env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"}   # לא לתקוע על חלון סיסמה – המפתח בכתובת המאגר
-            r = subprocess.run([exe, *args], cwd=str(root), capture_output=True, text=True, timeout=timeout, env=env, **kw)
+            r = subprocess.run([exe, *args], cwd=str(root), capture_output=True, stdin=subprocess.DEVNULL, text=True,
+                               encoding="utf-8", errors="replace", timeout=timeout, env=env, **kw)        # הודעות עדכון בעברית
             log.open("a", encoding="utf-8").write(f"{datetime.now():%d.%m.%Y %H:%M:%S} git {' '.join(args)} -> {r.returncode} {(r.stderr or r.stdout).strip()[-200:]}\n")
             return r
         except Exception as e:  # noqa: BLE001 – אין גיט / אין רשת

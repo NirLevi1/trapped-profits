@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -84,11 +85,15 @@ def ocr_available() -> str | None:
 # ---------------------------------------------------------------------------
 def _tsv_words(tess: str, png: Path, lang: str) -> list[Word]:
     env = {**os.environ, "TESSDATA_PREFIX": str(tessdata_dir()), "OMP_THREAD_LIMIT": "1"}
-    out = subprocess.run([tess, str(png), "-", "-l", lang, "--psm", "6", "tsv"], capture_output=True, text=True, env=env, timeout=180)
+    # ווינדוס: הפלט של טסרקט הוא UTF-8, אבל ברירת המחדל של פייתון שם היא קידוד המערכת (עברית חלונות) – הפענוח נכשל
+    # בשקט והפלט חוזר ריק. לכן מפענחים במפורש; בלי חלון שחור ובלי קלט (התוכנה רצה בלי מסוף)
+    kw = {"creationflags": 0x08000000} if sys.platform.startswith("win") else {}
+    out = subprocess.run([tess, str(png), "-", "-l", lang, "--psm", "6", "tsv"], capture_output=True, stdin=subprocess.DEVNULL,
+                         text=True, encoding="utf-8", errors="replace", env=env, timeout=180, **kw)
     if out.returncode != 0:
-        raise RuntimeError("טסרקט נכשל: " + out.stderr[-300:])
+        raise RuntimeError("טסרקט נכשל: " + (out.stderr or "")[-300:])
     words = []
-    for line in out.stdout.splitlines()[1:]:
+    for line in (out.stdout or "").splitlines()[1:]:
         c = line.split("\t")
         if len(c) < 12 or c[11].strip() == "":
             continue
