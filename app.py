@@ -31,6 +31,17 @@ def set_app_icon(window=None) -> None:
                 NSApplication.sharedApplication().setApplicationIconImage_(img)
         elif sys.platform.startswith("win"):
             import ctypes
+            # 1. הדרך הישירה: חלון ה-.NET של pywebview – האייקון בכותרת ובשורת המשימות
+            try:
+                native = getattr(window, "native", None)
+                if native is not None:
+                    import clr  # type: ignore[import-not-found]  # pythonnet – מגיע עם pywebview בווינדוס
+                    clr.AddReference("System.Drawing")
+                    from System.Drawing import Icon  # type: ignore[import-not-found]
+                    native.Icon = Icon(icon_path("ico"))
+            except Exception:  # noqa: BLE001
+                pass
+            # 2. גיבוי: הודעת WM_SETICON לחלון לפי הכותרת
             hwnd = ctypes.windll.user32.FindWindowW(None, WINDOW_TITLE)
             if hwnd:
                 for which, size in ((0, 16), (1, 32)):          # ICON_SMALL, ICON_BIG
@@ -352,6 +363,16 @@ class Api:
         return {"data_dir": str(new), "clients": len(self.store.list())}
 
 
+def set_app_id() -> None:
+    """ווינדוס: מזהה יישום משלנו – כך שורת המשימות לא מקבצת אותנו עם פייתון ומציגה את אייקון החלון (F) ולא את של pythonw."""
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("Fortera.TrappedProfits")
+        except Exception:  # noqa: BLE001
+            pass
+
+
 def set_app_name() -> None:
     """במק התהליך הוא פייתון – ולכן בשורת התפריטים ובדוק כתוב "Python". משנים את שם החבילה בזיכרון לפני שהחלון עולה."""
     if sys.platform != "darwin":
@@ -367,6 +388,7 @@ def set_app_name() -> None:
 
 
 def main() -> None:
+    set_app_id()
     set_app_name()
     api = Api()
     window = webview.create_window(WINDOW_TITLE, ui_path(), js_api=api, width=1240, height=820, min_size=(900, 600), maximized=True)
