@@ -38,7 +38,7 @@ def test_table_sums_replace_linear_factor():
     assert rent["cells"][4]["src"] == "gap" and rent["cells"][4]["v"] == 2000     # מאי – חור, אומדן ממוצע
     fees = next(x for x in t["rows"] if x["id"] == "30")
     assert fees["cells"][1]["src"] == "file" and fees["cells"][1]["v"] == 0       # שורה לא סדירה – אין חור
-    assert fees["cells"][6]["v"] == 200                                            # 1200 ÷ 6 – חלק יחסי
+    assert fees["cells"][6]["v"] == 200 and fees["method"] == "קצב"                # 1200 ÷ 6 – קצב
     assert t["annual"]["revenue"] == 1_200_000
     assert r["s62a"]["personal_effort_income"] == 1_200_000 or r["s62a"]["total_revenue"] == 1_200_000 if "total_revenue" in r["s62a"] else True
     assert any(i["key"] == "tb:31" and i["month"] == 5 and i["status"] == "pending" for i in r["estimate_items"])
@@ -105,7 +105,8 @@ def test_cycle_detection_semi_annual_and_quarterly():
     from trapped_profits.engine import _cycle_of
     assert _cycle_of([0, 6], [0, 6]) == 6                    # שניים השנה + אישור מהשנה הקודמת
     assert _cycle_of([0, 6], []) == 6                        # חצי-שנתי – שניים מספיקים
-    assert _cycle_of([0, 3], []) is None                     # רבעוני – שניים בלי אישור לא מספיק
+    assert _cycle_of([2, 5], [], 8) == 3                     # מרץ+יוני, הבא ספטמבר – עוד לא הגיע → מחזורי
+    assert _cycle_of([0, 3], [], 8) is None                  # ינו+אפר, יולי היה אמור להגיע ולא → לא מחזורי
     assert _cycle_of([2, 5], [2, 5, 8, 11]) == 3
     assert _cycle_of([0, 3, 6], []) == 3                     # שלושה במרווח זהה
     assert _cycle_of([0, 2, 5], []) is None                  # מרווחים שונים
@@ -119,3 +120,15 @@ def test_cycle_detection_semi_annual_and_quarterly():
     assert row["method"] == "מחזורי · כל 3 חודשים"
     assert [c["v"] for c in row["cells"][8:]] == [0, 3000, 0, 0]
     assert row["total"] == 12000
+
+
+def test_run_rate_for_non_key_rows_and_average_for_key_rows():
+    d = _base()
+    d["data_through_month"] = 8
+    d["tb_rows"].append(_row("60", "הוצאות רכב", [8400] * 5 + [0, 0, 16800] + [0] * 4))     # דילוג ותשלום כפול
+    d["tb_rows"][1]["months"] = [10000] * 4 + [0] + [10000] * 3 + [0] * 4                       # שכר עם חור במאי
+    r = compute(ClientInput.from_dict(d)).to_dict()
+    car = next(x for x in r["months_table"]["rows"] if x["id"] == "60")
+    assert car["method"] == "קצב" and car["cells"][8]["v"] == 7350                            # 58,800 ÷ 8, לא 9,800
+    sal = next(x for x in r["months_table"]["rows"] if x["id"] == "35")
+    assert sal["method"] == "ממוצע" and sal["cells"][4]["src"] == "gap" and sal["cells"][8]["v"] == 10000
