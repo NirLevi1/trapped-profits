@@ -711,7 +711,8 @@ class ClientStore:
         for rec in self.list():
             inp = rec.get("input") or {}
             s62 = inp.get("s62a") or {}
-            if s62.get("gross_profit_history") or inp.get("gp_checked"):
+            bad = any(float(h.get("rate") or 0) > 1 for h in s62.get("gross_profit_history") or [])   # נקרא בטעות (לפני 1.5) – קוראים שוב
+            if (s62.get("gross_profit_history") or inp.get("gp_checked")) and not bad:
                 continue
             src = next((x for x in reversed(rec.get("sources") or []) if x.get("slot") == "annual_report" and not x.get("superseded")), None)
             p = Path(src.get("path") or "") if src else None
@@ -725,6 +726,9 @@ class ClientStore:
             if not full:
                 continue
             full["input"].setdefault("s62a", {})["gross_profit_history"] = hist
+            if bad:                                       # גם האחוז הממוצע (משמש להתאמת המלאי) נקרא מאותה שורה שגויה
+                rates = [h["rate"] for h in hist if h.get("rate")]
+                full["input"]["s62a"]["gross_margin_rate"] = round(sum(rates) / len(rates), 4) if rates else None
             full["input"]["gp_checked"] = True
             self.save(full["input"], rec["id"])
             n += 1
