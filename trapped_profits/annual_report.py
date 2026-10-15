@@ -422,7 +422,16 @@ def _assets_and_margin(P: list, bs, pl, year: int, prev_year: int, notes: list[s
             if not y or (y != year and len(pl.year_cols) < 2):
                 continue
             g, glab = pl.value(("רווח גולמי", "רווח גלמי"), y)
-            r, rlab = pl.value(("הכנסות ממכירות", "מכירות", "הכנסות"), y)
+            # מכירות = רווח גולמי + עלות המכר (הכי אמין: "עלות המכירות" מכילה את המילה "מכירות" ונתפסה בטעות כהכנסות – 15.10)
+            c, clab = pl.value(("עלות המכירות", "עלות המכר", "עלות ההכנסות", "עלות השירותים", "עלות העבודות"), y)
+            r, rlab = (abs(g) + abs(c), f"{glab} + {clab}") if g is not None and c is not None else (None, "")
+            if r is None:
+                r, rlab = pl.value(("הכנסות ממכירות", "הכנסות ממתן שירותים", "מכירות", "הכנסות"), y)
+                if r is not None and _has(rlab, "עלות"):
+                    r = None
+            if g is not None and r and abs(g) > abs(r):          # רווח גולמי לא יכול לעלות על המכירות – נתון שגוי, לא משתמשים
+                notes.append(f"רווח גולמי {y}: {abs(g):,.0f} גדול מהמכירות שזוהו ({abs(r):,.0f}) – לא נקלט, לבדוק ידנית")
+                r = None
             if g is not None and r:
                 rates.append(abs(g) / abs(r))
                 used.append(f"{y}: {glab} {abs(g):,.0f} ÷ {rlab} {abs(r):,.0f} = {abs(g) / abs(r):.1%}")

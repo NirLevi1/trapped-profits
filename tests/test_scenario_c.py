@@ -73,3 +73,14 @@ def test_rollover_after_scenario_c_rolls_one_year(tmp_path, monkeypatch):
     assert inp["retained"]["prev2_year_profit_for_rollover"] is None
     ci = ClientInput.from_dict(inp)
     assert _roll_lag(ci) == 1
+
+
+def test_gross_margin_not_from_cost_line(tmp_path):
+    """15.10: "עלות המכירות" הכילה את המילה "מכירות" ונלקחה כהכנסות → 10,701%. עכשיו מכירות = רווח גולמי + עלות המכר; אחוז מעל 100% נפסל."""
+    import pytest
+    pdf = Path("/tmp/claude-0/-home-claude/b7636fe5-5021-5400-a5d6-dd52a8b2ec43/scratchpad/rep24/r.pdf")
+    if not pdf.exists():
+        pytest.skip("קובץ הלקוח לא זמין בסביבה הזו")
+    from trapped_profits.annual_report import parse_annual_report
+    h = parse_annual_report(pdf)["fields"]["s62a.gross_profit_history"]
+    assert [round(x["rate"], 3) for x in h] == [0.991, 0.972]
