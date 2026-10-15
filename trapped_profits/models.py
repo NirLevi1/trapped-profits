@@ -247,6 +247,11 @@ class ClientInput:
     # תיקונים של רואה החשבון מעל הקבצים: [{"key","month","amount","kind","note","by","at","estimate"}]
     # kind: manual (סכום שהוזן) / accepted (אומדן שאושר) / dismissed (לא חסר – בלי אומדן). תיקון תמיד גובר על אומדן
     adjustments: list = field(default_factory=list)
+    # סבב 4 (אברהם): כל שורות מאזן הבוחן של השנה (ושל השנה הקודמת – לעונתיות):
+    # [{"id","code","name","section","group","income","kind","category","months":[12]}]
+    # כשיש שורות – השנה מחושבת מסכום 12 התאים (קובץ / אומדן / תיקון), לא מהכפלה לינארית
+    tb_rows: list = field(default_factory=list)
+    tb_rows_prev_year: list = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -276,4 +281,6 @@ class ClientInput:
             months_without_revenue=list(d.get("months_without_revenue") or []),
             period_breakdown_months={k: list(v) for k, v in (d.get("period_breakdown_months") or {}).items()},
             adjustments=[dict(a) for a in (d.get("adjustments") or [])],
+            tb_rows=[dict(r) for r in (d.get("tb_rows") or [])],
+            tb_rows_prev_year=[dict(r) for r in (d.get("tb_rows_prev_year") or [])],
         )

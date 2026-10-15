@@ -85,6 +85,7 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
     if m:
         year = int(m.group(1))
     section = ""
+    group = ""
     accounts: list[dict] = []
     for r in rows:
         cells = [c for c in r if c != ""]
@@ -99,19 +100,21 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
             total = nums[0]
             # סדר העמודות: סה"כ, דצמבר..ינואר, יתרת פתיחה, שם
             months = [x or 0.0 for x in nums[1:13]][::-1]      # ינואר..דצמבר
-            accounts.append({"section": section, "name": label, "total": total, "months": months})
+            accounts.append({"section": section, "group": group, "name": label, "total": total, "months": months})
         elif n_nums == 0 and len(cells) == 1 and not cells[0].startswith("סה"):
             t = cells[0]
             if t in ("רווח והפסד", "קבוצה מאזן", "פריט מאזן", "סיווג מאזן") or t.startswith("סה"):
                 continue
             if " - " in t and t.split(" - ")[-1].strip().isdigit():   # "הוצאות הפעלה - 80" – תת-קבוצה
+                group = t
                 continue
             section = t
+            group = ""
     if not accounts:
         raise ValueError("לא נמצאו שורות חשבון בקובץ – זה מאזן בוחן לפי חודשים?")
 
-    def is_income(sec: str) -> bool:
-        return sec.startswith("הכנסות") or sec.startswith("רווחים")
+    def is_income(sec: str, grp: str = "") -> bool:
+        return sec.startswith("הכנסות") or sec.startswith("רווחים") or grp.startswith("הכנסות") or grp.startswith("רווחים")
 
     revenue = fin_income = other_income = expenses = 0.0
     months_activity = [0.0] * 12
@@ -119,22 +122,32 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
     hints: dict[str, float] = defaultdict(float)
     breakdown: dict[str, float] = defaultdict(float)
     breakdown_m: dict[str, list[float]] = defaultdict(lambda: [0.0] * 12)
+    tb_rows: list[dict] = []        # סבב 4 (אברהם): כל שורות הקובץ – המסמך המלא בכרטיס, עם אומדן לחודשים החסרים ועריכה
     for a in accounts:
-        sec, tot = a["section"], a["total"]
+        sec, grp, tot = a["section"], a["group"], a["total"]
         for i, v in enumerate(a["months"]):
             months_activity[i] += abs(v)
-        if is_income(sec):
+        m_code = re.match(r"^(\d+)\s+(.*)$", a["name"])
+        code, short = (m_code.group(1), m_code.group(2)) if m_code else ("", a["name"])
+        row = {"id": code or re.sub(r"\W+", "_", a["name"])[:40], "code": code, "name": short, "section": sec, "group": grp,
+               "income": is_income(sec, grp), "kind": "", "category": None, "months": [round(x, 2) for x in a["months"]]}
+        tb_rows.append(row)
+        if is_income(sec, grp):
             v = -tot                                   # הכנסות בזכות (שלילי בדוח)
-            if any(k in sec for k in _FIN_INCOME) or "ריבית" in a["name"]:
+            if any(k in sec for k in _FIN_INCOME) or any(k in grp for k in _FIN_INCOME) or "ריבית" in a["name"]:
                 fin_income += v
+                row["kind"] = "fin_income"
             elif any(k in sec for k in _OTHER_INCOME):
                 other_income += v
+                row["kind"] = "other_income"
             else:
                 revenue += v
+                row["kind"] = "revenue"
                 for i, mv in enumerate(a["months"]):
                     rev_months[i] += -mv
         else:
             expenses += tot
+            row["kind"] = "expense"
             nm = a["name"]
             if "שכר עבודה" in nm or "משכורת" in nm:
                 hints["salaries"] += tot
@@ -143,6 +156,7 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
             if "פחת" in nm:
                 hints["depreciation"] += tot
             cat = categorize(nm)
+            row["category"] = cat
             if cat:
                 breakdown[cat] += tot
                 for i, mv in enumerate(a["months"]):
@@ -168,6 +182,7 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
         "period_breakdown": {k: round(v) for k, v in breakdown.items()},
         "period_breakdown_months": {k: [round(x) for x in v] for k, v in breakdown_m.items()},
         "months_without_revenue": months_without,
+        "tb_rows": tb_rows,
     }
     if months_without:
         notes.append("חודשים בלי הכנסות: " + ", ".join(MONTHS[m - 1] for m in months_without) + " – לבדוק אם חסר קובץ/רישום")
@@ -294,7 +309,8 @@ def import_slot(slot: str, path: str | Path, tax_year: int | None = None) -> dic
             f = r["fields"]
             r["fields"] = {"shields.expenses_prev_year": f.get("shields.expenses_current_year", 0) + r.get("hints", {}).get("depreciation", 0),
                            "retained.prev_year_profit_for_rollover": f.get("distributions.current_year_profit_estimate", 0),
-                           "period_breakdown_prev_year": f.get("period_breakdown", {})}
+                           "period_breakdown_prev_year": f.get("period_breakdown", {}),
+                           "tb_rows_prev_year": f.get("tb_rows", [])}
             r["sources"] = {"shields.expenses_prev_year": f"מאזן בוחן {r.get('year')}: סך הוצאות (כולל פחת)",
                             "retained.prev_year_profit_for_rollover": f"מאזן בוחן {r.get('year')}: רווח לפני מס – המנוע מגלגל: עודפי הדוח + רווח × (1 − 23%) − דיבידנד השנה הקודמת (ידני)"}
             r["notes"] = [n for n in r["notes"] if "הכנסות עד" not in n] + [f"גלגול: דיבידנד {r.get('year')} אינו במאזן בוחן – להזין ידנית אם חולק"]

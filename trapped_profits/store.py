@@ -99,8 +99,8 @@ def _diff(prev: dict | None, cur: dict) -> list[dict]:
 # אברהם 14.10 (3): מצב לכל שדה – מהקובץ (לאישור) / אושר / ידני; ושדות שרק אדם יודע
 FIELD_STATES = ("file", "approved", "manual", "carried", "estimate")
 # carried = הועבר ממעבר שנה (ערך מהשנה הקודמת שאינו בקבצים); estimate = אומדן של המערכת (לבדיקת אברהם)
-FIELD_SKIP = ("flags", "data_as_of", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments")
-TOP_LEVEL_FIELDS = ("data_as_of", "data_through_month", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments")                 # לא נרשמת להם היסטוריית ערכים
+FIELD_SKIP = ("flags", "data_as_of", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year")
+TOP_LEVEL_FIELDS = ("data_as_of", "data_through_month", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year")                 # לא נרשמת להם היסטוריית ערכים
 
 
 def _flatten(d: dict, prefix: str = "") -> dict:
@@ -431,6 +431,19 @@ class ClientStore:
         inp = rec["input"]
         meta = {}
         now = datetime.now().isoformat(timespec="seconds")
+        superseded: list[str] = []
+        if "tb_rows" in (fields or {}):
+            # סבב 4: קובץ חדש ממלא חודשים שהיו אומדן – תיקון ידני על חודש כזה מוחלף על ידי הקובץ; תיקון על חודש שהיה בקובץ נשאר
+            old_m = int(inp.get("data_through_month") or 0)
+            new_m = int((fields or {}).get("data_through_month") or 12)
+            keep = []
+            for a in inp.get("adjustments") or []:
+                mth = int(a.get("month") or 0)
+                if str(a.get("key", "")).startswith("tb:") and mth and old_m < mth <= new_m:
+                    superseded.append(f"{a.get('key')} · חודש {mth} ({float(a.get('amount') or 0):,.0f} ₪)")
+                    continue
+                keep.append(a)
+            inp["adjustments"] = keep
         for path, value in (fields or {}).items():
             parts = path.split(".")
             target = inp
@@ -441,7 +454,7 @@ class ClientStore:
             target[parts[-1]] = value
             meta[path] = {"state": "file", "source": (sources or {}).get(path, label), "at": now}
         new = self.save(inp, cid, field_meta=meta, sources=[source] if source else None)
-        self._log(new, "עדכון מקובץ", f"{label} – {len(meta)} שדות")
+        self._log(new, "עדכון מקובץ", f"{label} – {len(meta)} שדות" + (f"; הוחלפו על ידי הקובץ {len(superseded)} תיקונים ידניים על חודשים שהיו אומדן: " + "; ".join(superseded) if superseded else ""))
         self._path(cid).write_text(json.dumps(new, ensure_ascii=False, indent=2), encoding="utf-8")
         return new
 
@@ -535,6 +548,10 @@ class ClientStore:
         inp["period_breakdown_prev_year"] = inp.get("period_breakdown") or {}
         inp["period_breakdown"] = {}
         inp["months_without_revenue"] = []
+        inp["tb_rows_prev_year"] = inp.get("tb_rows") or []
+        inp["tb_rows"] = []
+        inp["period_breakdown_months"] = {}
+        inp["adjustments"] = [a for a in (inp.get("adjustments") or []) if not a.get("month")]   # תיקוני חודשים שייכים לשנה שנסגרה
         carry("s62a.top_customers_prev2_year", s62.get("top_customers_prev_year") or [], "s62a.top_customers_prev_year", f"כרטסת {ty - 1}")
         carry("s62a.prev2_year_revenue_for_concentration", float(s62.get("prev_year_revenue_for_concentration") or 0), "s62a.prev_year_revenue_for_concentration", f"מחזור {ty - 1}")
         for k in ("s62a.purchases_current_year",):
@@ -573,7 +590,11 @@ class ClientStore:
         inp = rec["input"]
         month = int(month) if month else None
         adj = [a for a in (inp.get("adjustments") or []) if not (a.get("key") == key and (a.get("month") or None) == month)]
-        label = f"{key}" + (f" · חודש {month}" if month else "")
+        name = key
+        if str(key).startswith("tb:"):
+            rid = str(key)[3:]
+            name = next((f"{r.get('name')} (מאזן בוחן)" for r in (inp.get("tb_rows") or []) if str(r.get("id")) == rid), key)
+        label = f"{name}" + (f" · חודש {month}" if month else "")
         if kind != "clear":
             adj.append({"key": key, "month": month, "kind": kind, "amount": float(amount or 0), "note": note or "",
                         "by": self._by(), "at": datetime.now().isoformat(timespec="seconds")})

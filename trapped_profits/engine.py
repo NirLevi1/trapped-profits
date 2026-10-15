@@ -183,6 +183,7 @@ class ClientResult:
     data_breakdown: dict = field(default_factory=dict)      # {"file": …, "estimates": …, "corrections": …} – הוצאות השנה (לפני הכפלה)
     months_gap_table: dict = field(default_factory=dict)    # {סעיף: [12]} עם None בחודשים שאחרי הנתונים – לטבלת החוסרים
     years_used: dict = field(default_factory=dict)            # {"retained": "דוח 2025", "expenses_avg": "2024–2026", "concentration": "2024–2026"}
+    months_table: dict | None = None                          # סבב 4: מאזן הבוחן המלא – כל שורה × 12 חודשים (קובץ / אומדן / תיקון) – כשיש tb_rows
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -754,26 +755,28 @@ def _missing_fields(ci: ClientInput) -> list[str]:
     return out
 
 
-def _annualize(ci: ClientInput) -> tuple[ClientInput, float]:
-    """החלטה 4: נתוני השנה הנבדקת עד חודש N → הערכה שנתית לינארית (× 12 ÷ N)."""
+def _annualize(ci: ClientInput, tb_based: bool = False) -> tuple[ClientInput, float]:
+    """החלטה 4: נתוני השנה הנבדקת עד חודש N → הערכה שנתית לינארית (× 12 ÷ N).
+    tb_based (סבב 4): כשיש טבלת מאזן בוחן, ההכנסות/ההוצאות/הרווח כבר שנתיים מסכום 12 התאים – מוכפלים רק השדות שלא מהטבלה (כרטסת, אחרים)."""
     m = ci.data_through_month
     if not m or not (1 <= m < 12):
         return ci, 1.0
     f = 12.0 / m
+    keep = lambda v: v if tb_based else v * f
     s = replace(ci.s62a,
-                total_revenue=ci.s62a.total_revenue * f,
-                other_interest=ci.s62a.other_interest * f,
+                total_revenue=keep(ci.s62a.total_revenue),
+                other_interest=keep(ci.s62a.other_interest),
                 other_dividend=ci.s62a.other_dividend * f,
                 other_rent=ci.s62a.other_rent * f,
                 other_asset_sale=ci.s62a.other_asset_sale * f,
                 other_securities_inventory_sale=ci.s62a.other_securities_inventory_sale * f,
                 other_real_estate_sale=ci.s62a.other_real_estate_sale * f,
-                taxable_income_personal_effort=ci.s62a.taxable_income_personal_effort * f,
+                taxable_income_personal_effort=keep(ci.s62a.taxable_income_personal_effort),
                 related_company_payments=ci.s62a.related_company_payments * f,
                 top_customers=[{**c, "amount": float(c.get("amount") or 0) * f} for c in (ci.s62a.top_customers or [])])
-    sh = replace(ci.shields, expenses_current_year=ci.shields.expenses_current_year * f)
+    sh = replace(ci.shields, expenses_current_year=keep(ci.shields.expenses_current_year))
     d = ci.distributions
-    if d.current_year_profit_estimate is not None:              # אומדן הרווח – תזרים, מוכפל גם הוא
+    if d.current_year_profit_estimate is not None and not tb_based:   # אומדן הרווח – תזרים, מוכפל גם הוא
         d = replace(d, current_year_profit_estimate=d.current_year_profit_estimate * f)
     # דיבידנדים, הפסדים ויתרות מאזן – ערכים בפועל, לא מוכפלים
     return replace(ci, s62a=s, shields=sh, distributions=d), f
@@ -901,6 +904,108 @@ def _monthly_gaps(ci: ClientInput) -> tuple[ClientInput, list[dict], dict]:
     return ci, items, table
 
 
+def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, dict]:
+    """סבב 4 (אברהם, 15.10): מאזן הבוחן המלא – כל שורה × 12 חודשים.
+    תא = קובץ / אומדן (חודש שטרם הוזן) / חור (0 בחודש כשהשאר מלאים) / תיקון של רואה החשבון.
+    השנה = סכום 12 התאים – במקום הכפלה לינארית. אומדן: לפי אותו חודש במאזן הבוחן של השנה הקודמת מותאם לקצב השנה (עונתיות);
+    אין שנה קודמת – ממוצע החודשים שיש (שורה סדירה) או חלק יחסי (שורה לא סדירה)."""
+    rows = ci.tb_rows or []
+    if not rows:
+        return ci, [], None, {}
+    m_last = ci.data_through_month if ci.data_through_month and 1 <= ci.data_through_month <= 12 else 12
+    prev_by_id = {str(r.get("id")): r for r in (ci.tb_rows_prev_year or [])}
+    prev_by_name = {str(r.get("name")): r for r in (ci.tb_rows_prev_year or [])}
+    out_rows: list[dict] = []
+    items: list[dict] = []
+    stats = {"file": 0.0, "estimate": 0.0, "correction": 0.0, "season_rows": 0, "avg_rows": 0}
+    for r in rows:
+        inc = bool(r.get("income"))
+        raw = [float(x or 0) for x in list(r.get("months") or [])[:12]] + [0.0] * (12 - len(r.get("months") or []))
+        disp = [(-v if inc else v) for v in raw]                           # הכנסות בזכות – מוצגות חיוביות
+        filled = [i for i in range(m_last) if abs(disp[i]) > 0.5]
+        # "חור" (0 בחודש כשהשאר מלאים) נבדק רק בשורות שאמורות להיות כל חודש: הכנסות וסעיפי השלמות (שכר, עלויות מעסיק, שכירות…)
+        regular = len(filled) >= max(2, round(0.6 * m_last)) and (inc or r.get("category") not in (None, "קניות"))
+        avg = (sum(disp[i] for i in filled) / len(filled)) if filled else 0.0
+        linear = sum(disp[:m_last]) / m_last if m_last else 0.0
+        prev = prev_by_id.get(str(r.get("id"))) or prev_by_name.get(str(r.get("name")))
+        season = None
+        if prev:
+            pr = [float(x or 0) for x in list(prev.get("months") or [])[:12]] + [0.0] * 12
+            pd = [(-v if inc else v) for v in pr[:12]]
+            base_prev, base_cur = sum(pd[:m_last]), sum(disp[:m_last])
+            if base_prev > 0.5 and base_cur > 0.5 and any(abs(x) > 0.5 for x in pd[m_last:]):
+                ratio = base_cur / base_prev
+                season = [x * ratio for x in pd]
+        if season:
+            stats["season_rows"] += 1
+        else:
+            stats["avg_rows"] += 1
+        key = f"tb:{r.get('id')}"
+        cells = []
+        for i in range(12):
+            file_v = disp[i]
+            if i < m_last or abs(file_v) > 0.5:
+                if abs(file_v) > 0.5 or not regular:
+                    src, v, base = "file", file_v, file_v
+                else:                                                      # חור: 0 בחודש שבשאר החודשים יש
+                    base = season[i] if season else avg
+                    src, v = "gap", base
+            else:
+                base = season[i] if season else (avg if len(filled) >= max(2, round(0.6 * m_last)) else linear)
+                src, v = "estimate", base
+            adj = _adj_for(ci, key, i + 1)
+            note = by = at = ""
+            if adj:
+                note, by, at = adj.get("note", ""), adj.get("by", ""), adj.get("at", "")
+                if adj.get("kind") == "manual":
+                    v, src = float(adj.get("amount") or 0), "manual"
+                elif adj.get("kind") == "dismissed" and src == "gap":
+                    v, src = 0.0, "dismissed"
+                elif adj.get("kind") == "accepted" and src in ("gap", "estimate"):
+                    src = "accepted"
+            cells.append({"v": round(v), "src": src, "base": round(base), "note": note, "by": by, "at": at})
+            if not inc and r.get("kind") == "expense":
+                if src == "file":
+                    stats["file"] += v
+                elif src in ("estimate", "gap", "accepted"):
+                    stats["estimate"] += v
+                elif src == "manual":
+                    stats["correction"] += v - base
+            if src in ("gap", "dismissed") or (src in ("manual", "accepted") and i < m_last and abs(file_v) <= 0.5 and regular):
+                st = {"gap": "pending", "dismissed": "dismissed", "manual": "corrected", "accepted": "accepted"}[src]
+                items.append({"key": key, "month": i + 1, "label": f"{r.get('name')} · {MONTHS_HE[i]}: 0 – בשאר החודשים {'לפי השנה הקודמת' if season else 'ממוצע'} {base:,.0f} ₪",
+                              "amount": v if st != "dismissed" else 0.0, "estimate": base, "status": st, "note": note})
+        total = sum(c["v"] for c in cells)
+        out_rows.append({"id": r.get("id"), "code": r.get("code", ""), "name": r.get("name"), "section": r.get("section", ""), "group": r.get("group", ""),
+                         "income": inc, "kind": r.get("kind", ""), "category": r.get("category"), "cells": cells, "total": round(total),
+                         "file_total": round(sum(disp[:m_last])), "method": "עונתיות" if season else ("ממוצע" if regular else "יחסי")})
+    def tot(kind):
+        return sum(r["total"] for r in out_rows if r["kind"] == kind)
+    revenue, fin, other, expenses = tot("revenue"), tot("fin_income"), tot("other_income"), tot("expense")
+    bd = {}
+    for r in out_rows:
+        if r["kind"] == "expense" and r.get("category"):
+            bd[r["category"]] = bd.get(r["category"], 0.0) + r["total"]
+    dep = bd.get("פחת", 0.0)
+    profit = revenue + fin + other - expenses
+    ci2 = replace(ci,
+                  s62a=replace(ci.s62a, total_revenue=revenue, other_interest=fin, taxable_income_personal_effort=max(0.0, profit),
+                               purchases_current_year=(bd.get("קניות") if "קניות" in bd else ci.s62a.purchases_current_year)),
+                  shields=replace(ci.shields, expenses_current_year=expenses - dep),
+                  distributions=replace(ci.distributions, current_year_profit_estimate=profit),
+                  period_breakdown={k: round(v) for k, v in bd.items()})
+    sums = {}
+    for kind in ("revenue", "fin_income", "other_income", "expense"):
+        sums[kind] = [round(sum(r["cells"][i]["v"] for r in out_rows if r["kind"] == kind)) for i in range(12)]
+    sums["profit"] = [sums["revenue"][i] + sums["fin_income"][i] + sums["other_income"][i] - sums["expense"][i] for i in range(12)]
+    table = {"through_month": m_last, "rows": out_rows, "sums": sums,
+             "annual": {"revenue": round(revenue), "fin_income": round(fin), "other_income": round(other), "expenses": round(expenses), "profit": round(profit)},
+             "method": ("לפי מאזן הבוחן של השנה הקודמת (עונתיות)" if stats["season_rows"] and not stats["avg_rows"] else
+                        "לפי השנה הקודמת כשיש התאמה, אחרת ממוצע החודשים שיש" if stats["season_rows"] else "ממוצע החודשים שיש (אין מאזן בוחן של השנה הקודמת)"),
+             "stats": {k: round(v) if isinstance(v, float) else v for k, v in stats.items()}}
+    return ci2, items, table, stats
+
+
 def _estimates(ci: ClientInput) -> tuple[ClientInput, list[str]]:
     """אברהם (סבב 2, 5–7, 14, 15): השלמות שמאזן בוחן באמצע שנה לא מכיל – על נתונים שנתיים (אחרי ההכפלה).
     כל השלמה נרשמת כאומדן לבדיקת אברהם. 1. פחת לפי הדוח השנתי; 2. התאמת מלאי לפי רווח גולמי; 3. סעיף שהיה בשנה הקודמת ונעלם."""
@@ -928,7 +1033,7 @@ def _estimates(ci: ClientInput) -> tuple[ClientInput, list[str]]:
         add_exp += v
         add_cost += v
     if s.has_inventory and s.gross_margin_rate and s.purchases_current_year is not None and s.total_revenue > 0:
-        purchases = float(s.purchases_current_year) * (12.0 / ci.data_through_month if ci.data_through_month and 1 <= ci.data_through_month < 12 else 1.0)
+        purchases = float(s.purchases_current_year) * (1.0 if ci.tb_rows else (12.0 / ci.data_through_month if ci.data_through_month and 1 <= ci.data_through_month < 12 else 1.0))
         cogs = s.total_revenue * (1 - s.gross_margin_rate)
         delta = cogs - purchases                                 # חיובי = עלות המכר גבוהה מהקניות (המלאי ירד)
         v = decide("מלאי", delta, f"מלאי: במקום קניות {purchases:,.0f} ₪ – עלות מכר לפי רווח גולמי {s.gross_margin_rate:.1%} (ממוצע שתי השנים שבדוח): "
@@ -971,10 +1076,11 @@ def _annual_item_keys(ci: ClientInput, notes: list[str]) -> list:
     if sh.depreciation_annual_estimate and not bd.get("פחת"):
         out.append(item("פחת", f"פחת שנתי לפי הדוח השנתי: {float(sh.depreciation_annual_estimate):,.0f} ₪ (במאזן הבוחן אין פחת)", float(sh.depreciation_annual_estimate)))
     if s.has_inventory and s.gross_margin_rate and s.purchases_current_year is not None and s.total_revenue > 0:
-        f = 12.0 / ci.data_through_month if ci.data_through_month and 1 <= ci.data_through_month < 12 else 1.0
+        f = 1.0 if ci.tb_rows else (12.0 / ci.data_through_month if ci.data_through_month and 1 <= ci.data_through_month < 12 else 1.0)
         purchases = float(s.purchases_current_year) * f
         delta = s.total_revenue * (1 - s.gross_margin_rate) - purchases
-        out.append(item("מלאי", f"התאמת מלאי: עלות מכר לפי רווח גולמי {s.gross_margin_rate:.1%} במקום קניות – {'הקטנת' if delta > 0 else 'הגדלת'} הרווח ב-{abs(delta):,.0f} ₪", delta))
+        cogs = s.total_revenue * (1 - s.gross_margin_rate)
+        out.append(item("מלאי", f"התאמת מלאי: קניות בקובץ {purchases:,.0f} ₪ ← עלות מכר לפי רווח גולמי {s.gross_margin_rate:.1%} (מהדוח השנתי) {cogs:,.0f} ₪ ← הפרש {abs(delta):,.0f} ₪ {'נוסף להוצאות (הרווח קטן)' if delta > 0 else 'יורד מההוצאות (הרווח גדל)'}", delta))
     for cat, v_prev in bd_prev.items():
         v_prev = float(v_prev or 0)
         if bd and v_prev > 0 and not bd.get(cat) and cat not in ("פחת", "קניות"):
@@ -1001,13 +1107,20 @@ def compute(ci: ClientInput) -> ClientResult:
                "taxable_income": ci.s62a.taxable_income_personal_effort, "expenses": ci.shields.expenses_current_year,
                "profit_estimate": ci.distributions.current_year_profit_estimate}
     file_exp = ci.shields.expenses_current_year
-    ci, month_items, gap_table = _monthly_gaps(ci)
-    ci, factor = _annualize(ci)
+    months_table = None
+    if ci.tb_rows:                                                  # סבב 4: המסמך המלא קובע – השנה = סכום 12 התאים
+        ci, month_items, months_table, tb_stats = _tb_table(ci)
+        gap_table = {}
+        ci, factor = _annualize(ci, tb_based=True)
+        file_exp, est_m, corr_m = tb_stats["file"], tb_stats["estimate"], tb_stats["correction"]
+    else:
+        ci, month_items, gap_table = _monthly_gaps(ci)
+        ci, factor = _annualize(ci)
+        corr_m = sum(it["amount"] for it in month_items if it["status"] in ("corrected", "accepted"))
+        est_m = sum(it["amount"] for it in month_items if it["status"] == "pending")
     exp_before_annual_est = ci.shields.expenses_current_year
     ci, est_notes = _estimates(ci)
     est_annual = ci.shields.expenses_current_year - exp_before_annual_est
-    corr_m = sum(it["amount"] for it in month_items if it["status"] in ("corrected", "accepted"))
-    est_m = sum(it["amount"] for it in month_items if it["status"] == "pending")
     # אומדנים שנתיים (פחת/מלאי/סעיף שנעלם) – פריטים עם סטטוס לפי התיקונים
     annual_items = []
     for key, note in _annual_item_keys(ci, est_notes):
@@ -1055,4 +1168,5 @@ def compute(ci: ClientInput) -> ClientResult:
         data_breakdown={"file": file_exp, "estimates_monthly": est_m, "corrections_monthly": corr_m, "estimates_annual": est_annual, "factor": factor},
         months_gap_table=gap_table,
         years_used=_years_used(ci, s62),
+        months_table=months_table,
     )

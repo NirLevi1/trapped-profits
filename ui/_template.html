@@ -174,6 +174,10 @@
   .notice.info{background:var(--info-bg);color:var(--info)} .notice.neutral{background:var(--neutral-bg);color:var(--ink-2)}
   .flags{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
   table.gaps td.gap{background:var(--serious-bg);color:var(--serious);font-weight:600} table.gaps td.gap.accepted,table.gaps td.gap.corrected{background:var(--good-bg);color:var(--good)} table.gaps td.gap.dismissed{background:var(--neutral-bg);color:var(--ink-3);font-weight:400} table.gaps td.off{background:var(--canvas-2)} table.gaps td,table.gaps th{padding:3px 6px;border-bottom:1px solid var(--line-soft)}
+  .tbwrap{background:var(--surface);border:1px solid var(--line-soft);border-radius:8px;padding:4px 8px;margin-top:8px} table.tb{border-collapse:collapse;font-size:12px;width:100%} table.tb th,table.tb td{padding:3px 6px;border-bottom:1px solid var(--line-soft);text-align:right;white-space:nowrap} table.tb th{font-weight:500;color:var(--ink-3)} table.tb th.est{color:var(--warn)} table.tb td.name{max-width:220px;overflow:hidden;text-overflow:ellipsis} table.tb td.cat{color:var(--ink-3);font-size:11px}
+  table.tb tr.sec td{background:var(--canvas-2);font-weight:600;color:var(--ink-2);padding-top:6px} table.tb tr.grp td{color:var(--ink-3);font-size:11px;padding-top:4px} table.tb tr.sum td{font-weight:600;border-top:1px solid var(--line)} table.tb tr.sum.profit td{background:var(--canvas-2)}
+  table.tb td.c{cursor:pointer;min-width:62px} table.tb td.c:hover{outline:1px solid var(--line)} table.tb td.c.estimate{background:var(--warn-bg);color:#7a5a12} table.tb td.c.gap{background:var(--serious-bg);color:var(--serious);font-weight:600} table.tb td.c.manual{background:var(--info-bg);color:var(--info);font-weight:600} table.tb td.c.accepted{background:var(--good-bg);color:var(--good)} table.tb td.c.dismissed{background:var(--neutral-bg);color:var(--ink-3)} table.tb td.c.zero{color:var(--ink-3)}
+  table.tb td.c input{width:84px;padding:2px 4px;font-size:12px;text-align:left} .tblegend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--ink-3);margin:6px 0 2px} .tblegend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-inline-end:4px;border:1px solid var(--line-soft)}
   .gaplist{margin-top:10px;display:grid;gap:6px} .gapitem{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:8px 10px;border:1px solid var(--line-soft);border-radius:6px;background:var(--surface);color:var(--ink)} .gapitem.pending{border-color:var(--warn)} .gapitem .ga{display:flex;gap:4px;flex-wrap:wrap} .gapitem .gs{white-space:nowrap;font-size:12px;color:var(--ink-2)}
   tr.sup{opacity:.55}
   .status-card.upd{background:var(--info-bg);color:var(--info);border-color:transparent;margin-top:8px}
@@ -613,7 +617,8 @@
       if (items.length) addFlag('missing', 'serious', `חסרים ${items.length}`, `<ul style="margin:0;padding-inline-start:18px">${items.map(i => `<li style="color:var(--${i.t})">${esc(i.x)}</li>`).join('')}</ul><div class="hint" style="margin-top:6px"><button class="quiet" onclick="editClient('${esc(rec.id)}')">להשלים בעריכה</button></div>`); }
     if (rec.pending_file_fields?.length) addFlag('pending', 'warn', `לאישור ${rec.pending_file_fields.length}`, `<div style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
     { const items = c.estimate_items || []; const pend = items.filter(i => i.status === 'pending').length;
-      if (items.length || Object.keys(c.months_gap_table || {}).length) addFlag('gaps', pend ? 'warn' : 'neutral', pend ? `חוסרים ${pend}` : 'חוסרים – טופלו', gapsHtml(rec, c)); }
+      if (c.months_table) addFlag('gaps', pend ? 'warn' : 'neutral', pend ? `מאזן בוחן · ${pend} לבדיקה` : 'מאזן בוחן', gapsHtml(rec, c));
+      else if (items.length || Object.keys(c.months_gap_table || {}).length) addFlag('gaps', pend ? 'warn' : 'neutral', pend ? `חוסרים ${pend}` : 'חוסרים – טופלו', gapsHtml(rec, c)); }
     { const srcs = (rec.sources || []); const live = srcs.filter(x => !x.superseded); const unrev = live.filter(x => !x.reviewed).length;
       if (srcs.length) addFlag('sources', unrev ? 'warn' : 'neutral', unrev ? `מקורות · ${unrev} לבדיקה` : `מקורות ${live.length}`, sourcesHtml(rec)); }
     if (c.annualization_factor && c.annualization_factor !== 1){
@@ -1070,10 +1075,47 @@
   function foldCard(key, quiet, title, summary, body){ if (!quiet) return `<div class="card"><h3>${title}</h3>${body}</div>`; const o = openCards.has(key); return `<div class="card fold ${o ? 'open' : ''}"><h3 onclick="toggleCard('${key}')">${title}<span class="tog">${o ? 'הסתר ▴' : 'הצג ▾'}</span></h3><div class="fold-sum">${summary}</div><div class="fold-body">${body}</div></div>`; }
   const MONTHS_HE = ['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ'];
   const STATUS_HE = {pending: 'ממתין', accepted: 'אושר', corrected: 'תוקן', dismissed: 'לא חסר'};
+  // סבב 4: מאזן הבוחן המלא – כל שורה × 12 חודשים; תא צהוב = אומדן לחודש שטרם הוזן, אדום = חור, כחול = תיקון של אברהם. לחיצה על תא = עריכה
+  const openSecs = new Set();
+  function tbTableHtml(rec, c){
+    const t = c.months_table, m = t.through_month, id = esc(rec.id);
+    const SRC_HE = {file: 'מהקובץ', estimate: 'אומדן – החודש טרם הוזן', gap: 'חור – 0 בחודש כשבשאר החודשים יש; האומדן נכנס לחישוב', manual: 'תיקון של רואה החשבון', accepted: 'אומדן שאושר', dismissed: 'סומן: לא חסר'};
+    const cell = (r, cl, i) => {
+      const tip = `${r.name} · ${MONTHS_HE[i]}: ${SRC_HE[cl.src]}${cl.src !== 'file' && cl.src !== 'manual' ? '' : ''}${cl.src === 'manual' || cl.src === 'accepted' ? ` (${cl.by || ''} ${when(cl.at).slice(0, 10)}${cl.note ? ' – ' + cl.note : ''}; לפני: ${fmtNum(cl.base)})` : ''}`;
+      return `<td class="num c ${cl.src} ${cl.v === 0 && cl.src === 'file' ? 'zero' : ''}" title="${esc(tip)}" onclick="tbEdit(this,'${id}','tb:${esc(String(r.id))}',${i + 1},${cl.v},'${cl.src}',${cl.base})">${fmtNum(cl.v)}</td>`;
+    };
+    const rows = t.rows;                               // סדר הקובץ – כמו במסמך
+    let lastSec = null, lastGrp = null, html = '';
+    for (const r of rows){
+      if (r.section !== lastSec){ html += `<tr class="sec"><td colspan="15">${esc(r.section || (r.income ? 'הכנסות' : 'הוצאות'))}</td></tr>`; lastSec = r.section; lastGrp = null; }
+      if (r.group && r.group !== lastGrp){ html += `<tr class="grp"><td colspan="15">${esc(r.group)}</td></tr>`; lastGrp = r.group; }
+      html += `<tr><td class="name" title="${esc((r.code ? r.code + ' ' : '') + r.name)}">${esc(r.name)}</td>${r.cells.map((cl, i) => cell(r, cl, i)).join('')}<td class="num"><b>${fmtNum(r.total)}</b></td><td class="cat" title="${r.method === 'עונתיות' ? 'אומדן לפי אותו חודש בשנה הקודמת, מותאם לקצב השנה' : r.method === 'ממוצע' ? 'אומדן לפי ממוצע החודשים שיש' : 'אומדן לפי חלק יחסי מהסכום עד כה'}">${esc(r.category || '')}${r.category ? ' · ' : ''}${esc(r.method)}</td></tr>`;
+    }
+    const sumRow = (label, arr, cls = '') => `<tr class="sum ${cls}"><td>${label}</td>${arr.map(v => `<td class="num">${fmtNum(v)}</td>`).join('')}<td class="num">${fmtNum(arr.reduce((a, b) => a + b, 0))}</td><td></td></tr>`;
+    const sums = t.sums || {};
+    const income = (sums.revenue || []).map((v, i) => v + (sums.fin_income?.[i] || 0) + (sums.other_income?.[i] || 0));
+    html += sumRow('סה"כ הכנסות', income) + sumRow('סה"כ הוצאות', sums.expense || []) + sumRow('רווח לפני מס', sums.profit || [], 'profit');
+    const legend = `<div class="tblegend"><span><i style="background:var(--surface)"></i>מהקובץ</span><span><i style="background:var(--warn-bg)"></i>אומדן (חודש שטרם הוזן) – ${esc(t.method)}</span><span><i style="background:var(--serious-bg)"></i>חור – חודש בלי תנועה</span><span><i style="background:var(--info-bg)"></i>תיקון של רואה החשבון</span><span><i style="background:var(--good-bg)"></i>אומדן שאושר</span><span>לחיצה על תא – עריכה; ההנחיה נשמרת ומחשבת מיד</span></div>`;
+    return `<div class="tablewrap tbwrap"><table class="tb"><tr><th>סעיף</th>${MONTHS_HE.map((mm, i) => `<th class="num ${i + 1 > m ? 'est' : ''}">${mm}${i + 1 > m ? ' ◌' : ''}</th>`).join('')}<th class="num">שנה</th><th>משויך ל־ · שיטה</th></tr>${html}</table></div>${legend}`;
+  }
+  function tbEdit(td, id, key, month, cur, src, base){
+    if (td.querySelector('input')) return;
+    const undo = (src === 'manual' || src === 'accepted' || src === 'dismissed') ? `<button class="quiet" title="חזרה לערך מהקובץ / לאומדן" onclick="event.stopPropagation();adjust('${id}','${key}',${month},'clear',0)">↶</button>` : '';
+    const acc = (src === 'estimate' || src === 'gap') ? `<button class="quiet" title="אישור האומדן" onclick="event.stopPropagation();adjust('${id}','${key}',${month},'accepted',${base})">✓</button>` : '';
+    td.innerHTML = `<span style="display:inline-flex;gap:3px;align-items:center"><input type="text" inputmode="numeric" dir="ltr" value="${fmtNum(cur)}" oninput="fmtInput(this)" onclick="event.stopPropagation()" onkeydown="if(event.key==='Enter'){adjust('${id}','${key}',${month},'manual',parseNum(this.value)||0,'')}else if(event.key==='Escape'){renderClient()}" onblur="setTimeout(()=>{if(document.activeElement?.closest&&!document.activeElement.closest('td.c'))renderClient()},150)">${acc}${undo}</span>`;
+    td.onclick = null; const inp = td.querySelector('input'); inp.focus(); inp.select();
+  }
   function gapsHtml(rec, c){
     const tbl = c.months_gap_table || {}, items = c.estimate_items || [], bd = c.data_breakdown || {};
     const cats = Object.keys(tbl);
     const itemAt = (cat, m) => items.find(i => i.key === cat && i.month === m);
+    if (c.months_table){
+      const list2 = items.filter(it => !it.month || it.status === 'pending');
+      const lst = list2.length ? `<div class="gaplist">${list2.map(it => `<div class="gapitem ${it.status}"><div class="gl"><b>${esc(it.label)}</b>${it.note ? `<div class="hint">${esc(it.note)}</div>` : ''}</div><div class="gs">${it.status === 'pending' ? `אומדן <b>${fmtNum(Math.round(it.estimate))} ₪</b>` : `${STATUS_HE[it.status]}${it.status !== 'dismissed' ? ` · <b>${fmtNum(Math.round(it.amount))} ₪</b>` : ''}`}</div><div class="ga">${it.status === 'pending' ? `<button class="quiet" onclick="adjust('${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},'accepted',${Math.round(it.estimate)})">✓ אשר</button><button class="quiet" onclick="askAmount(this,'${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},${Math.round(it.estimate)})">תקן</button><button class="quiet" onclick="adjust('${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},'dismissed',0)">לא חסר</button>` : `<button class="quiet" onclick="askAmount(this,'${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},${Math.round(it.amount || it.estimate)})">שינוי</button><button class="quiet" onclick="adjust('${esc(rec.id)}','${esc(it.key)}',${it.month || 'null'},'clear',0)" title="חזרה לאומדן המערכת">↶</button>`}</div></div>`).join('')}</div>` : '';
+      const a = c.months_table.annual || {};
+      const sum2 = `<div class="hint" style="margin-top:8px">השנה לפי הטבלה: הכנסות ${fmtNum(a.revenue)} · הוצאות ${fmtNum(a.expenses)} · רווח לפני מס ${fmtNum(a.profit)}. הוצאות: מהקובץ ${fmtNum(Math.round(bd.file || 0))} · אומדן לחודשים שטרם הוזנו ${fmtNum(Math.round(bd.estimates_monthly || 0))} · תיקוני רו"ח ${fmtNum(Math.round(bd.corrections_monthly || 0))}${bd.estimates_annual ? ` · התאמות שנתיות (פחת/מלאי/סעיף חסר) ${fmtNum(Math.round(bd.estimates_annual))}` : ''}. סדר עדיפויות: קובץ ← אומדן ← תיקון.</div>`;
+      return `<b>מאזן בוחן ${esc(String(c.tax_year))} – המסמך המלא</b> · נתונים עד ${MONTHS_HE[c.months_table.through_month - 1]}; החודשים שאחריו באומדן. השנה בחישוב = סכום 12 התאים.${tbTableHtml(rec, c)}${lst}${sum2}`;
+    }
     const grid = cats.length ? `<div class="tablewrap"><table class="mini gaps"><tr><th>סעיף</th>${MONTHS_HE.map((m, i) => `<th class="num">${m}</th>`).join('')}<th class="num">סה"כ</th></tr>${cats.map(cat => {
       const row = tbl[cat]; const tot = row.reduce((a, v) => a + (v || 0), 0);
       return `<tr><td>${esc(cat)}</td>${row.map((v, i) => { const it = itemAt(cat, i + 1); const cls = v === null ? 'off' : (it ? 'gap ' + it.status : ''); return `<td class="num ${cls}" title="${it ? esc(it.label) : ''}">${v === null ? '' : (v ? fmtNum(v) : '0')}</td>`; }).join('')}<td class="num"><b>${fmtNum(tot)}</b></td></tr>`; }).join('')}</table></div>` : '<div class="hint">אין פירוט חודשי – הסעיפים מגיעים ממאזן בוחן לפי חודשים.</div>';
