@@ -250,7 +250,8 @@ def _numbers(line: list[Word]) -> list[tuple[float, float]]:
 # ---------------------------------------------------------------------------
 _RETAINED = ("שנצבר", "עודפים", "יתרת רווח", "רווחים שנצברו", "עודפים שנצברו")
 _RETAINED_SKIP = ("לתחילת", "תחילת השנה", "עוברת")      # שורות רווח והפסד שאינן היתרה במאזן
-_EXPENSE = ("הוצאות הנהלה", "הוצאות מכירה", "עלות המכירות", "עלות המכר", "הוצאות מימון", "הוצאות שיווק", "עלות ההכנסות", "הוצאות תפעול", "הוצאות אחרות")
+# 17.10: כל שורה שמתחילה ב"עלות" (עלות המכירות / עלות מתן השירותים וביצוע עבודות / עלות ההכנסות…) – קודם נקלטו רק שלושה ניסוחים
+_EXPENSE = ("הוצאות הנהלה", "הוצאות מכירה", "עלות", "הוצאות מימון", "הוצאות שיווק", "הוצאות תפעול", "הוצאות אחרות")
 _SKIP = ("סה\"כ", "סהכ", "רווח", "לאחר", "לפני")
 
 
@@ -285,7 +286,9 @@ class _Page:
     def _pick(self, nums: list[tuple[float, float]], year: int) -> float | None:
         if year in self.year_cols and len(self.year_cols) >= 2:
             x = self.year_cols[year]
-            return min(nums, key=lambda n: abs(n[0] - x))[1]
+            cx, v = min(nums, key=lambda n: abs(n[0] - x))
+            own = min(self.year_cols, key=lambda y: abs(self.year_cols[y] - cx))
+            return v if own == year else None          # 17.10: "-" בשנה הזו → המספר שבשורה שייך לשנה האחרת
         # בלי כותרת שנים: בעברית העמודה של השנה הנוכחית היא הימנית
         return max(nums, key=lambda n: n[0])[1]
 
@@ -327,14 +330,28 @@ def parse_annual_report(pdf: str | Path) -> dict[str, Any]:
     for pg in P:
         for l in pg.lines:
             lab = _label(l)
-            if 2 <= len(lab.split()) <= 7 and re.search(r"בע[\"'׳״]*\s?מ(\s|$)", lab):
+            if 2 <= len(lab.split()) <= 7 and re.search(r"בע[\"'׳״י]*\s?מ(\s|$)", lab):
                 nm = re.sub(r"[\u0591-\u05c7]", "", lab)                 # בלי ניקוד שזיהוי התווים ממציא
-                nm = re.sub(r"בע[\"'׳״]*\s?מ(?=\s|$)", 'בע"מ', nm)
+                nm = re.sub(r"בע[\"'׳״י]*\s?מ(?=\s|$)", 'בע"מ', nm)    # גם "בע'יימ" / "בעיימ" של זיהוי התווים
                 nm = re.sub(r"\s+", " ", nm).strip()
+                nm = re.sub(r"(?<=[\u05d0-\u05ea])/(?=[\u05d0-\u05ea\s])", "'", nm)   # זיהוי תווים: ג' → ג/
                 if nm != 'בע"מ':
                     cands.append(nm)
     if cands:
         base_fields["structure.name"] = max(cands, key=lambda c: (cands.count(c), -cands.index(c)))
+    else:
+        # שם בלי "בע"מ" (למשל משרד עורכי דין): השורה העליונה שחוזרת בכותרת של הכי הרבה עמודים
+        tops = []
+        for pg in P:
+            for l in pg.lines[:3]:
+                lab = re.sub(r"[\u0591-\u05c7]", "", _label(l)).strip()
+                if 2 <= len(lab.split()) <= 7 and not _has(lab, "דוח", "דוחות", "באורים", "ליום", "בדצמבר", "שקל", "מאזן", "והפסד", "תוכן"):
+                    tops.append(re.sub(r"\s+", " ", lab))
+                    break
+        if tops:
+            best = max(tops, key=lambda c: (tops.count(c), -tops.index(c)))
+            if tops.count(best) >= 2:
+                base_fields["structure.name"] = best
     if year:
         base_fields["structure.last_closed_report_year"] = year
         notes.append(f"דוח ליום 31.12.{year}")
@@ -371,7 +388,10 @@ def parse_annual_report(pdf: str | Path) -> dict[str, Any]:
         notes.append("לא זוהה עמוד מאזן")
 
     # רווח והפסד
-    pl = next((pg for pg in P if _has(pg.text, "והפסד") and _has(pg.text, "הוצאות") and not _has(pg.text[:200], "מאזן")), None)
+    def _pl_score(pg) -> int:
+        return sum(1 for l in pg.lines if _numbers(l) and _has(_label(l), "רווח גולמי", "רווח גלמי", "רווח תפעולי", "לפני מיסים", "לפני מסים", "הוצאות הנהלה", "הוצאות מימון", "הכנסות", "עלות"))
+    cands_pl = [pg for pg in P if _has(pg.text, "והפסד") and _has(pg.text, "הוצאות") and not _has(pg.text[:200], "מאזן")]
+    pl = max(cands_pl, key=_pl_score) if cands_pl else None     # 17.10: העמוד עם הכי הרבה שורות רווח והפסד (לא הראשון שמזכיר "והפסד")
     if pl:
         for y in (year, prev_year):
             if not y or (y != year and len(pl.year_cols) < 2):
@@ -471,7 +491,7 @@ def _assets_and_margin(P: list, bs, pl, year: int, prev_year: int, notes: list[s
                 continue
             g, glab = pl.value(("רווח גולמי", "רווח גלמי"), y)
             # מכירות = רווח גולמי + עלות המכר (הכי אמין: "עלות המכירות" מכילה את המילה "מכירות" ונתפסה בטעות כהכנסות – 15.10)
-            c, clab = pl.value(("עלות המכירות", "עלות המכר", "עלות ההכנסות", "עלות השירותים", "עלות העבודות"), y)
+            c, clab = pl.value(("עלות",), y)
             r, rlab = (abs(g) + abs(c), f"{glab} + {clab}") if g is not None and c is not None else (None, "")
             if r is None:
                 r, rlab = pl.value(("הכנסות ממכירות", "הכנסות ממתן שירותים", "מכירות", "הכנסות"), y)

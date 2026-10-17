@@ -196,6 +196,14 @@ def parse_trial_balance(path: str | Path) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # כרטסת הכנסות – לפי לקוח
 # ---------------------------------------------------------------------------
+_GENERIC_COUNTER = ("קופת העברות", "קופת שיקים", "קופת אשראי", "לקוחות שונים", "לקוחות מזדמנים", "קופה ראשית", "קופת מזומן", "העברות בנקאיות", "קופה רושמת")
+
+
+def _is_generic_counter(name: str) -> bool:
+    n = name.strip()
+    return any(k in n for k in _GENERIC_COUNTER) or n in ("קופה", "מזומן", "העברות", "שונים", "בנק")
+
+
 def parse_ledger(path: str | Path) -> dict[str, Any]:
     rows = _read(path)
     header_idx = next((i for i, r in enumerate(rows) if "חשבון נגדי" in r and "זכות" in r), None)
@@ -226,12 +234,17 @@ def parse_ledger(path: str | Path) -> dict[str, Any]:
     if not n:
         raise ValueError("לא נמצאו תנועות בכרטסת")
     total = sum(by_customer.values())
-    top = sorted(by_customer.items(), key=lambda x: -x[1])[:5]
+    # 17.10: חשבון נגדי כללי (קופה, העברות, לקוחות שונים) אינו לקוח – לא נכנס לריכוזיות (נשאר בסך ההכנסות)
+    generic = {k: v for k, v in by_customer.items() if _is_generic_counter(k)}
+    real = {k: v for k, v in by_customer.items() if k not in generic}
+    top = sorted(real.items(), key=lambda x: -x[1])[:5]
     customers = [{"name": k, "amount": round(v)} for k, v in top if v > 0]
     share = (top[0][1] / total) if total > 0 and top else 0.0
+    gen_total = sum(v for v in generic.values() if v > 0)
     year = max(years, key=years.get) if years else None
     return {"kind": "ledger", "year": year, "fields": {"s62a.top_customers": customers},
-            "notes": [f"{n} תנועות, {len(by_customer)} לקוחות, סה\"כ {total:,.0f} ₪; הגדול ביותר {top[0][0]} – {share:.0%}" if top else ""],
+            "notes": [f"{n} תנועות, {len(by_customer)} לקוחות, סה\"כ {total:,.0f} ₪; הגדול ביותר {top[0][0]} – {share:.0%}" if top else ""]
+                     + ([f"{gen_total / total:.0%} מההכנסות דרך חשבון כללי ({', '.join(sorted(generic))}) – לא לקוח מזוהה; לא נכלל בריכוזיות. לבדוק ידנית מי הלקוחות שם"] if total > 0 and gen_total > 0.05 * total else []),
             "summary": {"total": total, "customers": len(by_customer), "top_share": share}}
 
 

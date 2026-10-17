@@ -75,3 +75,10 @@ def test_import_files_merges_and_reports_unknown():
     r = import_files([_tb(), _ledger(), bad])
     assert "s62a.top_customers" in r["fields"] and "s62a.total_revenue" in r["fields"]
     assert len(r["files"]) == 2 and len(r["errors"]) == 1
+
+
+def test_generic_counter_accounts_not_customers():
+    from trapped_profits.importers import _is_generic_counter
+    for n in ("קופת העברות", "קופת שיקים", "לקוחות שונים", "קופת מזומן"):
+        assert _is_generic_counter(n)
+    assert not _is_generic_counter('אלביט מערכות אל אופ בע"מ')
