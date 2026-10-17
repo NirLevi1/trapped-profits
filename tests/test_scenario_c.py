@@ -96,3 +96,21 @@ def test_glyph_nun_font_and_name_vote():
     f = parse_annual_report(pdf)["fields"]
     assert f["structure.name"] == 'א. לודריק פיקוח וניהול פרויקטיים בע"מ'
     assert f["retained.balance_sheet_retained_earnings"] == 467072 and f["shields.share_capital_and_premium"] == 1001
+
+
+def test_status_62a_exempt_750k_label():
+    """17.10: רווחיות מעל 25% עם עודפים עד 750 אלף – הסטטוס אומר "פטור", לא "מתקרבת לסף"; מעל 750 – ייחוס."""
+    d = _client(2025)
+    d["retained"]["balance_sheet_retained_earnings"] = 500_000
+    d["structure"]["owner_controls_another_company"] = False
+    d["s62a"]["concentration_test_met"] = False
+    d["s62a"]["total_revenue"] = 1_000_000; d["s62a"]["taxable_income_personal_effort"] = 400_000
+    for k in ("other_interest", "other_dividend", "other_rent", "other_asset_sale", "other_securities_inventory_sale", "other_real_estate_sale"):
+        d["s62a"][k] = 0
+    d["s62a"]["top_customers"] = []; d["s62a"]["top_customers_prev_year"] = []; d["s62a"]["top_customers_prev2_year"] = []
+    r = compute(ClientInput.from_dict(d)).to_dict()
+    assert r["s62a"]["exemption_750k_applies"] and r["s62a"]["attributed_income"] == 0
+    assert "פטור: עודפים עד 750 אלף" in r["dashboard"]["status_62a"]
+    d["retained"]["balance_sheet_retained_earnings"] = 1_500_000
+    r = compute(ClientInput.from_dict(d)).to_dict()
+    assert r["s62a"]["attributed_income"] > 0 and r["dashboard"]["status_62a"].startswith("אדום")

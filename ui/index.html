@@ -712,7 +712,7 @@
           <div id="wi_out" class="hint">הסימולציה לא נשמרת. ${MOCK ? 'בתצוגת הדפדפן אין מנוע – זמין בתוכנה.' : ''}</div>
         </div>
         <div class="rec"><b>המלצה</b>${recHtml(m.recommendation_text || m.recommendation)}</div>`)}
-        ${foldCard('c62', !(c.applies_62a && s.attributed_income > 0), `סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}`, `${c.applies_62a ? 'חל, אין שכר לתיקון' : 'לא חל'} · רווחיות ${pct(s.governing_profitability)}${s.concentration_share_36m >= 0.55 ? ' · ריכוזיות ' + (s.concentration_share_36m*100).toFixed(0) + '%' : ''}`, `${kv([
+        ${foldCard('c62', !(c.applies_62a && s.attributed_income > 0), `סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}`, `${esc(strip(c.dashboard.status_62a))} · רווחיות ${pct(s.governing_profitability)}${s.concentration_share_36m >= 0.55 ? ' · ריכוזיות ' + (s.concentration_share_36m*100).toFixed(0) + '%' : ''}`, `${kv([
           ['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)],
           ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)],
           ['שיעור רווחיות', pct(s.governing_profitability)],

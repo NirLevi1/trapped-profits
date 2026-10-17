@@ -155,6 +155,19 @@ HUMAN_ONLY_FIELDS = {
 }
 
 
+def _model_has(path: str) -> bool:
+    """שדה שקיים במודל גם אם עוד לא נשמר ללקוח (לקוח ישן / שדה חדש) – מותר לערוך אותו מהכרטיס."""
+    try:
+        d = ClientInput().to_dict()
+    except Exception:  # noqa: BLE001
+        return False
+    for part in path.split("."):
+        if not isinstance(d, dict) or part not in d:
+            return False
+        d = d[part]
+    return True
+
+
 def _missing_human(meta: dict, inp: dict | None = None) -> list[str]:
     """שדות שרק אדם יודע ועדיין לא נגעו בהם (אין מצב ידני/מאושר). בתרחיש ב׳ גם דיבידנד השנה הקודמת."""
     fields = dict(HUMAN_ONLY_FIELDS)
@@ -470,7 +483,7 @@ class ClientStore:
         target = inp
         for pth in parts[:-1]:
             target = target.setdefault(pth, {})
-        if parts[-1] not in target and path not in TOP_LEVEL_FIELDS:
+        if parts[-1] not in target and path not in TOP_LEVEL_FIELDS and not _model_has(path):
             raise ValueError(f"שדה לא מוכר: {path}")
         target[parts[-1]] = value
         return self.save(inp, cid, field_meta={path: {"state": "manual", "source": "עריכה ישירה"}})

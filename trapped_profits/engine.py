@@ -686,6 +686,12 @@ def _dashboard(ci: ClientInput, s62: Section62AResult, tr: TransitionResult,
         status62 = "אדום – ייחוס הכנסה לבעל המניות"
     elif s62.concentration_share >= 0.70:
         status62 = f"צהוב – לקוח אחד {s62.concentration_share:.0%} מההכנסות – לבדוק ריכוזיות על 36 חודשים"
+    elif s62.crossed_25pct and s62.exemption_750k_applies:
+        # 17.10: רווחיות מעל 25% אבל עודפים עד 750 אלף ואין שליטה בחברה נוספת – הסעיף אינו חל (קודם: "מתקרבת לסף" – מטעה)
+        # צבע כמו באקסל של אברהם (צהוב – לעקוב: כשהעודפים יעברו 750 אלף הסעיף יחול); רק הניסוח מדויק
+        status62 = f"צהוב – פטור: עודפים עד 750 אלף ₪; רווחיות {s62.governing_profitability:.0%} מעל 25% – לעקוב"
+    elif s62.crossed_25pct and not s62.below_revenue_threshold:
+        status62 = "ירוק – מחזור מעל הסף – הסעיף אינו חל"
     elif s62.governing_profitability > f.profitability_warning_threshold:
         status62 = "צהוב – רווחיות מתקרבת לסף 25%"
     elif s62.concentration_share >= 0.55:

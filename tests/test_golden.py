@@ -24,6 +24,7 @@ CASES = sorted((ROOT / "golden" / "cases").iterdir())
 #  ב. חישוב_81!B7/B9, דאשבורד!B8/B10 – בשוויון בין החלופות האקסל בוחר חלופה 1 (ומאבד את מגן
 #     הנכסים); הסיכום: חברה בלי רווחים פטורים – תמיד חלופה 2.
 #  ג. דאשבורד!B25/B27 – לקוח פטור (למשל לפי מבחן ההפסדים) מקבל באקסל "צהוב – נדרשת חלוקה".
+#  ה. דאשבורד!B26 – רווחיות מעל 25% עם פטור 750 אלף: באקסל "מתקרבת לסף 25%" (מטעה); אצלנו אותו צבע, ניסוח "פטור: עודפים עד 750 אלף" (17.10)
 #  ד. סימולטור!B7/B8/B10/B14/B16/B17, דאשבורד!B14/B15 – כשבסיס ה-50% הוא 0 האקסל נותן דיבידנד מינימלי 0.
 def _skip_cell(ref: str, res) -> bool:
     sheet_cell = ref
@@ -34,6 +35,8 @@ def _skip_cell(ref: str, res) -> bool:
         return True
     if res.calc81.is_exempt and sheet_cell in ("דאשבורד!B25", "דאשבורד!B27"):
         return True
+    if sheet_cell == "דאשבורד!B26" and res.s62a.crossed_25pct and res.s62a.exemption_750k_applies:
+        return res.dashboard.status_62a.startswith("צהוב – פטור: עודפים עד 750 אלף")
     if res.simulator.option_50pct <= 0 and sheet_cell in (
         "סימולטור!B7", "סימולטור!B8", "סימולטור!B10", "סימולטור!B14", "סימולטור!B16", "סימולטור!B17",
         "דאשבורד!B14", "דאשבורד!B15",
