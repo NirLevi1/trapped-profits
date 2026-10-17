@@ -1016,6 +1016,12 @@
     }
     if (r.saved_copy) pendingCopies.push(r.saved_copy);
     if (r.source) pendingSources.push(r.source);
+    // 17.10: אין שם מהקובץ (קבצי ריווחית לא כוללים שם; דוח שלא נקרא) – מציעים את שם הקובץ עד המקף, מסומן "לאישור"
+    { const nmEl = $(fid('structure.name'));
+      if (nmEl && !nmEl.value.trim() && !(r.fields || {})['structure.name'] && r.file){
+        const guess = r.file.replace(/\.[^.]+$/, '').split(/\s[–-]\s/)[0].trim();
+        if (guess && guess.length >= 2 && !/^\d+$/.test(guess)){ r.fields = {...(r.fields || {}), 'structure.name': guess}; r.sources = {...(r.sources || {}), 'structure.name': 'משם הקובץ – לוודא'}; }
+      } }
     const n = fillFields(r.fields, r.sources, slotMeta.slots[slot]?.title);
     if (slot === 'annual_report' && r.year && ty && ty - r.year > closedLag){ closedLag = Math.min(3, ty - r.year); const two = closedLag >= 3; slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${n} שדות מולאו<div class="notes">${two ? `הדוח ישן בשנתיים – נפתחו חריצי מאזן בוחן מלא של ${ty - 2} ו־${ty - 1} (תרחיש ג׳)` : 'הדוח ישן בשנה – נפתחו חריצי השנה הקודמת (תרחיש ב׳)'}</div>`}; await renderSlots(slotMode, 'slots'); toast(two ? `הדוח ישן בשנתיים – להעלות מאזני בוחן מלאים של ${ty - 2} ו־${ty - 1}` : 'הדוח ישן בשנה – להעלות גם מאזן בוחן מלא של השנה הקודמת'); return; }
     slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר (יועבר לתיקיית הלקוח בשמירה)</div>` : '')};

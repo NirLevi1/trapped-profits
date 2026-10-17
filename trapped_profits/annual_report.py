@@ -136,7 +136,11 @@ def page_words(pdf: str | Path) -> list[list[Word]]:
     tess = None
     tmp = None
     for i, page in enumerate(doc):
-        ws = _fix_reversed([Word(w[0], w[1], w[2], w[3], w[4]) for w in page.get_text("words")])
+        raw = page.get_text("words")
+        if any(ch in w[4] for w in raw for ch in _GLYPH_FIX):
+            ws = _fix_reversed(_words_from_chars(page))      # גופן שבו "נ" נשמרה כתו זר – בונים מילים מחדש מהאותיות לפי מיקום
+        else:
+            ws = _fix_reversed([Word(w[0], w[1], w[2], w[3], w[4]) for w in raw])
         if _text_layer_ok(ws) or not (tess or ocr_available()):
             pages.append(ws)
             continue
@@ -156,6 +160,47 @@ def page_words(pdf: str | Path) -> list[list[Word]]:
         eng = [w for w in _tsv_words(tess, png, "eng") if _NUMTOK.match(w.text)]
         pages.append(heb + eng)
     return pages
+
+
+# 17.10: יש מחוללי PDF (דוחות של משרד אחד לפחות) שבהם האות "נ" מקודדת כ-ð. שולף הטקסט מסדר אותה כתו לטיני (משמאל לימין)
+# ולכן גם המילה נשברת: "מאזנים" יוצאת "יםðמאז" – העמוד לא מזוהה כמאזן והשם לא נקרא. המיקום של כל אות בעמוד נכון.
+_GLYPH_FIX = {"ð": "נ"}
+
+
+def _words_from_chars(page) -> list[Word]:
+    """בונה מילים מהאותיות הבודדות לפי מיקומן: מחליף אותיות שקודדו בטעות, ממיין כל שורה לפי x ומפריד במרווח/רווח.
+    מילה עם אותיות עבריות – מימין לשמאל; מספר – משמאל לימין."""
+    out: list[Word] = []
+    rd = page.get_text("rawdict")
+    for b in rd.get("blocks", []):
+        for ln in b.get("lines", []):
+            chars = [c for sp in ln.get("spans", []) for c in sp.get("chars", [])]
+            if not chars:
+                continue
+            chars.sort(key=lambda c: c["bbox"][0])
+            words: list[list] = []
+            cur: list = []
+            prev_x1 = None
+            for c in chars:
+                ch = _GLYPH_FIX.get(c["c"], c["c"])
+                x0, y0, x1, y1 = c["bbox"]
+                if ch.isspace():
+                    if cur:
+                        words.append(cur)
+                    cur, prev_x1 = [], None
+                    continue
+                if cur and prev_x1 is not None and x0 - prev_x1 > 3.0:
+                    words.append(cur)
+                    cur = []
+                cur.append((ch, x0, y0, x1, y1))
+                prev_x1 = x1
+            if cur:
+                words.append(cur)
+            for w in words:
+                heb = any(_HEB.match(ch) for ch, *_ in w)
+                seq = sorted(w, key=lambda t: -t[1]) if heb else w
+                out.append(Word(min(t[1] for t in w), min(t[2] for t in w), max(t[3] for t in w), max(t[4] for t in w), "".join(t[0] for t in seq)))
+    return out
 
 
 def group_lines(words: list[Word]) -> list[list[Word]]:
@@ -277,16 +322,19 @@ def parse_annual_report(pdf: str | Path) -> dict[str, Any]:
             ys = [int(w.text) for l in pg.lines for w in l if _YEAR.match(w.text)]
             year = max(ys) if ys else None
             break
+    # השם: כל השורות עם "בע"מ" בכל העמודים – הנפוצה ביותר (כותרת העמוד חוזרת; עמוד סרוק אחד יכול לשבור מילה) – 17.10
+    cands: list[str] = []
     for pg in P:
         for l in pg.lines:
             lab = _label(l)
             if 2 <= len(lab.split()) <= 7 and re.search(r"בע[\"'׳״]*\s?מ(\s|$)", lab):
                 nm = re.sub(r"[\u0591-\u05c7]", "", lab)                 # בלי ניקוד שזיהוי התווים ממציא
                 nm = re.sub(r"בע[\"'׳״]*\s?מ(?=\s|$)", 'בע"מ', nm)
-                base_fields["structure.name"] = re.sub(r"\s+", " ", nm).strip()
-                break
-        if "structure.name" in base_fields:
-            break
+                nm = re.sub(r"\s+", " ", nm).strip()
+                if nm != 'בע"מ':
+                    cands.append(nm)
+    if cands:
+        base_fields["structure.name"] = max(cands, key=lambda c: (cands.count(c), -cands.index(c)))
     if year:
         base_fields["structure.last_closed_report_year"] = year
         notes.append(f"דוח ליום 31.12.{year}")

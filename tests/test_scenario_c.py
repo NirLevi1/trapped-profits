@@ -84,3 +84,15 @@ def test_gross_margin_not_from_cost_line(tmp_path):
     from trapped_profits.annual_report import parse_annual_report
     h = parse_annual_report(pdf)["fields"]["s62a.gross_profit_history"]
     assert [round(x["rate"], 3) for x in h] == [0.991, 0.972]
+
+
+def test_glyph_nun_font_and_name_vote():
+    """17.10: PDF שבו "נ" מקודדת כ-ð – המאזן לא זוהה והשם יצא 'בע"מ'. עכשיו: בונים מילים מהאותיות; השם – הנפוץ בעמודים."""
+    import pytest
+    pdf = Path("/tmp/claude-0/-home-claude/b7636fe5-5021-5400-a5d6-dd52a8b2ec43/scratchpad/rep24/r.pdf")
+    if not pdf.exists():
+        pytest.skip("קובץ הלקוח לא זמין בסביבה הזו")
+    from trapped_profits.annual_report import parse_annual_report
+    f = parse_annual_report(pdf)["fields"]
+    assert f["structure.name"] == 'א. לודריק פיקוח וניהול פרויקטיים בע"מ'
+    assert f["retained.balance_sheet_retained_earnings"] == 467072 and f["shields.share_capital_and_premium"] == 1001
