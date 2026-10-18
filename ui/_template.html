@@ -479,7 +479,7 @@
   const handlingPill = h => { const st = h?.status || 'טרם טופל'; const k = st.startsWith('הוחלט') || st === 'טופל' ? 'good' : st === 'בשיחה' ? 'info' : ''; return `<span class="pill ${k}">${esc(st)}</span>`; };
   function row(c){
     return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
-      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.scenario_label ? esc(c.scenario_label) + ' · ' : (c.is_estimate ? 'אומדן · ' : '')}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c.manual_review?.length ? ` · <span style="color:var(--ink-3)" title="${esc(c.manual_review.join(' | '))}">⚠ ${c.manual_review.length} לבדיקה</span>` : ''}${c._unreviewed ? ` · <span style="color:var(--warn)">קובץ לא נבדק</span>` : ''}${c._pendingEst ? ` · <span style="color:var(--warn)">${c._pendingEst} אומדנים</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(fmtDate(c.data_as_of) || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(fmtDate(c.data_as_of))}` : '')}</div></td>
+      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.scenario_label ? esc(c.scenario_label) + ' · ' : (c.is_estimate ? 'אומדן · ' : '')}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c.manual_review?.length ? ` · <span style="color:var(--ink-3)" title="${esc(c.manual_review.join(' | '))}">⚠ ${c.manual_review.length} לבדיקה</span>` : ''}${c._pendingEst ? ` · <span style="color:var(--warn)">${c._pendingEst} אומדנים</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(fmtDate(c.data_as_of) || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(fmtDate(c.data_as_of))}` : '')}</div></td>
       <td>${pill(c.dashboard.color_overall)}</td>
       <td>${pill(c.dashboard.color_81, short(c.dashboard.status_81))}</td>
       <td>${pill(c.dashboard.color_62a, short(c.dashboard.status_62a))}</td>
@@ -629,8 +629,8 @@
     { const items = c.estimate_items || []; const pend = items.filter(i => i.status === 'pending').length;
       if (c.months_table) addFlag('gaps', pend ? 'warn' : (c.months_table.approved ? 'good' : 'neutral'), pend ? `מאזן בוחן · ${pend} לבדיקה` : (c.months_table.approved ? 'מאזן בוחן ✓' : 'מאזן בוחן'), gapsHtml(rec, c));
       else if (items.length || Object.keys(c.months_gap_table || {}).length) addFlag('gaps', pend ? 'warn' : 'neutral', pend ? `חוסרים ${pend}` : 'חוסרים – טופלו', gapsHtml(rec, c)); }
-    { const srcs = (rec.sources || []); const live = srcs.filter(x => !x.superseded); const unrev = live.filter(x => !x.reviewed).length;
-      if (srcs.length) addFlag('sources', unrev ? 'warn' : 'neutral', unrev ? `מקורות · ${unrev} לבדיקה` : `מקורות ${live.length}`, sourcesHtml(rec)); }
+    { const srcs = (rec.sources || []);
+      if (srcs.length) addFlag('sources', 'neutral', 'מקורות', sourcesHtml(rec)); }      // 18.10: מידע בלבד – לא "לבדיקה"; תחת "מידע נוסף"
     if (c.annualization_factor && c.annualization_factor !== 1){
       const a = c.actuals || {}, mth = a.through_month;
       const row = (l, from, to) => `<tr><td>${l}</td><td class="num">${ils(from)}</td><td class="num"><b>${ils(to)}</b></td></tr>`;
@@ -659,7 +659,7 @@
     const notices = [];
     notices.push(`<div class="card" id="cardSlots" style="display:none;margin-bottom:12px"><h3 style="margin-top:0">עדכון מקבצים</h3><div class="slots" id="cardSlotsBody"></div></div>`);
     // אברהם 15.10: למעלה רק מה שדורש תשומת לב (חסרים, לאישור, מאזן בוחן, מקורות, מיושן, מעבר שנה, השתנה); השאר תחת "מידע נוסף"
-    const MORE = new Set(['annual', 'today', 'actions', 'review', 'history']);
+    const MORE = new Set(['annual', 'today', 'actions', 'review', 'history', 'sources']);
     const topFlags = flags.filter(f => !MORE.has(f.key));
     const more = [...flags.filter(f => MORE.has(f.key)).map(f => ({...f, notice: true})), ...bottom];
     const openMore = more.some(f => openFlags.has(f.key));
@@ -1191,7 +1191,7 @@
   }
   function sourcesHtml(rec){
     const srcs = rec.sources || [];
-    return `<b>הקבצים שהלקוח מבוסס עליהם</b><table class="mini" style="margin-top:6px;width:100%"><tr><th>קובץ</th><th>שנה</th><th>הועלה</th><th>שדות</th><th>נבדק</th><th></th></tr>${srcs.map((x, i) => `<tr class="${x.superseded ? 'sup' : ''}"><td>${esc(x.title)}<div class="hint">${esc(x.file)}${x.superseded ? ' · הוחלף' : ''}</div></td><td class="num">${x.year || ''}</td><td class="num">${when(x.at).slice(0,10)}</td><td class="num">${x.fields || ''}</td><td>${x.reviewed ? `<span style="color:var(--good)">✓ ${esc(x.reviewed.by || '')} ${when(x.reviewed.at).slice(0,10)}</span>` : (x.superseded ? '' : `<button class="quiet" onclick="markReviewed(this,'${esc(rec.id)}',${i})">עברתי – נבדק</button>`)}</td><td><button class="quiet" onclick="api('open_source','${esc(rec.id)}',${i}).then(r => { if (r?.error) toast(r.error); })">פתיחה</button></td></tr>`).join('')}</table>`;
+    return `<b>הקבצים שהלקוח מבוסס עליהם</b><table class="mini" style="margin-top:6px;width:100%"><tr><th>קובץ</th><th>שנה</th><th>הועלה</th><th>שדות</th><th></th></tr>${srcs.map((x, i) => `<tr class="${x.superseded ? 'sup' : ''}"><td>${esc(x.title)}<div class="hint">${esc(x.file)}${x.superseded ? ' · הוחלף' : ''}</div></td><td class="num">${x.year || ''}</td><td class="num">${when(x.at).slice(0,10)}</td><td class="num">${x.fields || ''}</td><td><button class="quiet" onclick="api('open_source','${esc(rec.id)}',${i}).then(r => { if (r?.error) toast(r.error); })">פתיחה</button></td></tr>`).join('')}</table>`;
   }
   async function adjust(id, key, month, kind, amount, note){
     const r = await api('adjust', id, key, month, kind, amount, note || ''); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
@@ -1212,7 +1212,7 @@
     const r = await api('mark_reviewed', id, i, acceptAll); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
     openFlags.add('sources'); const top = document.querySelector('main').scrollTop; await reload(); renderClient(); document.querySelector('main').scrollTop = top; toast('סומן כנבדק');
   }
-  function toggleMore(){ if (openFlags.has('more')){ openFlags.delete('more'); for (const k of ['annual', 'today', 'actions', 'review', 'history']) openFlags.delete(k); } else openFlags.add('more'); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
+  function toggleMore(){ if (openFlags.has('more')){ openFlags.delete('more'); for (const k of ['annual', 'today', 'actions', 'review', 'history', 'sources']) openFlags.delete(k); } else openFlags.add('more'); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
   function toggleFlag(k){ if (openFlags.has(k)) openFlags.delete(k); else openFlags.add(k); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
   document.addEventListener('click', e => { for (const id of ['exportMenu', 'handlingMenu']){ const m = $(id); if (m && !m.contains(e.target)) m.classList.remove('open'); } });
   async function exportDoc(id, kind, fmt){
