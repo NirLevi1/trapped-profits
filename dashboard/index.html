@@ -284,7 +284,7 @@
     </div>
     <h2>בודק שני</h2>
     <div class="card">
-      <div class="hint" style="margin-bottom:8px">מודל שפה קורא כל דוח שנתי ומאזן בוחן שמועלים, בנפרד מהקורא שלנו. ערך זהה – מסומן "אומת". ערך שונה – מסומן אדום ואתה בוחר. בלי מפתח (או בלי אינטרנט / קרדיט) הכל עובד כרגיל, עם הודעה שהבדיקה לא רצה.</div>
+      <div class="hint" style="margin-bottom:8px">מודל שפה קורא כל דוח שנתי שמועלה, בנפרד מהקורא שלנו. ערך זהה – מסומן "אומת". ערך שונה – מסומן אדום ואתה בוחר. בלי מפתח (או בלי אינטרנט / קרדיט) הכל עובד כרגיל, עם הודעה שהבדיקה לא רצה.</div>
       <div class="row" style="align-items:flex-end">
         <label class="field"><span>מפתח גישה</span><input type="password" id="st_aikey" autocomplete="off" dir="ltr" placeholder=""></label>
         <div class="toolbar" style="margin:0 0 4px"><button type="button" onclick="saveAiKey()">שמירה ובדיקת חיבור</button><button type="button" class="quiet" id="ai_test" onclick="saveAiKey(true)">בדיקת חיבור</button><button type="button" class="quiet" id="ai_clear" onclick="clearAiKey()">מחיקת המפתח</button></div>
@@ -998,7 +998,7 @@
   }
   async function importSlot(slot){
     const btn = $('btn_' + slot), st = $('st_' + slot);
-    btn.disabled = true; st.className = 'st'; st.textContent = slot === 'annual_report' ? (settings?.ai_key_tail ? 'קורא את הדוח ובודק פעם שנייה… (עד דקה וחצי)' : 'קורא את הדוח… (סרוק: עד חצי דקה)') : (slot === 'trial_balance' && settings?.ai_key_tail ? 'קורא ובודק פעם שנייה…' : 'קורא…');
+    btn.disabled = true; st.className = 'st'; st.textContent = slot === 'annual_report' ? (settings?.ai_key_tail ? 'קורא את הדוח ובודק פעם שנייה… (עד דקה וחצי)' : 'קורא את הדוח… (סרוק: עד חצי דקה)') : 'קורא…';
     const curRec = slotMode === 'card' ? records.find(x => x.id === selectedId) : null;
     const ty = slotMode === 'card' ? curRec?.input?.structure?.tax_year : (parseNum($(fid('structure.tax_year'))?.value) || null);
     const cname = slotMode === 'card' ? curRec?.input?.structure?.name : ($(fid('structure.name'))?.value || '');

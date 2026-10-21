@@ -263,8 +263,9 @@ class Api:
             r = import_slot(slot, paths[0], int(tax_year) if tax_year else None)
         except Exception as e:  # noqa: BLE001
             return {"error": str(e), "file": Path(paths[0]).name}
-        # 21.10: בודק שני – דוח שנתי ומאזן בוחן של השנה. בלי מפתח / אינטרנט / קרדיט: ממשיכים, עם הודעה
-        if slot in ("annual_report", "trial_balance"):
+        # 21.10: בודק שני – דוח שנתי בלבד (ניסוי על 7 לקוחות: ברווח והפסד אין תרומה – סוג הכנסה זהה בכולם,
+        # ההבדלים רק בשכר תחת "עלויות ייצור" שהוכרע במכוון). בלי מפתח / אינטרנט / קרדיט: ממשיכים, עם הודעה
+        if slot == "annual_report":
             from trapped_profits import ai_check
             key, model = self._ai_key()
             if not key:
