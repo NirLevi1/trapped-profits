@@ -126,3 +126,31 @@ def test_settings_hide_key(tmp_path, monkeypatch):
     monkeypatch.setattr(ai_check, "test_key", lambda k, m=None: {"ok": False, "msg": "המפתח לא תקין – לבדוק בהגדרות"})
     r = api.set_ai_key("bad")
     assert r["ok"] is False and api._ai_key()[0] == "sk-secret-1234"  # מפתח שנכשל לא נשמר
+
+
+def test_reread_old_reports_opens_choices(tmp_path, monkeypatch):
+    """21.10: עדכון של הקורא – הדוח השמור נקרא שוב; ערך שונה לא נדרס אלא נפתח לבחירה; שדה שהוקלד – לא נוגעים."""
+    from trapped_profits import importers
+    st = ClientStore(tmp_path / "clients")
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(b"%PDF")
+    rec = st.save({"structure": {"name": "מיכל", "tax_year": 2026}})
+    rec = st.apply_import(rec["id"], {"retained.balance_sheet_retained_earnings": 0.0, "shields.total_assets_cost": 100.0,
+                                      "shields.depreciation_annual_estimate": 50.0}, {}, "דוח",
+                          source={"slot": "annual_report", "title": "דוח", "file": "report.pdf", "path": str(pdf)})
+    st.update_field(rec["id"], "shields.total_assets_cost", 999.0)          # אברהם הקליד
+    full = st.get(rec["id"]); full["report_parser_version"] = "old"; st._write(rec["id"], full)
+    monkeypatch.setattr(importers, "import_slot", lambda *a, **k: {"fields": {
+        "retained.balance_sheet_retained_earnings": 691283.0, "shields.total_assets_cost": 21035.0,
+        "shields.depreciation_annual_estimate": 50.0}, "sources": {"retained.balance_sheet_retained_earnings": "מאזן"}})
+    out = st.reread_reports()
+    assert out["changed"] == 1 and out["fields"] == 1
+    rec = st.get(rec["id"])
+    conf = rec["input"]["ai_annual"]["conflicts"]
+    assert list(conf) == ["retained.balance_sheet_retained_earnings"]
+    assert rec["input"]["retained"]["balance_sheet_retained_earnings"] == 0          # לא נדרס
+    assert any("הקורא החדש מצא ערך אחר" in x for x in rec["missing_human"])
+    assert st.reread_reports()["clients"] == 0                                        # פעם אחת לכל גרסה
+    rec = st.resolve_ai(rec["id"], "retained.balance_sheet_retained_earnings", "model")
+    assert rec["input"]["retained"]["balance_sheet_retained_earnings"] == 691283
+    assert "הקורא החדש" in rec["history"][-1]["text"]

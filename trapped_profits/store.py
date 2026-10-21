@@ -175,7 +175,7 @@ def _prune_ai(rec: dict) -> None:
     meta = rec.get("field_meta") or {}
     for path in list(conf):
         m = meta.get(path) or {}
-        if m.get("state") in ("manual", "approved") and str(m.get("at") or "") >= str(ai.get("at") or ""):
+        if m.get("state") in ("manual", "approved") and str(m.get("at") or "") >= str(conf[path].get("at") or ai.get("at") or ""):
             conf.pop(path, None)
 
 
@@ -183,7 +183,7 @@ def _missing_human(meta: dict, inp: dict | None = None) -> list[str]:
     """שדות שרק אדם יודע ועדיין לא נגעו בהם (אין מצב ידני/מאושר). בתרחיש ב׳ גם דיבידנד השנה הקודמת.
     21.10: וסתירות בין הקורא שלנו לבודק השני – עד שאברהם בוחר."""
     conf = (((inp or {}).get("ai_annual") or {}).get("conflicts") or {})
-    extra = [f"סתירה בין הקוראים: {c.get('label') or p}" for p, c in conf.items()]
+    extra = [f"סתירה בין הקוראים: {c.get('label') or p}" if not c.get("reread") else f"הקורא החדש מצא ערך אחר: {c.get('label') or p}" for p, c in conf.items()]
     return extra + _missing_human_base(meta, inp)
 
 
@@ -331,7 +331,11 @@ class ClientStore:
             "field_meta": _merge_meta((prev or {}).get("field_meta"), field_meta),
             "years": (prev or {}).get("years") or {},            # תמונות של שנים שנסגרו (מעבר שנה)
             "sources": _merge_sources((prev or {}).get("sources"), sources),   # סבב 3: הקבצים שהלקוח מבוסס עליהם
+            "report_parser_version": (prev or {}).get("report_parser_version"),
         }
+        if any(isinstance(x, dict) and x.get("slot") == "annual_report" for x in (sources or [])):
+            from .annual_report import PARSER_VERSION
+            rec["report_parser_version"] = PARSER_VERSION
         rec["field_meta"] = _record_changes((prev or {}).get("input"), rec["input"], rec["field_meta"], self._by(), reset_paths)
         _prune_ai(rec)
         rec["missing_human"] = _missing_human(rec["field_meta"], rec["input"])
@@ -476,6 +480,8 @@ class ClientStore:
                     continue
                 keep.append(a)
             inp["adjustments"] = keep
+        if (source or {}).get("slot") == "annual_report" and "ai_annual" not in (fields or {}):
+            inp["ai_annual"] = {}                                         # דוח חדש – סתירות של הדוח הקודם כבר לא רלוונטיות
         if "retained.balance_sheet_retained_earnings" in (fields or {}):
             inp.setdefault("retained", {})["retained_as_of_year"] = None      # דוח סגור חדש – העודפים שוב "מהדוח", לא אומדן מגולגל
         for path, value in (fields or {}).items():
@@ -655,7 +661,7 @@ class ClientStore:
         vals = {path: c[choice], **(c.get(choice + "_also") or {})}
         meta = {}
         now = datetime.now().isoformat(timespec="seconds")
-        who = "הקורא שלנו" if choice == "ours" else "הבודק השני"
+        who = c.get(choice + "_name") or ("הקורא שלנו" if choice == "ours" else "הבודק השני")
         for p, v in vals.items():
             parts = p.split(".")
             t = inp
@@ -668,6 +674,17 @@ class ClientStore:
         shown = f"{v:,.0f}" if isinstance((v := c[choice]), (int, float)) and not isinstance(v, bool) and abs(v) > 1 else str(v)
         self._log(new, "תיקון", f"{c.get('label') or path}: נבחר {who} ({shown})")
         return self._write(cid, new)
+
+    def resolve_ai_all(self, cid: str, choice: str, reread: bool = True) -> dict[str, Any]:
+        """21.10: "לקחת את כל הערכים מהקורא החדש" – כל הסתירות מהקריאה מחדש בבת אחת."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        conf = ((rec["input"].get("ai_annual") or {}).get("conflicts") or {})
+        paths = [p for p, c in conf.items() if bool(c.get("reread")) == reread]
+        for p in paths:
+            rec = self.resolve_ai(cid, p, choice)
+        return rec
 
     def resolve_tb_ai(self, cid: str, row_id: str, choice: str) -> dict[str, Any]:
         """21.10: שורה במאזן הבוחן שהבודק השני סיווג אחרת – אברהם בוחר."""
@@ -818,6 +835,70 @@ class ClientStore:
             self.save(full["input"], rec["id"])
             n += 1
         return n
+
+    def reread_reports(self, force: bool = False) -> dict[str, Any]:
+        """21.10: אחרי עדכון של הקורא – קוראים שוב את הדוחות השנתיים השמורים (פעם אחת לכל גרסת קורא).
+        ערך שונה ממה ששמור לא נדרס: נפתחת "סתירה" (שמור / הקורא החדש) ואברהם בוחר. שדה שאברהם הקליד – לא נוגעים."""
+        from .annual_report import PARSER_VERSION
+        from .ai_check import LABELS, _COMPANIONS, _SKIP, _same, _present
+        from .importers import import_slot
+        out = {"clients": 0, "changed": 0, "fields": 0, "names": []}
+        for rec in self.list():
+            if "input" not in rec or (rec.get("report_parser_version") == PARSER_VERSION and not force):
+                continue
+            src = next((x for x in reversed(rec.get("sources") or []) if x.get("slot") == "annual_report" and not x.get("superseded")), None)
+            p = Path(src.get("path") or "") if src else None
+            full = self.get(rec["id"])
+            if not full:
+                continue
+            if not (p and p.exists()):
+                full["report_parser_version"] = PARSER_VERSION      # אין קובץ שמור – אין מה לקרוא
+                self._write(rec["id"], full)
+                continue
+            inp = full["input"]
+            try:
+                r = import_slot("annual_report", p, (inp.get("structure") or {}).get("tax_year"))
+            except Exception as e:  # noqa: BLE001
+                self._log(full, "קריאה מחדש", f"הדוח השנתי לא נקרא מחדש: {e}")
+                full["report_parser_version"] = PARSER_VERSION
+                self._write(rec["id"], full)
+                continue
+            out["clients"] += 1
+            meta = full.get("field_meta") or {}
+            now = datetime.now().isoformat(timespec="seconds")
+            ai = inp.setdefault("ai_annual", {})
+            conf = ai.setdefault("conflicts", {})
+            n = 0
+            for path, new in (r.get("fields") or {}).items():
+                if path in _SKIP or path in conf:
+                    continue
+                if (meta.get(path) or {}).get("state") == "manual":
+                    continue                                          # אברהם הקליד – לא נוגעים
+                cur = self._get_path(inp, path)
+                if path == "s62a.has_inventory":
+                    if bool(cur) == bool(new):
+                        continue
+                elif not _present(new) or (_present(cur) and _same(path, cur, new)):
+                    continue
+                conf[path] = {"label": LABELS.get(path, path), "reread": True, "at": now,
+                              "ours": cur, "ours_name": "שמור היום", "ours_src": (meta.get(path) or {}).get("source", ""),
+                              "ours_also": {c: self._get_path(inp, c) for c in _COMPANIONS.get(path, ())},
+                              "model": new, "model_name": "הקורא החדש", "model_src": (r.get("sources") or {}).get(path, "") + f" ({p.name})",
+                              "model_also": {c: r["fields"][c] for c in _COMPANIONS.get(path, ()) if c in r["fields"]}}
+                n += 1
+            full["report_parser_version"] = PARSER_VERSION
+            if n:
+                ai.setdefault("at", now)
+                new_rec = self.save(inp, rec["id"])
+                new_rec["report_parser_version"] = PARSER_VERSION
+                self._log(new_rec, "קריאה מחדש", f"הדוח השנתי נקרא שוב בגרסה החדשה של הקורא: {n} ערכים שונים ממה ששמור – לבחירה (לא נדרסו)")
+                self._write(rec["id"], new_rec)
+                out["changed"] += 1
+                out["fields"] += n
+                out["names"].append((inp.get("structure") or {}).get("name") or rec["id"])
+            else:
+                self._write(rec["id"], full)
+        return out
 
     def recompute_all(self, only_outdated: bool = False) -> int:
         """מחשב מחדש את כל הלקוחות. only_outdated=True – רק מי שחושב בגרסת לוגיקה ישנה (אחרי update.bat)."""

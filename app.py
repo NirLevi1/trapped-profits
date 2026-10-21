@@ -87,6 +87,17 @@ class Api:
             self.store.backfill_gross_history()          # רווח גולמי של שנות הדוח ללקוחות קיימים – מהדוח השנתי שכבר הועלה
         except Exception:  # noqa: BLE001
             pass
+        # 21.10: קורא חדש → קוראים שוב את הדוחות השמורים ברקע (סרוק: עד חצי דקה לדוח); ערך שונה נפתח לבחירה, לא נדרס
+        self._reread = {"running": True, "result": None}
+        import threading
+
+        def _bg():
+            try:
+                self._reread["result"] = self.store.reread_reports()
+            except Exception as e:  # noqa: BLE001
+                self._reread["result"] = {"error": str(e)}
+            self._reread["running"] = False
+        threading.Thread(target=_bg, daemon=True).start()
 
     # ---- read
     def list_clients(self):
@@ -144,9 +155,19 @@ class Api:
             r["tail"] = key[-4:]
         return r
 
+    def reread_status(self):
+        st = getattr(self, "_reread", None) or {"running": False, "result": None}
+        return {"running": st["running"], "result": st["result"]}
+
     def resolve_ai(self, cid: str, path: str, choice: str):
         try:
             return self.store.resolve_ai(cid, path, choice)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
+    def resolve_ai_all(self, cid: str, choice: str, reread: bool = True):
+        try:
+            return self.store.resolve_ai_all(cid, choice, bool(reread))
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 

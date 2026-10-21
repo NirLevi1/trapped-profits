@@ -634,9 +634,12 @@
     const addFlag = (key, tone, label, html) => flags.push({key, tone, label, html});
     // 21.10: סתירות בין הקורא שלנו לבודק השני – אברהם בוחר; עד אז השדה לא מתמלא
     { const ai = rec.input?.ai_annual || {}, conf = Object.entries(ai.conflicts || {});
-      if (conf.length) addFlag('ai', 'serious', `סתירות ${conf.length}`, `<div class="hint" style="margin-bottom:6px">הקורא שלנו והבודק השני קראו ערך שונה בדוח השנתי. השדה לא נכנס לחישוב עד שבוחרים.</div>${conf.map(([p, x]) => aiConfHtml(rec.id, p, x, 'card')).join('')}`);
+      const rr = conf.filter(([, x]) => x.reread), two = conf.filter(([, x]) => !x.reread);
+      if (conf.length) addFlag('ai', 'serious', `סתירות ${conf.length}`,
+        (two.length ? `<div class="hint" style="margin-bottom:6px">הקורא שלנו והבודק השני קראו ערך שונה בדוח השנתי. השדה לא נכנס לחישוב עד שבוחרים.</div>${two.map(([p, x]) => aiConfHtml(rec.id, p, x, 'card')).join('')}` : '') +
+        (rr.length ? `<div style="display:flex;gap:10px;align-items:center;margin:${two.length ? '10px' : '0'} 0 6px"><span class="hint">הדוח השנתי נקרא שוב בגרסה החדשה של הקורא ויצא ערך אחר. החישוב עדיין עם הערך השמור – לבחור.</span><div class="spacer"></div>${rr.length > 1 ? `<button onclick="resolveAiAll('${esc(rec.id)}','model')">✓ הכל מהקורא החדש</button><button class="quiet" onclick="resolveAiAll('${esc(rec.id)}','ours')">להשאיר הכל</button>` : ''}</div>${rr.map(([p, x]) => aiConfHtml(rec.id, p, x, 'card')).join('')}` : ''));
       else if (ai.ok === false && ai.msg) addFlag('ai', 'neutral', 'בודק שני לא רץ', `<div>${esc(ai.msg)} – הערכים מהדוח השנתי מהקורא שלנו בלבד. אפשר להעלות שוב את הדוח אחרי התיקון.</div>`); }
-    { const items = [...(rec.missing_human || []).filter(x => !x.startsWith('סתירה בין הקוראים')).map(x => ({t: 'serious', x})), ...(c.missing_fields || []).map(x => ({t: 'warn', x: x + ' – חושב עם אפס'}))];
+    { const items = [...(rec.missing_human || []).filter(x => !x.startsWith('סתירה בין הקוראים') && !x.startsWith('הקורא החדש מצא')).map(x => ({t: 'serious', x})), ...(c.missing_fields || []).map(x => ({t: 'warn', x: x + ' – חושב עם אפס'}))];
       if (items.length) addFlag('missing', 'serious', `חסרים ${items.length}`, `<ul style="margin:0;padding-inline-start:18px">${items.map(i => `<li style="color:var(--${i.t})">${esc(i.x)}</li>`).join('')}</ul><div class="hint" style="margin-top:6px"><button class="quiet" onclick="editClient('${esc(rec.id)}')">להשלים בעריכה</button></div>`); }
     if (rec.pending_file_fields?.length) addFlag('pending', 'warn', `לאישור ${rec.pending_file_fields.length}`, `<div style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
     { const items = c.estimate_items || []; const pend = items.filter(i => i.status === 'pending').length;
@@ -1047,12 +1050,13 @@
   }
   let slotsFor = null;
   async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ window._showPdfSlot = false; Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
-  function aiVal(p, v){ if (v == null || v === '') return '—'; if (typeof v === 'boolean') return v ? 'כן' : 'לא'; if (p === 's62a.gross_margin_rate') return (v * 100).toFixed(1) + '%'; if (typeof v === 'number') return Math.abs(v) < 3000 && Number.isInteger(v) && p.includes('year') ? String(v) : Math.round(v).toLocaleString('he-IL') + ' ₪'; return String(v); }
+  function aiVal(p, v){ if (v == null || v === '') return '—'; if (typeof v === 'boolean') return v ? 'כן' : 'לא'; if (p === 's62a.gross_margin_rate') return (v * 100).toFixed(1) + '%'; if (typeof v === 'number') return p.endsWith('report_year') ? String(v) : ((Math.round(v) || 0).toLocaleString('he-IL') + ' ₪'); return String(v); }
   function aiConfHtml(id, p, x, mode){
-    const b = (ch, who) => `<button type="button" onclick="${mode === 'card' ? `resolveAi('${esc(id)}','${esc(p)}','${ch}')` : `pickAiForm('${esc(p)}','${ch}')`}" title="${esc(x[ch + '_src'] || '')}">${who}: <b>${esc(aiVal(p, x[ch]))}</b></button>`;
+    const b = (ch, who) => `<button type="button" onclick="${mode === 'card' ? `resolveAi('${esc(id)}','${esc(p)}','${ch}')` : `pickAiForm('${esc(p)}','${ch}')`}" title="${esc(x[ch + '_src'] || '')}">${esc(x[ch + '_name'] || who)}: <b>${esc(aiVal(p, x[ch]))}</b></button>`;
     return `<div class="aiconf"><span class="lab">${esc(x.label || p)}</span>${b('ours', 'הקורא שלנו')}${b('model', 'הבודק השני')}</div>`;
   }
   async function resolveAi(id, p, ch){ const r = await api('resolve_ai', id, p, ch); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('נבחר וחושב מחדש'); }
+  async function resolveAiAll(id, ch){ const r = await api('resolve_ai_all', id, ch, true); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast(ch === 'model' ? 'נלקחו הערכים מהקורא החדש – חושב מחדש' : 'נשארו הערכים השמורים'); }
   async function resolveTbAi(id, row, ch){ const r = await api('resolve_tb_ai', id, row, ch); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('הסיווג נשמר וחושב מחדש'); }
   function pickAiForm(p, ch){
     const ai = getp(formHidden, 'ai_annual'); const x = ai?.conflicts?.[p]; if (!x) return;
@@ -1308,7 +1312,14 @@
     records = (await api('list_clients')) || [];
     renderQueue(); renderReview(); renderClients();
   }
-  function boot(){ MOCK = isMock(); api('field_info').then(r => { if (r?.human_only) humanOnly = r.human_only; }); loadSettings().then(reload); if (!MOCK) setTimeout(() => checkUpdate(false), 4000); }
+  // 21.10: קריאה מחדש של דוחות שמורים ברקע (אחרי עדכון של הקורא) – כשמסתיים: רענון והודעה
+  async function pollReread(n = 0){
+    const r = await api('reread_status'); if (!r) return;
+    if (r.running){ if (n < 120) setTimeout(() => pollReread(n + 1), 3000); return; }
+    const x = r.result || {};
+    if (x.changed){ await reload(); if ($('s-client')?.classList.contains('active')) renderClient(); toast(`הדוחות השנתיים נקראו שוב בגרסה החדשה: אצל ${x.changed} לקוחות יצא ערך אחר – מסומן "סתירות" לבחירה (${(x.names || []).slice(0, 4).join(', ')}${x.changed > 4 ? '…' : ''})`, 9000); }
+  }
+  function boot(){ MOCK = isMock(); api('field_info').then(r => { if (r?.human_only) humanOnly = r.human_only; }); loadSettings().then(reload); if (!MOCK){ setTimeout(() => checkUpdate(false), 4000); setTimeout(() => pollReread(), 2500); } }
   let updInfo = null;
   async function checkUpdate(manual){
     const r = await api('check_update'); updInfo = r;
