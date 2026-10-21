@@ -99,8 +99,8 @@ def _diff(prev: dict | None, cur: dict) -> list[dict]:
 # אברהם 14.10 (3): מצב לכל שדה – מהקובץ (לאישור) / אושר / ידני; ושדות שרק אדם יודע
 FIELD_STATES = ("file", "approved", "manual", "carried", "estimate")
 # carried = הועבר ממעבר שנה (ערך מהשנה הקודמת שאינו בקבצים); estimate = אומדן של המערכת (לבדיקת אברהם)
-FIELD_SKIP = ("flags", "data_as_of", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year", "tb_approved", "tb_cogs", "gp_checked")
-TOP_LEVEL_FIELDS = ("data_as_of", "data_through_month", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year", "tb_approved", "tb_cogs", "gp_checked")                 # לא נרשמת להם היסטוריית ערכים
+FIELD_SKIP = ("flags", "data_as_of", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year", "tb_approved", "tb_cogs", "gp_checked", "tb_kind", "ai_annual", "ai_tb")
+TOP_LEVEL_FIELDS = ("data_as_of", "data_through_month", "period_breakdown", "period_breakdown_prev_year", "months_without_revenue", "period_breakdown_months", "adjustments", "tb_rows", "tb_rows_prev_year", "tb_approved", "tb_cogs", "gp_checked", "tb_kind", "ai_annual", "ai_tb")                 # לא נרשמת להם היסטוריית ערכים
 
 
 def _flatten(d: dict, prefix: str = "") -> dict:
@@ -168,8 +168,26 @@ def _model_has(path: str) -> bool:
     return True
 
 
+def _prune_ai(rec: dict) -> None:
+    """21.10: סתירה בין הקוראים נסגרת כשאברהם הזין/אישר את השדה אחרי שהסתירה נוצרה."""
+    ai = (rec.get("input") or {}).get("ai_annual") or {}
+    conf = ai.get("conflicts") or {}
+    meta = rec.get("field_meta") or {}
+    for path in list(conf):
+        m = meta.get(path) or {}
+        if m.get("state") in ("manual", "approved") and str(m.get("at") or "") >= str(ai.get("at") or ""):
+            conf.pop(path, None)
+
+
 def _missing_human(meta: dict, inp: dict | None = None) -> list[str]:
-    """שדות שרק אדם יודע ועדיין לא נגעו בהם (אין מצב ידני/מאושר). בתרחיש ב׳ גם דיבידנד השנה הקודמת."""
+    """שדות שרק אדם יודע ועדיין לא נגעו בהם (אין מצב ידני/מאושר). בתרחיש ב׳ גם דיבידנד השנה הקודמת.
+    21.10: וסתירות בין הקורא שלנו לבודק השני – עד שאברהם בוחר."""
+    conf = (((inp or {}).get("ai_annual") or {}).get("conflicts") or {})
+    extra = [f"סתירה בין הקוראים: {c.get('label') or p}" for p, c in conf.items()]
+    return extra + _missing_human_base(meta, inp)
+
+
+def _missing_human_base(meta: dict, inp: dict | None = None) -> list[str]:
     fields = dict(HUMAN_ONLY_FIELDS)
     st = (inp or {}).get("structure") or {}
     if st.get("last_closed_report_year") and st.get("tax_year") and st["last_closed_report_year"] < st["tax_year"] - 1:
@@ -315,8 +333,9 @@ class ClientStore:
             "sources": _merge_sources((prev or {}).get("sources"), sources),   # סבב 3: הקבצים שהלקוח מבוסס עליהם
         }
         rec["field_meta"] = _record_changes((prev or {}).get("input"), rec["input"], rec["field_meta"], self._by(), reset_paths)
+        _prune_ai(rec)
         rec["missing_human"] = _missing_human(rec["field_meta"], rec["input"])
-        rec["pending_file_fields"] = [k for k, v in rec["field_meta"].items() if v.get("state") == "file"]
+        rec["pending_file_fields"] = [k for k, v in rec["field_meta"].items() if v.get("state") == "file" and k.split(".")[0] not in FIELD_SKIP]
         try:
             rec["result"] = compute(ci).to_dict()
         except Exception as e:  # noqa: BLE001
@@ -431,7 +450,7 @@ class ClientStore:
                 n += 1
         rec["field_meta"] = meta
         rec["missing_human"] = _missing_human(meta, rec.get("input"))
-        rec["pending_file_fields"] = [k for k, v in meta.items() if v.get("state") == "file"]
+        rec["pending_file_fields"] = [k for k, v in meta.items() if v.get("state") == "file" and k.split(".")[0] not in FIELD_SKIP]
         self._log(rec, "אישור", f"אושרו {n} שדות מהקובץ")
         self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
         return rec
@@ -486,6 +505,7 @@ class ClientStore:
         if parts[-1] not in target and path not in TOP_LEVEL_FIELDS and not _model_has(path):
             raise ValueError(f"שדה לא מוכר: {path}")
         target[parts[-1]] = value
+        ((inp.get("ai_annual") or {}).get("conflicts") or {}).pop(path, None)     # 21.10: הזנה ידנית סוגרת סתירה בין הקוראים
         return self.save(inp, cid, field_meta={path: {"state": "manual", "source": "עריכה ישירה"}})
 
     # ---- אברהם (סבב 2, 9+13, 10): מעבר שנה
@@ -622,12 +642,64 @@ class ClientStore:
                   f"מאזן בוחן אושר (עד חודש {inp['tb_approved']['through_month']}) – כל האומדנים מאושרים" + (f"; {n_manual} תיקונים ידניים נשמרו" if n_manual else ""))
         return self._write(cid, new)
 
+    def resolve_ai(self, cid: str, path: str, choice: str) -> dict[str, Any]:
+        """21.10: אברהם בוחר בין הקורא שלנו (ours) לבודק השני (model) בשדה מהדוח השנתי."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        inp = rec["input"]
+        conf = ((inp.get("ai_annual") or {}).get("conflicts") or {})
+        c = conf.get(path)
+        if not c or choice not in ("ours", "model"):
+            raise ValueError("הסתירה כבר נסגרה")
+        vals = {path: c[choice], **(c.get(choice + "_also") or {})}
+        meta = {}
+        now = datetime.now().isoformat(timespec="seconds")
+        who = "הקורא שלנו" if choice == "ours" else "הבודק השני"
+        for p, v in vals.items():
+            parts = p.split(".")
+            t = inp
+            for x in parts[:-1]:
+                t = t.setdefault(x, {})
+            t[parts[-1]] = v
+            meta[p] = {"state": "approved", "source": f"נבחר: {who} – " + (c.get(choice + "_src") or ""), "at": now}
+        conf.pop(path, None)
+        new = self.save(inp, cid, field_meta=meta)
+        shown = f"{v:,.0f}" if isinstance((v := c[choice]), (int, float)) and not isinstance(v, bool) and abs(v) > 1 else str(v)
+        self._log(new, "תיקון", f"{c.get('label') or path}: נבחר {who} ({shown})")
+        return self._write(cid, new)
+
+    def resolve_tb_ai(self, cid: str, row_id: str, choice: str) -> dict[str, Any]:
+        """21.10: שורה במאזן הבוחן שהבודק השני סיווג אחרת – אברהם בוחר."""
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        inp = rec["input"]
+        conf = ((inp.get("ai_tb") or {}).get("conflicts") or {})
+        c = conf.get(str(row_id))
+        if not c or choice not in ("ours", "model"):
+            raise ValueError("הסתירה כבר נסגרה")
+        val = c[choice]
+        if c.get("type") == "kind":
+            m = dict(inp.get("tb_kind") or {}); m[str(row_id)] = val; inp["tb_kind"] = m
+        else:
+            m = dict(inp.get("tb_cogs") or {}); m[str(row_id)] = bool(val); inp["tb_cogs"] = m
+        conf.pop(str(row_id), None)
+        new = self.save(inp, cid)
+        from .ai_check import KINDS
+        shown = KINDS.get(val, val) if c.get("type") == "kind" else ("עלות מכר" if val else "לא עלות מכר")
+        self._log(new, "תיקון", f"{c.get('name') or row_id}: נבחר {'הקורא שלנו' if choice == 'ours' else 'הבודק השני'} – {shown}")
+        return self._write(cid, new)
+
     def set_tb_cogs(self, cid: str, row_id: str, on: bool) -> dict[str, Any]:
         """אילו שורות במאזן הבוחן נכנסות לעלות המכר (שורת הרווח הגולמי)."""
         rec = self.get(cid)
         if not rec:
             raise ValueError("לקוח לא נמצא")
         inp = rec["input"]
+        c = ((inp.get("ai_tb") or {}).get("conflicts") or {})
+        if (c.get(str(row_id)) or {}).get("type") == "cogs":
+            c.pop(str(row_id), None)
         m = dict(inp.get("tb_cogs") or {})
         m[str(row_id)] = bool(on)
         inp["tb_cogs"] = m

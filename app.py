@@ -116,10 +116,49 @@ class Api:
 
     def get_settings(self):
         from trapped_profits.store import HANDLING_STATUSES
-        return {**self.store.settings.load(), "handling_statuses": HANDLING_STATUSES, "data_dir": str(self.store.root.parent), "app_version": APP_VERSION}
+        st = self.store.settings.load()
+        key = str(st.pop("ai_key", "") or "")
+        # 21.10: המפתח לא חוזר למסך – רק ארבע הספרות האחרונות
+        return {**st, "ai_key_tail": key[-4:] if key else "", "handling_statuses": HANDLING_STATUSES, "data_dir": str(self.store.root.parent), "app_version": APP_VERSION}
+
+    def _ai_key(self) -> tuple[str, str]:
+        from trapped_profits.ai_check import DEFAULT_MODEL
+        st = self.store.settings.load()
+        return str(st.get("ai_key") or "").strip(), str(st.get("ai_model") or DEFAULT_MODEL)
+
+    def set_ai_key(self, key: str = "", clear: bool = False):
+        """שמירת מפתח הבודק השני (בהגדרות שבתיקיית הנתונים) ובדיקת חיבור."""
+        from trapped_profits.ai_check import test_key
+        if clear:
+            self.store.settings.save({"ai_key": ""})
+            return {"ok": True, "msg": "המפתח נמחק – הבדיקה השנייה כבויה", "tail": ""}
+        key = (key or "").strip()
+        if not key:
+            key, model = self._ai_key()
+            if not key:
+                return {"ok": False, "msg": "אין מפתח"}
+            return {**test_key(key, model), "tail": key[-4:]}
+        r = test_key(key, self._ai_key()[1])
+        if r.get("ok") or "קרדיט" in r.get("msg", ""):
+            self.store.settings.save({"ai_key": key})
+            r["tail"] = key[-4:]
+        return r
+
+    def resolve_ai(self, cid: str, path: str, choice: str):
+        try:
+            return self.store.resolve_ai(cid, path, choice)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+
+    def resolve_tb_ai(self, cid: str, row_id: str, choice: str):
+        try:
+            return self.store.resolve_tb_ai(cid, row_id, choice)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
 
     def save_settings(self, data: dict):
         try:
+            data = {k: v for k, v in (data or {}).items() if k != "ai_key"}     # המפתח נשמר רק דרך set_ai_key
             self.store.settings.save(data)
             n = self.store.recompute_all()          # דגלים השתנו → כולם מחושבים מחדש (החלטה 6)
             return {"ok": True, "recomputed": n}
@@ -224,6 +263,17 @@ class Api:
             r = import_slot(slot, paths[0], int(tax_year) if tax_year else None)
         except Exception as e:  # noqa: BLE001
             return {"error": str(e), "file": Path(paths[0]).name}
+        # 21.10: בודק שני – דוח שנתי ומאזן בוחן של השנה. בלי מפתח / אינטרנט / קרדיט: ממשיכים, עם הודעה
+        if slot in ("annual_report", "trial_balance"):
+            from trapped_profits import ai_check
+            key, model = self._ai_key()
+            if not key:
+                r.setdefault("notes", []).append("בודק שני כבוי (אין מפתח בהגדרות) – הערכים מהקורא שלנו בלבד")
+                r["ai"] = {"ok": False, "msg": "אין מפתח", "off": True}
+            elif slot == "annual_report":
+                ai_check.verify_annual(r, paths[0], int(tax_year) if tax_year else None, key, model)
+            else:
+                ai_check.verify_tb(r, key, model)
         try:
             # לקוח קיים → ישר לתיקייה שלו; לקוח חדש → "_בהמתנה", ובשמירה עובר לתיקיית הלקוח (attach_copies)
             folder = self._client_folder(client_name) if (cid and client_name) else self.store.root.parent / "files" / "_בהמתנה"

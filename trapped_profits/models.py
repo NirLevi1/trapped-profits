@@ -266,6 +266,11 @@ class ClientInput:
     tb_approved: dict = field(default_factory=dict)
     # אילו שורות נכנסות לעלות המכר (רווח גולמי) – {row_id: true/false}; ברירת מחדל לפי סעיף הקובץ ("עלויות ייצור" / "עלות המכירות")
     tb_cogs: dict = field(default_factory=dict)
+    # 21.10: סיווג שורת הכנסה שאברהם בחר (revenue / other_income / fin_income) – גובר על הסיווג מהקובץ
+    tb_kind: dict = field(default_factory=dict)
+    # 21.10: בודק שני – {"at","ok","msg","conflicts"}; סתירה נשארת עד שאברהם בוחר
+    ai_annual: dict = field(default_factory=dict)
+    ai_tb: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -299,4 +304,7 @@ class ClientInput:
             tb_rows_prev_year=[dict(r) for r in (d.get("tb_rows_prev_year") or [])],
             tb_approved=dict(d.get("tb_approved") or {}),
             tb_cogs=dict(d.get("tb_cogs") or {}),
+            tb_kind=dict(d.get("tb_kind") or {}),
+            ai_annual=dict(d.get("ai_annual") or {}),
+            ai_tb=dict(d.get("ai_tb") or {}),
         )

@@ -1031,8 +1031,9 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
     stats = {"file": 0.0, "estimate": 0.0, "correction": 0.0, "season_rows": 0, "avg_rows": 0}
     approved = _tb_is_approved(ci)
     cogs_over = {str(k): bool(v) for k, v in (ci.tb_cogs or {}).items()}
+    kind_over = {str(k): v for k, v in (ci.tb_kind or {}).items() if v in ("revenue", "other_income", "fin_income")}
     for r in rows:
-        r = {**r, "kind": _row_kind(r)}
+        r = {**r, "kind": kind_over.get(str(r.get("id"))) if (r.get("income") and str(r.get("id")) in kind_over) else _row_kind(r)}
         inc = bool(r.get("income"))
         raw = [float(x or 0) for x in list(r.get("months") or [])[:12]] + [0.0] * (12 - len(r.get("months") or []))
         disp = [(-v if inc else v) for v in raw]                           # הכנסות בזכות – מוצגות חיוביות
