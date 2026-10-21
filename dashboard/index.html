@@ -380,7 +380,7 @@
   // ── helpers ──
   const $ = id => document.getElementById(id);
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const ils = v => v == null ? '—' : `<span class="num">${Math.round(v).toLocaleString('en-US')}&#8239;₪</span>`;
+  const ils = v => v == null ? '—' : `<span class="num">${(Math.round(v) || 0).toLocaleString('en-US')}&#8239;₪</span>`;
   const pct = x => `<span class="num">${(x*100).toFixed(1)}%</span>`;
   const yn = b => b ? 'כן' : 'לא';
   const fmtDate = d => { if (!d) return ''; const m = String(d).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${+m[3]}.${+m[2]}.${m[1]}` : String(d); };
@@ -403,7 +403,7 @@
   let toastTimer = null;
   function toast(msg, ms){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms || (/לא נשמר|נכשל|שגיאה|כבר קיים|חייב|בלבד|לסגור/.test(msg) ? 6000 : 2200)); }
   // אברהם 14.10 (5): פסיקים בכל שדה מספרי
-  const fmtNum = v => (v == null || v === '') ? '' : Number(v).toLocaleString('en-US', {maximumFractionDigits: 2});
+  const fmtNum = v => (v == null || v === '') ? '' : (Number(v) || 0).toLocaleString('en-US', {maximumFractionDigits: 2});
   const parseNum = str => { const t = String(str ?? '').replace(/[^\d.\-]/g, ''); return t === '' || t === '-' ? null : Number(t); };
   function fmtInput(el){
     const neg = el.value.trim().startsWith('-');
@@ -590,7 +590,7 @@
   }
 
   // ── client card ──
-  const kv = rows => `<div class="kv">${rows.map(r => r === null ? '<div class="sep"></div>' : `<div class="k ${r[2]?'hl':''}">${r[0]}</div><div class="v ${r[2]?'hl':''}">${r[1]}</div>`).join('')}</div>`;
+  const kv = rows => `<div class="kv">${rows.map(r => r === null ? '<div class="sep"></div>' : r[3] === 'full' ? `<div style="grid-column:1/-1;margin:-4px 0 4px">${r[0]}</div>` : `<div class="k ${r[2]?'hl':''}">${r[0]}</div><div class="v ${r[2]?'hl':''}">${r[1]}</div>`).join('')}</div>`;
   function renderClient(){
     const el = $('clientView'); const rec = records.find(r => r.id === selectedId);
     if (!rec){ el.innerHTML = `<h1>כרטיס לקוח</h1><div class="empty"><b>לא נבחר לקוח.</b>לחיצה על שורה בתור העבודה פותחת את הכרטיס שלה כאן.</div>`; return; }
@@ -691,18 +691,24 @@
           ['מצב', esc(k.status_label || (tests.length ? 'פטור – ' + tests.join('; ') : ''))],
           ['תוספת מס לתשלום', ils(k.surtax), true],
         ]))}
-        ${foldCard('csim', !m.action_required, `סימולטור · לחלק דיבידנד או לשלם 2%?`, `לא נדרש השנה – פתח כדי לתקן "כבר חולק" או לבדוק "מה אם"`, `${m.action_required ? '' : `<div class="hint" style="margin:-4px 0 8px">${esc(k.status_label)} – אין תוספת מס השנה. הסימולטור נשאר פתוח: אפשר לתקן את "כבר חולק השנה" או לבדוק "מה אם".</div>`}${kv([
-          [`${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`, ils(m.option_6pct)],
-          ['50% מהרווחים העודפים', m.option_50pct > 0 ? ils(m.option_50pct) : '—'],
-          ...(m.option_20pct_start_day != null ? [['20% מרווחי יום התחילה', ils(m.option_20pct_start_day)]] : []),
-          ['דיבידנד מינימלי לפטור (' + esc(m.cheaper_option) + ')', ils(m.min_dividend), true],
+        ${foldCard('csim', !m.action_required, `סימולטור · לחלק דיבידנד או לשלם 2%?`, `לא נדרש השנה – פתח כדי לתקן "כבר חולק" או לבדוק "מה אם"`, `${m.action_required ? '' : simProtected(k, r)}${kv([
+          // 21.10 (אברהם): מוגן – בלי 6% / 50% / דיבידנד מינימלי / פער (אין מה לסגור); נשאר "כבר חולק", האומדן ו"מה אם"
+          ...(m.action_required ? [
+            [`${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`, ils(m.option_6pct)],
+            ['50% מהרווחים העודפים', m.option_50pct > 0 ? ils(m.option_50pct) : '—'],
+            ...(m.option_20pct_start_day != null ? [['20% מרווחי יום התחילה', ils(m.option_20pct_start_day)]] : []),
+            ['דיבידנד מינימלי לפטור (' + esc(m.cheaper_option) + ')', ils(m.min_dividend), true],
+          ] : []),
           ['כבר חולק השנה <span class="hint" style="display:inline">(לעריכה)</span>', `<input type="text" inputmode="numeric" value="${fmtNum(m.already_distributed)}" onkeydown="if(event.key==='Enter')saveField('${esc(rec.id)}','distributions.dividends_taxed_current_year',this.value)" onblur="saveField('${esc(rec.id)}','distributions.dividends_taxed_current_year',this.value,true)" oninput="fmtInput(this)">`],
-          ['פער לסגירה עד 31.12', m.action_required ? ils(m.gap_to_close) : 'לא נדרש', true],
-          null,
-          ['מס דיבידנד על הפער', ils(m.dividend_tax_cost)],
-          ['תוספת המס אם לא מחלקים', ils(m.surtax_if_not_distributing)],
-          ...(m.years_to_breakeven ? [['שנים לאיזון', `<span class="num">${m.years_to_breakeven.toFixed(1)}</span>`]] : []),
-          ...(m.estimated_retained_year_end != null ? [[`אומדן עודפים ל־31.12.${c.tax_year}`, ils(m.estimated_retained_year_end)]] : []),
+          ...(m.action_required ? [
+            ['פער לסגירה עד 31.12', ils(m.gap_to_close), true],
+            null,
+            ['מס דיבידנד על הפער', ils(m.dividend_tax_cost)],
+            ['תוספת המס אם לא מחלקים', ils(m.surtax_if_not_distributing)],
+            ...(m.years_to_breakeven ? [['שנים לאיזון', `<span class="num">${m.years_to_breakeven.toFixed(1)}</span>`]] : []),
+          ] : []),
+          ...(m.estimated_retained_year_end != null ? [[`אומדן עודפים ל־31.12.${c.tax_year}`, ils(m.estimated_retained_year_end), true]] : []),
+          ...(m.estimated_retained_parts ? [[estPartsHtml(m.estimated_retained_parts, c.tax_year), '', false, 'full']] : []),
           ...(m.surtax_if_salary_paid != null && m.surtax_if_salary_paid < k.surtax ? [['תוספת המס אם משלמים את שכר 62א עד 31.12', ils(m.surtax_if_salary_paid), true]] : []),
         ])}
         <div class="whatif" id="whatif">
@@ -713,9 +719,9 @@
           </div>
           <div class="hint" style="display:flex;gap:5px;align-items:center;white-space:nowrap;margin:-2px 0 8px">או העלאה חודשית: <input type="text" inputmode="numeric" dir="ltr" id="wi_raise" value="0" oninput="fmtInput(this);wiRaise()" style="width:72px;padding:3px 6px"> ₪ מחודש <input type="text" inputmode="numeric" dir="ltr" id="wi_from" value="${Math.min(12, (rec.input?.data_through_month || new Date().getMonth()) + 1)}" oninput="wiRaise()" style="width:38px;padding:3px 6px"></div><div class="hint" id="wi_raise_out" style="margin:-4px 0 8px"></div>
           <div class="toolbar" style="margin-bottom:8px">
-            <button class="quiet" onclick="wiSet(${Math.round(m.gap_to_close)}, 0)">הפער לפטור</button>
-            <button class="quiet" onclick="wiSet(0, ${Math.round(s.attributed_income)})">שכר התיקון</button>
-            <button class="quiet" onclick="wiSet(${Math.round(m.gap_to_close)}, ${Math.round(s.attributed_income)})">שניהם</button>
+            ${m.action_required ? `<button class="quiet" onclick="wiSet(${Math.round(m.gap_to_close)}, 0)">הפער לפטור</button>` : ''}
+            ${s.attributed_income > 0 ? `<button class="quiet" onclick="wiSet(0, ${Math.round(s.attributed_income)})">שכר התיקון</button>` : ''}
+            ${m.action_required && s.attributed_income > 0 ? `<button class="quiet" onclick="wiSet(${Math.round(m.gap_to_close)}, ${Math.round(s.attributed_income)})">שניהם</button>` : ''}
             <div class="spacer"></div>
             <button onclick="runWhatIf()">חשב</button>
           </div>
@@ -1141,6 +1147,20 @@
   const openCards = new Set();
   function toggleCard(k){ if (openCards.has(k)) openCards.delete(k); else openCards.add(k); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
   // כרטיס שאינו מעניין כרגע (מוגן / פטור / לא חל) מוצג מקופל – כותרת, מצב ושורת סיכום; לחיצה פותחת
+  function simProtected(k, r){
+    const sh = k.governing_shield || 0, ret = r.retained_for_81a || 0, room = sh - ret;
+    const why = k.excess_profits <= 0 && sh > 0 && room >= 0 ? `המגן (${ils(sh)}) גדול מהרווחים הנצברים (${ils(ret)}) ב־${ils(room)}.` : esc(k.status_label || '');
+    return `<div class="notice good" style="margin:-4px 0 10px"><b>מוגן – אין צורך לחלק דיבידנד השנה.</b> ${why} אין רווחים עודפים, ולכן אין חובת חלוקה ואין תוספת מס.</div>`;
+  }
+  function estPartsHtml(p, ty){
+    const row = (l, v) => `<div style="display:flex;justify-content:space-between;gap:12px"><span>${l}</span><span class="num">${v}</span></div>`;
+    return `<div class="hint" style="width:100%;line-height:1.7">`
+      + row(`עודפים לתום ${p.base_year}${p.rolled ? ' (אומדן – גלגול)' : ' (מהדוח)'}`, ils(p.base))
+      + row(`ועוד רווח ${ty} (אומדן ממאזן הבוחן)`, ils(p.profit))
+      + (p.tax ? row(`פחות מס חברות ${Math.round(p.tax_rate * 100)}%`, '−' + ils(p.tax)) : '')
+      + (p.dividend ? row('פחות דיבידנד שחולק השנה', '−' + ils(p.dividend)) : '')
+      + `<div style="margin-top:2px">אלה הרווחים הנצברים שהחוק יבדוק בשנה הבאה.</div></div>`;
+  }
   function foldCard(key, quiet, title, summary, body){ if (!quiet) return `<div class="card"><h3>${title}</h3>${body}</div>`; const o = openCards.has(key); return `<div class="card fold ${o ? 'open' : ''}"><h3 onclick="toggleCard('${key}')">${title}<span class="tog">${o ? 'הסתר ▴' : 'הצג ▾'}</span></h3><div class="fold-sum">${summary}</div><div class="fold-body">${body}</div></div>`; }
   const MONTHS_HE = ['ינו','פבר','מרץ','אפר','מאי','יוני','יולי','אוג','ספט','אוק','נוב','דצמ'];
   const STATUS_HE = {pending: 'ממתין', accepted: 'אושר', corrected: 'תוקן', dismissed: 'לא חסר'};

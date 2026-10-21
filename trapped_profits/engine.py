@@ -135,6 +135,7 @@ class SimulatorResult:
     option_20pct_start_day: float | None = None
     # נקודה 5 – אומדן עודפים לתום השנה (תצוגה בלבד)
     estimated_retained_year_end: float | None = None
+    estimated_retained_parts: dict | None = None      # 21.10: פירוט האומדן – עודפים + רווח − מס − דיבידנד
     # החלטה 10 – אם משלמים את שכר התיקון של 62א עד 31.12: כמה תוספת המס של 81 יורדת (מגן ההוצאות גדל)
     surtax_if_salary_paid: float | None = None
     # החלטה 12 – המלצה מנוסחת (כמה משפטים עם מספרים), לכרטיס ולדוח
@@ -644,17 +645,22 @@ def _simulator(ci: ClientInput, ret: RetainedResult, tr: TransitionResult, c81: 
         opt20 = 0.2 * tr.start_day_remaining
 
     est = None
+    est_parts = None
     if d.current_year_profit_estimate is not None:
         p = d.current_year_profit_estimate
         after_tax = p * (1 - ci.s62a.corporate_tax_rate) if p > 0 else p   # על הפסד אין מס
-        est = ci.retained.balance_sheet_retained_earnings + after_tax - d.dividends_taxed_current_year
+        # 21.10 (אברהם): בסיס = עודפים לתום השנה הקודמת (בתרחיש ב׳/ג׳ – אחרי הגלגול), ופירוט לתצוגה
+        base = _rolled_retained(ci) if _roll_lag(ci) else ci.retained.balance_sheet_retained_earnings
+        est = base + after_tax - d.dividends_taxed_current_year
+        est_parts = {"base": round(base), "base_year": st.previous_year, "rolled": bool(_roll_lag(ci)), "profit": round(p),
+                     "tax": round(p - after_tax), "tax_rate": ci.s62a.corporate_tax_rate, "dividend": round(d.dividends_taxed_current_year)}
 
     return SimulatorResult(
         option_6pct=opt6, option_50pct=opt50, cheaper_option=cheaper, min_dividend=min_div,
         already_distributed=already, gap_to_close=gap, dividend_tax_cost=div_tax,
         surtax_if_not_distributing=surtax, difference=diff, years_to_breakeven=years,
         recommendation=rec, action_required=c81.surtax > 0,
-        option_20pct_start_day=opt20, estimated_retained_year_end=est,
+        option_20pct_start_day=opt20, estimated_retained_year_end=est, estimated_retained_parts=est_parts,
     )
 
 

@@ -114,3 +114,17 @@ def test_status_62a_exempt_750k_label():
     d["retained"]["balance_sheet_retained_earnings"] = 1_500_000
     r = compute(ClientInput.from_dict(d)).to_dict()
     assert r["s62a"]["attributed_income"] > 0 and r["dashboard"]["status_62a"].startswith("אדום")
+
+
+def test_year_end_estimate_uses_rolled_base():
+    """21.10 (אברהם): אומדן העודפים לסוף השנה – מהעודפים לתום השנה הקודמת (בתרחיש ב׳/ג׳ – אחרי הגלגול), עם פירוט."""
+    from trapped_profits.engine import compute, _rolled_retained
+    from trapped_profits.models import ClientInput
+    ci = ClientInput.from_dict({"structure": {"name": "x", "tax_year": 2026, "last_closed_report_year": 2024},
+                                "retained": {"balance_sheet_retained_earnings": 1000000, "prev_year_profit_for_rollover": 500000},
+                                "distributions": {"current_year_profit_estimate": 200000}})
+    sm = compute(ci).simulator
+    base = _rolled_retained(ci)
+    assert base == 1000000 + 500000 * 0.77
+    assert sm.estimated_retained_parts["base"] == round(base) and sm.estimated_retained_parts["rolled"]
+    assert round(sm.estimated_retained_year_end) == round(base + 200000 * 0.77)
