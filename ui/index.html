@@ -291,12 +291,10 @@
     </div>
     <h2>בודק שני</h2>
     <div class="card">
-      <div class="hint" style="margin-bottom:8px">מודל שפה קורא כל דוח שנתי שמועלה, בנפרד מהקורא שלנו. ערך זהה – מסומן "אומת". ערך שונה – מסומן אדום ואתה בוחר. בלי מפתח (או בלי אינטרנט / קרדיט) הכל עובד כרגיל, עם הודעה שהבדיקה לא רצה.</div>
       <div class="row" style="align-items:flex-end">
-        <label class="field"><span>מפתח גישה</span><input type="password" id="st_aikey" autocomplete="off" dir="ltr" placeholder=""></label>
-        <div class="toolbar" style="margin:0 0 4px"><button type="button" onclick="saveAiKey()">שמירה ובדיקת חיבור</button><button type="button" class="quiet" id="ai_test" onclick="saveAiKey(true)">בדיקת חיבור</button><button type="button" class="quiet" id="ai_clear" onclick="clearAiKey()">מחיקת המפתח</button></div>
+        <label class="field"><span>מפתח</span><input type="password" id="st_aikey" autocomplete="off" dir="ltr"></label>
+        <div class="toolbar" style="margin:0 0 4px"><button type="button" onclick="saveAiKey()">שמירה</button></div>
       </div>
-      <div id="ai_state" class="hint"></div>
     </div>
     <h2>נקודות פתוחות לאישור אברהם (דגלים)</h2>
     <div class="card">
@@ -361,7 +359,7 @@
       case 'update_field': { const r = S.find(x => x.id === a); if (!r) return {error:'לא נמצא'}; const ps = b.split('.'); let o = r.input; ps.slice(0,-1).forEach(k => o = o[k] = o[k] || {}); o[ps.at(-1)] = arguments[3]; return r; }
       case 'set_letter_note': { const r = S.find(x => x.id === a); if (r) r.letter_note = b; return r; }
       case 'set_handling': { const r = S.find(x => x.id === a); if (r) r.handling = {status: b, note: arguments[3] || '', at: new Date().toISOString().slice(0,19)}; return r; }
-      case 'get_settings': return window.__settings ||= {default_tax_year: 2026, stale_days: 60, data_dir: '/Users/niro/Projects/trapped-profits/data', app_version: '1.0', handling_statuses: ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל'], flags: {deduct_transition_from_50pct_base:false, enable_20pct_current_year_rule:true, deduction_base_excludes_related_payments:false, profitability_warning_threshold:.2}};
+      case 'get_settings': return window.__settings ||= {default_tax_year: 2026, firm_name: "מדהלה שלמה ושות'", stale_days: 60, data_dir: '/Users/niro/Projects/trapped-profits/data', app_version: '1.0', handling_statuses: ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל'], flags: {deduct_transition_from_50pct_base:false, enable_20pct_current_year_rule:true, deduction_base_excludes_related_payments:false, profitability_warning_threshold:.2}};
       case 'save_settings': Object.assign(window.__settings, a, {flags: {...window.__settings.flags, ...a.flags}}); return {ok: true, recomputed: 0};
       case 'export_report': return {path: null};
       case 'export_document': return {error: 'ייצוא קבצים זמין רק בתוכנה המותקנת'};
@@ -1124,21 +1122,18 @@
     paintAi();
     $('fl_rel').checked = !!f.deduction_base_excludes_related_payments; $('fl_thr').value = Math.round((f.profitability_warning_threshold ?? .2) * 100);
   }
-  function paintAi(msg, ok){
+  function paintAi(){
     const tail = settings?.ai_key_tail;
-    $('st_aikey').value = ''; $('st_aikey').placeholder = tail ? `שמור – מסתיים ב־${tail}` : 'להדביק כאן את המפתח';
-    $('ai_test').style.display = tail ? '' : 'none'; $('ai_clear').style.display = tail ? '' : 'none';
-    $('ai_state').innerHTML = msg ? `<span style="color:var(--${ok ? 'good' : 'serious'})">${esc(msg)}</span>` : (tail ? 'יש מפתח – הבודק השני פעיל' : 'אין מפתח – הבודק השני כבוי');
+    $('st_aikey').value = ''; $('st_aikey').placeholder = tail ? `•••• ${tail}` : '';
   }
-  async function saveAiKey(testOnly){
-    const k = testOnly ? '' : $('st_aikey').value.trim();
-    if (!testOnly && !k){ toast('להדביק מפתח'); return; }
-    $('ai_state').textContent = 'בודק חיבור…';
+  async function saveAiKey(){
+    const k = $('st_aikey').value.trim();
+    if (!k){ toast(settings?.ai_key_tail ? 'המפתח כבר שמור' : 'להדביק מפתח'); return; }
+    toast('בודק את המפתח…', 20000);
     const r = await api('set_ai_key', k, false);
-    if (!r){ $('ai_state').textContent = 'זמין רק בתוכנה'; return; }
-    settings = await api('get_settings'); paintAi(r.msg, r.ok);
+    if (!r){ toast('זמין רק בתוכנה'); return; }
+    settings = await api('get_settings'); paintAi(); toast(r.ok ? 'המפתח נשמר' : r.msg, 6000);
   }
-  async function clearAiKey(){ const r = await api('set_ai_key', '', true); settings = await api('get_settings'); paintAi(r?.msg, true); }
   async function saveSettings(){
     const data = { default_tax_year: Number($('st_year').value) || Y, stale_days: Number($('st_stale').value) || 60,
       firm_name: $('st_firm').value.trim(), accountant_name: $('st_acc').value.trim(),

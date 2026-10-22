@@ -154,3 +154,22 @@ def test_reread_old_reports_opens_choices(tmp_path, monkeypatch):
     rec = st.resolve_ai(rec["id"], "retained.balance_sheet_retained_earnings", "model")
     assert rec["input"]["retained"]["balance_sheet_retained_earnings"] == 691283
     assert "הקורא החדש" in rec["history"][-1]["text"]
+
+
+def test_firm_name_and_key_survive(tmp_path, monkeypatch):
+    """22.10: שם המשרד – ברירת מחדל, לא נמחק בשמירה ריקה; ועובר עם המפתח לתיקיית נתונים חדשה."""
+    import sys, types
+    monkeypatch.setitem(sys.modules, "webview", sys.modules.get("webview") or types.ModuleType("webview"))
+    import app
+    st = ClientStore(tmp_path / "a" / "clients")
+    st.settings.save({"firm_name": ""})
+    assert st.settings.load()["firm_name"] == "מדהלה שלמה ושות'"
+    api = app.Api.__new__(app.Api); api.store = st
+    st.settings.save({"firm_name": "משרד אחר", "ai_key": "sk-1234"})
+    api.save_settings({"firm_name": "  ", "stale_days": 30})
+    assert st.settings.load()["firm_name"] == "משרד אחר"
+    win = types.SimpleNamespace(create_file_dialog=lambda *a, **k: [str(tmp_path / "b")])
+    monkeypatch.setattr(app, "webview", types.SimpleNamespace(windows=[win], FOLDER_DIALOG=1), raising=False)
+    monkeypatch.setattr(app, "set_data_root", lambda p: None)
+    api.choose_data_folder()
+    assert api.store.settings.load()["firm_name"] == "משרד אחר" and api._ai_key()[0] == "sk-1234"

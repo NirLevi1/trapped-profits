@@ -180,6 +180,8 @@ class Api:
     def save_settings(self, data: dict):
         try:
             data = {k: v for k, v in (data or {}).items() if k != "ai_key"}     # המפתח נשמר רק דרך set_ai_key
+            if "firm_name" in data and not str(data["firm_name"] or "").strip():
+                data.pop("firm_name")                                         # 22.10: לא מוחקים את שם המשרד בטעות
             self.store.settings.save(data)
             n = self.store.recompute_all()          # דגלים השתנו → כולם מחושבים מחדש (החלטה 6)
             return {"ok": True, "recomputed": n}
@@ -473,8 +475,18 @@ class Api:
         if not paths:
             return {"cancelled": True}
         new = Path(paths[0])
+        # 22.10: שם המשרד, רואה החשבון ומפתח הבודק השני עוברים לתיקייה החדשה (אם אין בה כבר)
+        old_st = self.store.settings.load()
         set_data_root(new)
         self.store = ClientStore(new / "clients")
+        try:
+            import json as _json
+            cur = _json.loads(self.store.settings.path.read_text(encoding="utf-8")) if self.store.settings.path.exists() else {}
+        except Exception:  # noqa: BLE001
+            cur = {}
+        carry = {k: old_st.get(k) for k in ("firm_name", "accountant_name", "ai_key", "ai_model") if old_st.get(k) and not str(cur.get(k) or "").strip()}
+        if carry:
+            self.store.settings.save(carry)
         return {"data_dir": str(new), "clients": len(self.store.list())}
 
 

@@ -234,7 +234,7 @@ HANDLING_STATUSES = ["טרם טופל", "בשיחה", "הוחלט: חלוקה", 
 
 DEFAULT_SETTINGS = {
     "default_tax_year": 2026,
-    "firm_name": "",                        # לחתימת המכתב ללקוח
+    "firm_name": "מדהלה שלמה ושות'",        # לחתימת המכתב ללקוח (22.10: המוצר של המשרד – ברירת מחדל)
     "accountant_name": "",
     "stale_days": 60,                       # החלטה 15: נתון מיושן אחרי כמה ימים
     "flags": {                              # הדגלים של הנקודות הפתוחות – ניתנים לשינוי בלי קוד אחרי הפגישה
@@ -255,7 +255,7 @@ class Settings:
         if self.path.exists():
             try:
                 saved = json.loads(self.path.read_text(encoding="utf-8"))
-                out.update({k: v for k, v in saved.items() if k != "flags"})
+                out.update({k: v for k, v in saved.items() if k != "flags" and not (k == "firm_name" and not str(v or "").strip())})
                 out["flags"].update(saved.get("flags", {}))
             except Exception:  # noqa: BLE001
                 pass
