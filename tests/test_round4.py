@@ -200,5 +200,30 @@ def test_grants_refunds_and_cogs_default():
     assert round(r["s62a"]["personal_effort_income"]) == round(r2["s62a"]["personal_effort_income"])   # המענק לא בהכנסה מעתירת יגיעה
     assert round(r["s62a"]["taxable_income_personal_effort"]) == round(r2["s62a"]["taxable_income_personal_effort"])
     ref = rows["99"]
-    assert not any(c["src"] == "gap" for c in ref["cells"]) and ref["method"] == "קצב"
+    # 22.10: החזר (שורת הוצאה שלילית) – בלי חורים ובלי אומדן קדימה (בדיקה לאחור: הקצב היה הופך סימן)
+    assert not any(c["src"] == "gap" for c in ref["cells"]) and ref["method"] == "ללא אומדן"
     assert rows["71"]["cogs"] and not rows["35"]["cogs"]                         # שכר לא בעלות המכר כברירת מחדל
+
+
+
+def test_backtest_rules_22_10():
+    """22.10 (בדיקה לאחור על שנים שלמות): עונתיות מוגבלת, חורים רק בסעיפים חודשיים, שכר לפי מגמה, חודש חריג לא בבסיס."""
+    from trapped_profits.engine import _tb_table
+    m = lambda *v: list(v) + [0] * (12 - len(v))
+    rows = [
+        {"id": "r", "name": "הכנסות", "income": True, "kind": "revenue", "months": m(-100, -100, 0, -100, -100, -100, -100, -100)},
+        {"id": "s", "name": "שכר עבודה", "income": False, "kind": "expense", "category": "שכר", "months": m(10, 10, 10, 10, 10, 0, 16, 16)},
+        {"id": "k", "name": "עבודות חוץ-קבלני משנה", "income": False, "kind": "expense", "category": "קבלני משנה", "months": m(5, 0, 5, 5, 0, 5, 5, 5)},
+        {"id": "o", "name": "אחזקה", "income": False, "kind": "expense", "category": None, "months": m(2, 2, 2, 30, 2, 2, 2, 2)},
+        {"id": "p", "name": "קניות", "income": False, "kind": "expense", "category": "קניות", "months": m(1, 0, 0, 0, 0, 0, 0, 1)},
+    ]
+    prev = [{"id": "p", "name": "קניות", "income": False, "months": [0, 0, 0, 0, 0, 0, 0, 1, 50, 50, 50, 50]}]
+    ci = ClientInput.from_dict({"structure": {"name": "x", "tax_year": 2026}, "tb_rows": rows, "tb_rows_prev_year": prev, "data_through_month": 8})
+    _, _, mt, _ = _tb_table(ci)
+    R = {r["id"]: r for r in mt["rows"]}
+    assert all(c["src"] != "gap" for c in R["r"]["cells"])                       # חודש בלי הכנסה – לא "חור"
+    assert R["s"]["cells"][5]["src"] == "gap"                                    # שכר 0 ביוני – חור
+    assert R["s"]["cells"][8]["v"] == 14                                         # מגמה: (10+16+16)/3
+    assert all(c["src"] != "gap" for c in R["k"]["cells"])                       # קבלני משנה – לא חודשי
+    assert R["o"]["cells"][8]["v"] == 2                                          # חודש חריג (30) לא בבסיס
+    assert R["p"]["method"] != "עונתיות" and R["p"]["total"] < 10                 # היחס מתפוצץ – לא עונתיות

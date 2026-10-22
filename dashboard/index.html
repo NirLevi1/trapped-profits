@@ -1470,7 +1470,7 @@
     const x = r.result || {};
     if (x.changed){ await reload(); if ($('s-client')?.classList.contains('active')) renderClient(); toast(`הדוחות השנתיים נקראו שוב בגרסה החדשה: אצל ${x.changed} לקוחות יצא ערך אחר – מסומן "סתירות" לבחירה (${(x.names || []).slice(0, 4).join(', ')}${x.changed > 4 ? '…' : ''})`, 9000); }
   }
-  const UI_VERSION = '1.34';
+  const UI_VERSION = '1.35';
   // 22.10: הממשק חדש אבל התהליך ישן (עדכון שלא הופעל מחדש) – פס בראש המסך עם הפעלה מחדש
   function versionMismatch(){
     const v = settings?.app_version; if (MOCK || !UI_VERSION || !v || v === UI_VERSION) return;

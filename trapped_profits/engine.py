@@ -984,7 +984,7 @@ def _tb_is_approved(ci: ClientInput) -> bool:
 
 
 COGS_NAME_KEYS = ("עלות", "פרויקט", "חומרי", "יבוא", "קניות")
-OTHER_INCOME_KEYS = ("הכנסות אחרות", "רווחים אחרים", "מענק", "החזר", "פיצוי")
+OTHER_INCOME_KEYS = ("הכנסות אחרות", "רווחים אחרים", "מענק", "החזר", "פיצוי", "מילואים")
 
 
 def _is_cogs_default(r: dict) -> bool:
@@ -1003,6 +1003,25 @@ def _row_kind(r: dict) -> str:
         if any(w in txt for w in OTHER_INCOME_KEYS):
             return "other_income"
     return k
+
+
+# 22.10 (בדיקה לאחור על שנים שלמות): בסיס האומדן לשורה סדירה
+MONTHLY_CATS = ("שכר", "עלויות מעסיק", "שכירות", "דמי ניהול")      # סעיפים שאמורים להופיע כל חודש – 0 בחודש שעבר = "חור"
+TREND_CATS = ("שכר", "עלויות מעסיק")                                 # מגמה (העלאות) – ממוצע שלושת החודשים האחרונים
+
+
+def _robust_base(eff: list[float], filled: list[int], trend: bool = False, keep_idx: set | None = None) -> float:
+    """ממוצע החודשים המלאים בלי חודש חריג (פי 3 מהחציון ומעלה). שכר / עלויות מעסיק – שלושת החודשים האחרונים (מגמה)."""
+    vals = [eff[i] for i in filled]
+    if not vals:
+        return 0.0
+    srt = sorted(vals)
+    med = srt[len(srt) // 2] if len(srt) % 2 else (srt[len(srt) // 2 - 1] + srt[len(srt) // 2]) / 2
+    keep = [i for i in filled if i in (keep_idx or ()) or not (med > 0 and eff[i] > 3 * med)] if len(vals) >= 4 else list(filled)
+    if trend and len(keep) >= 3:
+        keep = keep[-3:]
+    keep = keep or filled
+    return sum(eff[i] for i in keep) / len(keep)
 
 
 def _cycle_of(filled: list[int], prev_filled: list[int], m_last: int = 12) -> int | None:
@@ -1050,27 +1069,40 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
         key = f"tb:{r.get('id')}"
         # אברהם 15.10: תיקון על חודש שכבר עבר (ינואר–אוגוסט) משנה גם את הבסיס לאומדן החודשים הבאים
         eff = list(disp)
+        manual_idx: set[int] = set()
         for i in range(12):
             if i < m_last or abs(disp[i]) > 0.5:
                 a0 = _adj_for(ci, key, i + 1)
                 if a0 and a0.get("kind") == "manual":
                     eff[i] = float(a0.get("amount") or 0)
+                    manual_idx.add(i)                                          # תיקון של אברהם – מכוון, לא "חודש חריג"
         filled = [i for i in range(m_last) if abs(eff[i]) > 0.5]
         # "חור" (0 בחודש כשהשאר מלאים) נבדק רק בשורות שאמורות להיות כל חודש: הכנסות וסעיפי השלמות (שכר, עלויות מעסיק, שכירות…)
         # שורה שלילית (החזרים, למשל "החזר מילואים") – אינה סעיף חודשי; בלי חורים, אומדן לפי קצב
         regular = len(filled) >= max(2, round(0.6 * m_last)) and (inc or r.get("category") not in (None, "קניות")) and sum(eff[:m_last]) > 0
-        one_off = r.get("kind") == "other_income"                          # מענקים / הכנסות אחרות – בלי אומדן לחודשים הבאים
-        avg = (sum(eff[i] for i in filled) / len(filled)) if filled else 0.0
+        # 22.10 (בדיקה לאחור): "חור" רק בסעיפים שבאמת חודשיים – שכר, עלויות מעסיק, שכירות, דמי ניהול; לא הכנסות ולא קבלני משנה
+        monthly = (not inc) and r.get("category") in MONTHLY_CATS and regular
+        # מענקים / הכנסות אחרות, וגם החזרים (שורת הוצאה שלילית) – בלי אומדן לחודשים הבאים
+        one_off = r.get("kind") == "other_income" or (not inc and sum(eff[:m_last]) < -0.5)
+        # הכנסות: קצב השנה (כולל חודשים בלי הכנסה – הכנסות לא סדירות, אין "חודש חריג"); הוצאות סדירות: ממוצע בלי חודש חריג, שכר – מגמה
+        avg = (sum(eff[:m_last]) / m_last if m_last else 0.0) if inc else _robust_base(eff, filled, trend=r.get("category") in TREND_CATS, keep_idx=manual_idx)
         linear = sum(eff[:m_last]) / m_last if m_last else 0.0
+        if not inc and len(filled) >= 4 and linear > 0:                      # 22.10: תשלום חריג חד-פעמי לא נכנס לקצב החודשים הבאים
+            vals = sorted(eff[i] for i in filled)
+            med = vals[len(vals) // 2]
+            linear = sum(eff[i] for i in range(m_last) if i in manual_idx or not (med > 0 and eff[i] > 3 * med)) / m_last
         prev = prev_by_id.get(str(r.get("id"))) or prev_by_name.get(str(r.get("name")))
         season = None
         if prev:
             pr = [float(x or 0) for x in list(prev.get("months") or [])[:12]] + [0.0] * 12
             pd = [(-v if inc else v) for v in pr[:12]]
             base_prev, base_cur = sum(pd[:m_last]), sum(eff[:m_last])
+            full_prev = sum(pd)
             if base_prev > 0.5 and base_cur > 0.5 and any(abs(x) > 0.5 for x in pd[m_last:]):
                 ratio = base_cur / base_prev
-                season = [x * ratio for x in pd]
+                # 22.10: היחס לשנה הקודמת מתפוצץ כשעד החודש הזה כמעט לא היה כלום (קניות 70 אלף → אומדן 4.6 מיליון) – אז לא עונתיות
+                if base_prev >= 0.15 * full_prev and 1 / 3 <= ratio <= 3:
+                    season = [x * ratio for x in pd]
         # מחזורי (אברהם 15.10): תשלום כל k חודשים (חשמל כל חצי שנה, ביטוח רבעוני) – ממשיכים את המחזור במקום ממוצע/חלק יחסי
         cycle = None
         if not season:
@@ -1097,7 +1129,7 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
         for i in range(12):
             file_v = disp[i]
             if i < m_last or abs(file_v) > 0.5:
-                if abs(file_v) > 0.5 or not regular:
+                if abs(file_v) > 0.5 or not monthly:
                     src, v, base = "file", file_v, file_v
                 else:                                                      # חור: 0 בחודש שבשאר החודשים יש
                     base = season[i] if season else avg
@@ -1132,7 +1164,7 @@ def _tb_table(ci: ClientInput) -> tuple[ClientInput, list[dict], dict | None, di
                     stats["estimate"] += v
                 elif src == "manual":
                     stats["correction"] += v - base
-            if src in ("gap", "dismissed") or (src in ("manual", "accepted") and i < m_last and abs(file_v) <= 0.5 and regular):
+            if src in ("gap", "dismissed") or (src in ("manual", "accepted") and i < m_last and abs(file_v) <= 0.5 and monthly):
                 st = {"gap": "pending", "dismissed": "dismissed", "manual": "corrected", "accepted": "accepted"}[src]
                 items.append({"key": key, "month": i + 1, "label": f"{r.get('name')} · {MONTHS_HE[i]}: 0 – בשאר החודשים {'לפי השנה הקודמת' if season else 'ממוצע'} {base:,.0f} ₪",
                               "amount": v if st != "dismissed" else 0.0, "estimate": base, "status": st, "note": note})
