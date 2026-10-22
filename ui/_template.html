@@ -709,8 +709,8 @@
           bottom.push({key:'history', label:`היסטוריה ${(rec.history || []).length}`, html: `<div class="card" style="grid-column:1/-1"><h3>היסטוריה <span class="hint" style="display:inline">· ${(rec.history || []).length} רשומות</span></h3>${historyHtml(rec.history || [])}</div>`});
     const notices = [];
     notices.push(`<div class="card" id="cardSlots" style="display:none;margin-bottom:12px"><h3 style="margin-top:0">עדכון מקבצים</h3><div class="slots" id="cardSlotsBody"></div></div>`);
-    // אברהם 15.10/18.10: למעלה רק מה שדורש תשומת לב (חסרים, מאזן בוחן, מיושן, מעבר שנה, השתנה); השאר תחת "מידע נוסף"
-    const MORE = new Set(['pending', 'annual', 'today', 'actions', 'review', 'history', 'sources']);
+    // אברהם 15.10/18.10/22.10: למעלה רק סתירות, מאזן בוחן, מיושן, מעבר שנה, השתנה; חסרים ובדיקת היגיון – תחת "מידע נוסף"; השאר תחת "מידע נוסף"
+    const MORE = new Set(['missing', 'aireview', 'pending', 'annual', 'today', 'actions', 'review', 'history', 'sources']);
     const topFlags = flags.filter(f => !MORE.has(f.key));
     const more = [...flags.filter(f => MORE.has(f.key)).map(f => ({...f, notice: true})), ...bottom];
     const openMore = more.some(f => openFlags.has(f.key));
