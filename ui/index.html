@@ -134,7 +134,7 @@
   input.st-missing{border-color:var(--serious);background:#fdf1ee}
   table.mini{border-collapse:collapse;font-size:12px} table.mini th,table.mini td{padding:2px 10px 2px 0;text-align:right} table.mini th{font-weight:500;color:inherit;opacity:.8}
   .fstate{font-size:11px;margin-top:3px;display:flex;gap:6px;align-items:center}
-  .xrow{cursor:pointer} .xrow .tog{font-size:11px;color:var(--ink-3)} .xdet{background:var(--surface-2,#f5f3ef);border-radius:8px;padding:8px 10px;font-size:12.5px} .xdet>div{display:flex;justify-content:space-between;gap:12px;padding:2px 0} .xdet>div.sum{border-top:1px solid var(--line-soft);margin-bottom:4px} .xdet>div.gov{color:var(--good);font-weight:600} .xdet small{font-weight:400} .rvf{border-top:1px solid var(--line-soft);padding:8px 0;color:var(--ink)} .rvf .hint{color:var(--ink-3)} .rvf:first-of-type{border-top:0} .rvh{display:flex;gap:8px;align-items:center;margin-bottom:3px} .aiconf button.on{border-color:var(--good);color:var(--good)} .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
+  @keyframes spin{to{transform:rotate(360deg)}} .xrow{cursor:pointer} .xrow .tog{font-size:11px;color:var(--ink-3)} .xdet{background:var(--surface-2,#f5f3ef);border-radius:8px;padding:8px 10px;font-size:12.5px} .xdet>div{display:flex;justify-content:space-between;gap:12px;padding:2px 0} .xdet>div.sum{border-top:1px solid var(--line-soft);margin-bottom:4px} .xdet>div.gov{color:var(--good);font-weight:600} .xdet small{font-weight:400} .rvf{border-top:1px solid var(--line-soft);padding:8px 0;color:var(--ink)} .rvf .hint{color:var(--ink-3)} .rvf:first-of-type{border-top:0} .rvh{display:flex;gap:8px;align-items:center;margin-bottom:3px} .aiconf button.on{border-color:var(--good);color:var(--good)} .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
   .fstate button{padding:0 6px;font-size:11px;line-height:18px;border-radius:5px}
   .check .fstate{margin-inline-start:0}
   .slots{display:grid;gap:10px}
@@ -725,7 +725,7 @@
       (openFlags.has('more') ? more.filter(f => openFlags.has(f.key)).map(f => f.notice ? `<div class="notice ${f.tone}">${f.html}</div>` : f.html).join('') : ''));
     el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall), handlingMenu) + notices.join('') + `
       <div class="cols">
-        ${foldCard('c81', !m.action_required, `סעיף 81 · קנס מס 2% &nbsp;${pill(c.dashboard.color_81, k.surtax > 0 ? `חשוף · קנס ${Math.round(k.surtax).toLocaleString('en-US')} ₪` : (c.dashboard.color_81 === 'צהוב' ? strip(c.dashboard.status_81) : (k.status_label || strip(c.dashboard.status_81))))}`, `רווחים נצברים ${ils(r.retained_for_81a)} · המגן ${ils(k.governing_shield)} · אין קנס השנה`, kv(c81Rows(c, k, r, sh)))}
+        ${foldCard('c81', !m.action_required, `סעיף 81 · קנס מס 2% &nbsp;${pill(c.dashboard.color_81, k.surtax > 0 ? `חשוף · קנס ${Math.round(k.surtax).toLocaleString('en-US')} ₪` : (c.dashboard.color_81 === 'צהוב' ? strip(c.dashboard.status_81) : (k.status_label || strip(c.dashboard.status_81))))}`, `רווחים נצברים ${ils(r.retained_for_81a)} · המגן ${ils(k.governing_shield)} · אין קנס השנה`, kv(c81Rows(c, k, r, sh, rec.id)))}
         ${foldCard('csim', !m.action_required, `סימולטור · לחלק דיבידנד או לשלם 2%?`, `לא נדרש השנה – פתח כדי לתקן "כבר חולק" או לבדוק "מה אם"`, `${m.action_required ? '' : simProtected(k, r)}${kv([
           // 21.10 (אברהם): מוגן – בלי 6% / 50% / דיבידנד מינימלי / פער (אין מה לסגור); נשאר "כבר חולק", האומדן ו"מה אם"
           ...(m.action_required ? [
@@ -1252,12 +1252,13 @@
   // 22.10 (ניר): כרטיס 81 – הגלגול והמגנים נפתחים בלחיצה; שורת "מצב" עברה לכותרת; "קנס מס 2%" באדום
   const openRows = new Set();
   function toggleRow(k){ if (openRows.has(k)) openRows.delete(k); else openRows.add(k); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
-  function c81Rows(c, k, r, sh){
+  function c81Rows(c, k, r, sh, id){
     const steps = r.roll_steps || [], rk = 'roll', shk = 'shield';
     const xl = (key, label) => `<span class="xrow" onclick="toggleRow('${key}')">${label} <span class="tog">${openRows.has(key) ? '▴' : '▾'}</span></span>`;
     const keep = steps[0] && steps[0].profit > 0 ? Math.round(steps[0].after_tax / steps[0].profit * 100) : 77;
     const roll = steps.length ? `<div class="xdet">${[`<div><span>עודפים לתום ${r.roll_base_year} (דוח סגור)</span><b>${ils(steps[0].from)}</b></div>`,
-      ...steps.map(x => `<div><span>+ רווח ${x.year} לפני מס ${ils(x.profit)} × ${keep}%</span><b>${ils(x.after_tax)}</b></div>` + (x.dividend ? `<div><span>− דיבידנד ${x.year}</span><b>−${ils(x.dividend)}</b></div>` : `<div class="hint"><span>− דיבידנד ${x.year} (לא הוזן – 0)</span><b></b></div>`) + `<div class="sum"><span>= עודפים לתום ${x.year}</span><b>${ils(x.to)}</b></div>`)].join('')}</div>` : '';
+      ...steps.map(x => `<div><span>+ רווח ${x.year} לפני מס ${ils(x.profit)} × ${keep}%</span><b>${ils(x.after_tax)}</b></div>` + (() => { const path = x.year === c.previous_year ? 'distributions.dividends_prev_year' : 'distributions.dividends_prev2_year';
+        return `<div class="${x.dividend ? '' : 'hint'}"><span>− דיבידנד שחולק ב־${x.year}${x.dividend ? '' : ' (לא הוזן – 0)'}</span><b><input type="text" inputmode="numeric" dir="ltr" style="width:110px;padding:2px 6px" value="${fmtNum(x.dividend || 0)}" oninput="fmtInput(this)" onkeydown="if(event.key==='Enter')saveField('${esc(id)}','${path}',this.value)" onblur="saveField('${esc(id)}','${path}',this.value,true)" title="להקליד את הדיבידנד שחולק בשנה – הגלגול מתעדכן"></b></div>`; })() + `<div class="sum"><span>= עודפים לתום ${x.year}</span><b>${ils(x.to)}</b></div>`)].join('')}</div>` : '';
     const shields = [['מגן קבוע', sh.fixed_shield, '750,000 ₪' + (c.companies_for_750k_split > 1 ? ` ÷ ${c.companies_for_750k_split} חברות` : '')], ['מגן הוצאות', sh.expenses_shield, `הגבוה מבין הוצאות השנה ${ils(sh.expenses_current_adjusted)} וממוצע 3 שנים ${ils(sh.expenses_avg_3y)}`], ['מגן נכסים', sh.assets_shield, `עלות רכוש קבוע פחות מזומנים ופיקדונות (${ils(sh.special_assets_net)}) והון מניות`]];
     const gov = shields.reduce((a, b) => b[1] > a[1] ? b : a);
     const shDet = `<div class="xdet">${shields.map(([l, v, how]) => `<div class="${l === gov[0] ? 'gov' : ''}"><span>${l}${l === gov[0] ? ' ◀ הקובע' : ''}<br><small class="hint">${how}</small></span><b>${ils(v)}</b></div>`).join('')}</div>`;
@@ -1441,7 +1442,11 @@
     const x = r.result || {};
     if (x.changed){ await reload(); if ($('s-client')?.classList.contains('active')) renderClient(); toast(`הדוחות השנתיים נקראו שוב בגרסה החדשה: אצל ${x.changed} לקוחות יצא ערך אחר – מסומן "סתירות" לבחירה (${(x.names || []).slice(0, 4).join(', ')}${x.changed > 4 ? '…' : ''})`, 9000); }
   }
-  function boot(){ MOCK = isMock(); api('field_info').then(r => { if (r?.human_only) humanOnly = r.human_only; }); loadSettings().then(reload); if (!MOCK){ setTimeout(() => checkUpdate(false), 4000); setTimeout(() => pollReread(), 2500); } }
+  function versionNotice(){
+    try { const v = settings?.app_version; if (!v || MOCK) return; const last = localStorage.getItem('tp_last_version');
+      if (last && last !== v) toast(`עודכן לגרסה ${v}`, 6000); localStorage.setItem('tp_last_version', v); } catch (e) {}
+  }
+  function boot(){ MOCK = isMock(); api('field_info').then(r => { if (r?.human_only) humanOnly = r.human_only; }); loadSettings().then(() => { versionNotice(); return reload(); }); if (!MOCK){ setTimeout(() => checkUpdate(false), 4000); setTimeout(() => pollReread(), 2500); } }
   let updInfo = null;
   async function checkUpdate(manual){
     const r = await api('check_update'); updInfo = r;
@@ -1459,11 +1464,19 @@
       if (manual) toast('התוכנה מעודכנת');
     }
   }
+  // 22.10: מסך "מעדכן" שנשאר עד שהתוכנה נסגרת – ואחרי ההפעלה מחדש הודעה עם הגרסה החדשה
+  function updOverlay(on, text){
+    let o = $('updOverlay');
+    if (!o){ o = document.createElement('div'); o.id = 'updOverlay'; o.style.cssText = 'position:fixed;inset:0;background:rgba(250,249,247,.92);z-index:9999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;font-size:16px'; document.body.appendChild(o); }
+    o.innerHTML = `<div class="spin" style="width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--ink);border-radius:50%;animation:spin 0.9s linear infinite"></div><b>${esc(text || '')}</b><div class="hint">התוכנה תיסגר ותיפתח מחדש לבד (עד דקה). הנתונים לא נוגעים.</div>`;
+    o.style.display = on ? 'flex' : 'none';
+  }
   async function applyUpdate(){
     const btn = $('upd_btn'); if (btn){ btn.disabled = true; btn.textContent = 'מעדכן…'; }
-    toast('מושך את הגרסה החדשה… התוכנה תיסגר ותיפתח מחדש');
+    updOverlay(true, 'מוריד את הגרסה החדשה…');
     const r = await api('apply_update');
-    if (!r || r.error){ toast(r?.error || 'העדכון נכשל'); if (btn){ btn.disabled = false; btn.textContent = 'עדכון והפעלה מחדש'; } }
+    if (!r || r.error){ updOverlay(false); toast(r?.error || 'העדכון נכשל'); if (btn){ btn.disabled = false; btn.textContent = 'עדכון והפעלה מחדש'; } return; }
+    updOverlay(true, `הורד – מפעיל מחדש בגרסה ${r.version || 'החדשה'}…`);
   }
   window.addEventListener('pywebviewready', boot);   // התוכנה: נטען שוב מהמנוע ברגע שהגשר מוכן
   boot();                                            // דפדפן / לפני שהגשר מוכן: דמו או ריק

@@ -194,6 +194,8 @@ def _missing_human_base(meta: dict, inp: dict | None = None) -> list[str]:
     st = (inp or {}).get("structure") or {}
     if st.get("last_closed_report_year") and st.get("tax_year") and st["last_closed_report_year"] < st["tax_year"] - 1:
         fields["distributions.dividends_prev_year"] = "דיבידנד שחולק בשנה הקודמת (לגלגול)"
+    if st.get("last_closed_report_year") and st.get("tax_year") and st["last_closed_report_year"] < st["tax_year"] - 2:
+        fields["distributions.dividends_prev2_year"] = "דיבידנד שחולק בשנה שלפני הקודמת (לגלגול)"
     return [label for path, label in fields.items()
             if (meta.get(path) or {}).get("state") not in ("manual", "approved")]
 

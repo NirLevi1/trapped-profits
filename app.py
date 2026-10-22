@@ -455,8 +455,15 @@ class Api:
         r = self._git("pull", "--ff-only", timeout=90)
         if r is None or r.returncode != 0:
             return {"error": "העדכון נכשל: " + ((r.stderr or r.stdout).strip()[-300:] if r else "אין גיט/רשת")}
+        ver = None
+        try:
+            import re as _re
+            m = _re.search(r'APP_VERSION\s*=\s*"([^"]+)"', (app_dir() / "trapped_profits" / "__init__.py").read_text(encoding="utf-8"))
+            ver = m.group(1) if m else None
+        except Exception:  # noqa: BLE001
+            pass
         self._restart()
-        return {"ok": True}
+        return {"ok": True, "version": ver}
 
     @staticmethod
     def _restart():
