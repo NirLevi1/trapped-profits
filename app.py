@@ -514,6 +514,70 @@ class Api:
         open_path(str(self.store.root.parent))      # data/ – לקוחות, קבצים שהועלו, דוחות
         return True
 
+    # ---- 22.10: ייבוא לקוחות מתיקיית איסוף
+    def choose_intake_folder(self):
+        try:
+            win = webview.windows[0]
+            cur = self.store.settings.load().get("intake_dir") or str(Path.home())
+            paths = win.create_file_dialog(webview.FOLDER_DIALOG, directory=cur)
+        except Exception as e:  # noqa: BLE001
+            return {"error": f"לא נפתח חלון בחירת תיקייה: {e}"}
+        if not paths:
+            return {"cancelled": True}
+        self.store.settings.save({"intake_dir": str(paths[0])})
+        return {"intake_dir": str(paths[0])}
+
+    def intake_plan(self):
+        from trapped_profits import folder_import as fi
+        root = self.store.settings.load().get("intake_dir")
+        if not root:
+            return {"error": "לא נבחרה תיקיית איסוף"}
+        try:
+            pl = fi.plan(root, self.store, int(self.store.settings.load().get("default_tax_year") or 2026))
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+        for it in pl["items"]:
+            for f in it["files"]:
+                f.pop("sig", None)
+        return pl
+
+    def intake_run(self, only=None):
+        from trapped_profits import folder_import as fi, ai_check
+        st = getattr(self, "_intake", None)
+        if st and st.get("running"):
+            return {"error": "ייבוא כבר רץ"}
+        root = self.store.settings.load().get("intake_dir")
+        if not root:
+            return {"error": "לא נבחרה תיקיית איסוף"}
+        key, model = self._ai_key()
+        self._intake = {"running": True, "progress": None, "summary": None, "error": None}
+        import threading
+
+        def _bg():
+            try:
+                done: list[str] = []
+                s = fi.run(root, self.store, None, key, model, progress=lambda p: self._intake.update(progress=p),
+                           review=(lambda cid: done.append(cid)) if key else None, only=only or None)
+                self._intake["summary"] = s
+                for i, cid in enumerate(done):                    # בדיקת היגיון – בסוף, לקוח אחרי לקוח
+                    self._intake["progress"] = {"i": i, "n": len(done), "folder": "בדיקת היגיון", "review": True}
+                    self.store.review_start(cid)
+                    try:
+                        self.store.review_finish(cid, ai_check.review_client(self.store.get(cid), key, model))
+                    except ai_check.AIError as e:
+                        self.store.review_finish(cid, error=str(e))
+                    except Exception as e:  # noqa: BLE001
+                        self.store.review_finish(cid, error=f"שגיאה בבדיקה: {e}")
+            except Exception as e:  # noqa: BLE001
+                self._intake["error"] = str(e)
+            self._intake["running"] = False
+        threading.Thread(target=_bg, daemon=True).start()
+        return {"ok": True}
+
+    def intake_status(self):
+        st = getattr(self, "_intake", None) or {"running": False}
+        return {k: st.get(k) for k in ("running", "progress", "summary", "error")}
+
     def choose_data_folder(self):
         """הגדרות: בחירת תיקיית נתונים אחרת (למשל כונן משותף במשרד). נכנסת לתוקף מיד; הקבצים הקיימים לא מועברים."""
         try:
@@ -533,7 +597,7 @@ class Api:
             cur = _json.loads(self.store.settings.path.read_text(encoding="utf-8")) if self.store.settings.path.exists() else {}
         except Exception:  # noqa: BLE001
             cur = {}
-        carry = {k: old_st.get(k) for k in ("firm_name", "accountant_name", "ai_key", "ai_model") if old_st.get(k) and not str(cur.get(k) or "").strip()}
+        carry = {k: old_st.get(k) for k in ("firm_name", "accountant_name", "ai_key", "ai_model", "intake_dir") if old_st.get(k) and not str(cur.get(k) or "").strip()}
         if carry:
             self.store.settings.save(carry)
         return {"data_dir": str(new), "clients": len(self.store.list())}

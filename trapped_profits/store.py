@@ -175,7 +175,7 @@ def _prune_ai(rec: dict) -> None:
     meta = rec.get("field_meta") or {}
     for path in list(conf):
         m = meta.get(path) or {}
-        if m.get("state") in ("manual", "approved") and str(m.get("at") or "") >= str(conf[path].get("at") or ai.get("at") or ""):
+        if m.get("state") in ("manual", "approved") and str(m.get("at") or "") > str(conf[path].get("at") or ai.get("at") or ""):
             conf.pop(path, None)
 
 
@@ -463,7 +463,7 @@ class ClientStore:
         self._path(cid).write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
         return rec
 
-    def apply_import(self, cid: str, fields: dict, sources: dict | None, label: str, source: dict | None = None) -> dict[str, Any]:
+    def apply_import(self, cid: str, fields: dict, sources: dict | None, label: str, source: dict | None = None, keep_manual: bool = True) -> dict[str, Any]:
         """אברהם 14.10 (2): עדכון רבעוני מקובץ בכרטיס לקוח קיים – דורס רק את השדות שבקובץ, מחשב, ורושם בהיסטוריה."""
         rec = self.get(cid)
         if not rec:
@@ -488,17 +488,33 @@ class ClientStore:
             inp["ai_annual"] = {}                                         # דוח חדש – סתירות של הדוח הקודם כבר לא רלוונטיות
         if "retained.balance_sheet_retained_earnings" in (fields or {}):
             inp.setdefault("retained", {})["retained_as_of_year"] = None      # דוח סגור חדש – העודפים שוב "מהדוח", לא אומדן מגולגל
+        old_meta = rec.get("field_meta") or {}
+        kept: list[str] = []
+        if "ai_annual" in (fields or {}):
+            inp["ai_annual"] = json.loads(json.dumps(fields["ai_annual"]))     # קודם – כדי שסתירות "הוזן ידנית" יתווספו אליו
         for path, value in (fields or {}).items():
+            if path == "ai_annual":
+                continue
             parts = path.split(".")
             target = inp
             for pth in parts[:-1]:
                 target = target.setdefault(pth, {})
             if parts[-1] not in target and path not in TOP_LEVEL_FIELDS:
                 continue
+            # 22.10: ערך שהוקלד ידנית לא נדרס מקובץ – נפתחת סתירה (הוזן ידנית / הקובץ) לבחירה
+            if keep_manual and (old_meta.get(path) or {}).get("state") == "manual" and path.split(".")[0] not in FIELD_SKIP \
+                    and not isinstance(value, (list, dict)) and target.get(parts[-1]) != value:
+                from .ai_check import LABELS
+                conf = inp.setdefault("ai_annual", {}).setdefault("conflicts", {})
+                conf[path] = {"label": LABELS.get(path, path), "reread": True, "at": now,
+                              "ours": target.get(parts[-1]), "ours_name": "הוזן ידנית", "ours_src": (old_meta.get(path) or {}).get("source", ""), "ours_also": {},
+                              "model": value, "model_name": "הקובץ החדש", "model_src": (sources or {}).get(path, label), "model_also": {}}
+                kept.append(path)
+                continue
             target[parts[-1]] = value
             meta[path] = {"state": "file", "source": (sources or {}).get(path, label), "at": now}
         new = self.save(inp, cid, field_meta=meta, sources=[source] if source else None)
-        self._log(new, "עדכון מקובץ", f"{label} – {len(meta)} שדות" + (f"; הוחלפו על ידי הקובץ {len(superseded)} תיקונים ידניים על חודשים שהיו אומדן: " + "; ".join(superseded) if superseded else ""))
+        self._log(new, "עדכון מקובץ", f"{label} – {len(meta)} שדות" + (f"; {len(kept)} ערכים שהוזנו ידנית לא נדרסו – לבחירה" if kept else "") + (f"; הוחלפו על ידי הקובץ {len(superseded)} תיקונים ידניים על חודשים שהיו אומדן: " + "; ".join(superseded) if superseded else ""))
         self._path(cid).write_text(json.dumps(new, ensure_ascii=False, indent=2), encoding="utf-8")
         return new
 

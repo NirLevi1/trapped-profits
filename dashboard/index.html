@@ -254,9 +254,23 @@
       <div class="spacer"></div>
       <div class="seg" id="cView"><button type="button" class="on" data-v="list">רשימה</button><button type="button" data-v="q">לפי רבעונים</button></div>
       <button onclick="api('recompute_all').then(r=>{toast('חושבו מחדש '+(r?.n??0)+' לקוחות');reload();})">חישוב מחדש לכולם</button>
+      <button onclick="show('intake')">ייבוא מתיקייה</button>
       <button class="primary" onclick="newClient()">לקוח חדש</button>
     </div>
     <div class="tablewrap" id="clientsList"></div>
+  </section>
+
+  <!-- ── 22.10: ייבוא מתיקיית איסוף ── -->
+  <section class="screen" id="s-intake">
+    <div class="toolbar"><h1>ייבוא מתיקייה</h1><div class="spacer"></div><button class="quiet" onclick="show('clients')">חזרה ללקוחות</button></div>
+    <div class="card">
+      <div class="field"><span>תיקיית איסוף הדוחות</span>
+        <div class="pathbox"><span id="in_dir" dir="ltr"></span><button type="button" class="quiet" onclick="chooseIntake()">בחירה…</button></div>
+        <div class="hint">תיקייה לכל לקוח, ובתוכה תיקייה לכל שנה. נקלטים: דוח שנתי (PDF), "רווח והפסד שנה", "כרטסת שנה". קובץ שכבר נקלט ולא השתנה – מדלגים.</div>
+      </div>
+      <div class="toolbar" style="margin:8px 0 0"><button onclick="intakeScan()">סריקה</button><button class="primary" id="in_go" style="display:none" onclick="intakeGo()">ייבוא</button><span class="hint" id="in_state"></span></div>
+    </div>
+    <div id="in_body"></div>
   </section>
 
   <!-- ── Settings ── -->
@@ -463,9 +477,10 @@
   document.querySelectorAll('.nav a').forEach(a => { a.tabIndex = 0; a.onclick = () => show(a.dataset.screen); a.onkeydown = e => { if (e.key === 'Enter') show(a.dataset.screen); }; });
   async function show(id){
     if (['queue','clients'].includes(id)) await reload();   // תמיד עדכני מול הקבצים בדיסק
-    document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.screen === id || (id === 'client' && a.dataset.screen === 'queue') || (id === 'form' && a.dataset.screen === 'clients')));
+    document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.screen === id || (id === 'client' && a.dataset.screen === 'queue') || (id === 'form' && a.dataset.screen === 'clients') || (id === 'intake' && a.dataset.screen === 'clients')));
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === 's-' + id));
     if (id === 'client') renderClient();
+    if (id === 'intake'){ intakeInit(); if (!intakePlan && settings?.intake_dir) intakeScan(); }
     document.querySelector('main').scrollTop = 0;
   }
 
@@ -1160,6 +1175,40 @@
     const r = await api('set_ai_key', k, false);
     if (!r){ toast('זמין רק בתוכנה'); return; }
     settings = await api('get_settings'); paintAi(); toast(r.ok ? 'המפתח נשמר' : r.msg, 6000);
+  }
+  // ── 22.10: ייבוא מתיקייה
+  let intakePlan = null;
+  function intakeInit(){ $('in_dir').textContent = settings?.intake_dir || 'לא נבחרה'; }
+  async function chooseIntake(){ const r = await api('choose_intake_folder'); if (!r || r.cancelled) return; if (r.error){ toast(r.error); return; } settings = await api('get_settings'); intakeInit(); intakeScan(); }
+  const IN_TONE = {'חדש': 'info', 'לעדכון': 'warn', 'ללא שינוי': 'neutral', 'לבירור': 'serious', 'אין קבצים': 'neutral', 'נוסף': 'good', 'עודכן': 'good', 'שגיאה': 'serious'};
+  async function intakeScan(){
+    $('in_state').textContent = 'סורק…'; $('in_go').style.display = 'none';
+    const r = await api('intake_plan'); if (!r){ $('in_state').textContent = 'זמין רק בתוכנה'; return; }
+    if (r.error){ $('in_state').textContent = r.error; return; }
+    intakePlan = r; const c = r.counts || {}; const n = (c['חדש'] || 0) + (c['לעדכון'] || 0);
+    $('in_state').textContent = Object.entries(c).map(([k, v]) => `${k}: ${v}`).join(' · ');
+    $('in_go').style.display = n ? '' : 'none'; $('in_go').textContent = `ייבוא ${n} לקוחות`;
+    const order = ['לבירור', 'חדש', 'לעדכון', 'אין קבצים', 'ללא שינוי'];
+    const items = [...r.items].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
+    $('in_body').innerHTML = `<div class="tablewrap"><table><tr><th>תיקייה</th><th>מצב</th><th>לקוח במערכת</th><th>קבצים חדשים / שהשתנו</th><th>הערות</th></tr>${items.map(it => {
+      const ch = it.files.filter(f => f.state !== 'same');
+      return `<tr><td>${esc(it.folder)}</td><td><span class="pill ${IN_TONE[it.status] || 'neutral'}">${esc(it.status)}</span></td><td>${esc(it.client_name || '—')}</td><td class="hint">${ch.map(f => `${f.year} · <bdi>${esc(f.name)}</bdi>` + (f.state === 'changed' ? ' (השתנה)' : '')).join('<br>')}</td><td class="hint">${(it.notes || []).map(n => `<bdi>${esc(n)}</bdi>`).join('<br>')}</td></tr>`; }).join('')}</table></div>`;
+  }
+  async function intakeGo(){
+    const r = await api('intake_run', null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
+    $('in_go').style.display = 'none'; intakePoll();
+  }
+  async function intakePoll(){
+    const st = await api('intake_status'); if (!st) return;
+    if (st.running){
+      const p = st.progress; $('in_state').textContent = p ? (p.review ? `בדיקת היגיון ${p.i + 1}/${p.n}` : `מייבא ${p.i + 1}/${p.n}: ${p.folder}`) : 'מתחיל…';
+      setTimeout(intakePoll, 2500); return;
+    }
+    if (st.error){ $('in_state').textContent = st.error; return; }
+    const s = st.summary || {}; const c = s.counts || {};
+    $('in_state').textContent = 'הסתיים – ' + (Object.entries(c).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'אין שינויים');
+    $('in_body').innerHTML = `<div class="tablewrap"><table><tr><th>תיקייה</th><th>תוצאה</th><th>נקלט</th><th>דילוגים / שגיאות</th></tr>${(s.results || []).map(x => `<tr><td>${x.client_id ? `<a href="#" onclick="selectedId='${esc(x.client_id)}';show('client');return false">${esc(x.folder)}</a>` : esc(x.folder)}</td><td><span class="pill ${IN_TONE[x.status] || 'neutral'}">${esc(x.status)}</span></td><td class="hint">${(x.imported || []).map(esc).join('<br>')}</td><td class="hint">${[...(x.errors || []).map(e => `<span style="color:var(--serious)">${esc(e)}</span>`), ...(x.skipped || []).map(esc), ...(x.notes || []).map(esc)].join('<br>')}</td></tr>`).join('')}</table></div>`;
+    await reload(); toast('הייבוא הסתיים');
   }
   async function saveSettings(){
     const data = { default_tax_year: Number($('st_year').value) || Y, stale_days: Number($('st_stale').value) || 60,
