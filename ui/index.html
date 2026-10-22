@@ -158,7 +158,7 @@
   /* ── detail ── */
   .detail-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
   .detail-head h1{margin:0}
-  .cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start} .cols.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start} .cols.two{grid-template-columns:repeat(2,minmax(0,1fr))} .cols .stack{display:flex;flex-direction:column;gap:14px;min-width:0}
   @media (max-width:1100px){.cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .cols .card{margin:0}
   .card.fold>h3{margin:0;cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap} .card.fold>h3 .tog{margin-inline-start:auto;font-size:11px;color:var(--ink-3);white-space:nowrap} .card.fold>.fold-sum{font-size:12px;color:var(--ink-3);margin-top:8px} .card.fold>.fold-body{display:none} .card.fold.open>.fold-body{display:block;margin-top:10px} .card.fold.open>.fold-sum{display:none}
@@ -727,9 +727,9 @@
     // 22.10 (ניר): הסימולטור – רק כשצריך להחליט (חשוף / נדרשת חלוקה); לקוח מוגן – בלי הכרטיס
     const showSim = !!(m.action_required || c.dashboard.color_81 === 'צהוב');
     el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall), handlingMenu) + notices.join('') + `
-      <div class="cols ${showSim ? '' : 'two'}">
-        ${foldCard('c81', !m.action_required, `סעיף 81 · קנס מס 2% &nbsp;${pill(c.dashboard.color_81, k.surtax > 0 ? `חשוף · קנס ${Math.round(k.surtax).toLocaleString('en-US')} ₪` : (c.dashboard.color_81 === 'צהוב' ? strip(c.dashboard.status_81) : (k.status_label || strip(c.dashboard.status_81))))}`, `רווחים נצברים ${ils(r.retained_for_81a)} · המגן ${ils(k.governing_shield)} · אין קנס השנה`, kv(c81Rows(c, k, r, sh, rec.id, showSim ? null : m)))}
-        ${showSim ? `<div class="card"><h3>מה לעשות עד 31.12?</h3>${simHtml(c, k, m, s, rec)}</div>` : ''}
+      <div class="cols two">
+        <div class="stack">${foldCard('c81', !m.action_required, `סעיף 81 · קנס מס 2% &nbsp;${pill(c.dashboard.color_81, k.surtax > 0 ? `חשוף · קנס ${Math.round(k.surtax).toLocaleString('en-US')} ₪` : (c.dashboard.color_81 === 'צהוב' ? strip(c.dashboard.status_81) : (k.status_label || strip(c.dashboard.status_81))))}`, `רווחים נצברים ${ils(r.retained_for_81a)} · המגן ${ils(k.governing_shield)} · אין קנס השנה`, kv(c81Rows(c, k, r, sh, rec.id, showSim ? null : m)))}
+        ${showSim ? `<div class="card"><h3>מה לעשות עד 31.12?</h3>${simHtml(c, k, m, s, rec)}</div>` : ''}</div>
         ${foldCard('c62', !(c.applies_62a && s.attributed_income > 0), `סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}`, `${esc(strip(c.dashboard.status_62a))} · רווחיות ${pct(s.governing_profitability)}${s.concentration_share_36m >= 0.55 ? ' · ריכוזיות ' + (s.concentration_share_36m*100).toFixed(0) + '%' : ''}`, `${kv([
           ['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)],
           ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)],
@@ -1447,11 +1447,19 @@
     const x = r.result || {};
     if (x.changed){ await reload(); if ($('s-client')?.classList.contains('active')) renderClient(); toast(`הדוחות השנתיים נקראו שוב בגרסה החדשה: אצל ${x.changed} לקוחות יצא ערך אחר – מסומן "סתירות" לבחירה (${(x.names || []).slice(0, 4).join(', ')}${x.changed > 4 ? '…' : ''})`, 9000); }
   }
+  const UI_VERSION = '1.32';
+  // 22.10: הממשק חדש אבל התהליך ישן (עדכון שלא הופעל מחדש) – פס בראש המסך עם הפעלה מחדש
+  function versionMismatch(){
+    const v = settings?.app_version; if (MOCK || !UI_VERSION || !v || v === UI_VERSION) return;
+    let b = $('verBar'); if (!b){ b = document.createElement('div'); b.id = 'verBar'; b.style.cssText = 'position:fixed;top:0;inset-inline:0;z-index:9000;background:var(--warn-bg);color:var(--ink);padding:8px 16px;display:flex;gap:12px;align-items:center;justify-content:center;font-size:14px;border-bottom:1px solid var(--line)'; document.body.appendChild(b); }
+    b.innerHTML = `<span>העדכון לגרסה ${esc(UI_VERSION)} הורד, אבל עדיין רצה הגרסה הקודמת (${esc(v)}).</span><button class="primary" onclick="restartApp()">הפעלה מחדש</button>`;
+  }
+  async function restartApp(){ updOverlay(true, 'מפעיל מחדש…'); const r = await api('restart_app'); if (!r || r.error){ updOverlay(false); toast(r?.error || 'לא הצליח – לסגור את התוכנה ולפתוח מהקיצור'); } }
   function versionNotice(){
     try { const v = settings?.app_version; if (!v || MOCK) return; const last = localStorage.getItem('tp_last_version');
       if (last && last !== v) toast(`עודכן לגרסה ${v}`, 6000); localStorage.setItem('tp_last_version', v); } catch (e) {}
   }
-  function boot(){ MOCK = isMock(); api('field_info').then(r => { if (r?.human_only) humanOnly = r.human_only; }); loadSettings().then(() => { versionNotice(); return reload(); }); if (!MOCK){ setTimeout(() => checkUpdate(false), 4000); setTimeout(() => pollReread(), 2500); } }
+  function boot(){ MOCK = isMock(); api('field_info').then(r => { if (r?.human_only) humanOnly = r.human_only; }); loadSettings().then(() => { versionNotice(); versionMismatch(); return reload(); }); if (!MOCK){ setTimeout(() => checkUpdate(false), 4000); setTimeout(() => pollReread(), 2500); } }
   let updInfo = null;
   async function checkUpdate(manual){
     const r = await api('check_update'); updInfo = r;

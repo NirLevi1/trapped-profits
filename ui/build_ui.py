@@ -14,6 +14,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TPL = (ROOT / "ui" / "_template.html").read_text(encoding="utf-8")
+# 22.10: גרסת הממשק נצרבת בבנייה – כדי לזהות ממשק חדש שרץ מול תהליך ישן (עדכון שלא הופעל מחדש)
+_VER = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', (ROOT / "trapped_profits" / "__init__.py").read_text(encoding="utf-8"))
+TPL = TPL.replace("/*UI_VERSION*/''", repr(_VER.group(1) if _VER else ""))
 
 
 def strip_markers(s: str, *names: str) -> str:

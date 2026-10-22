@@ -467,21 +467,43 @@ class Api:
 
     @staticmethod
     def _restart():
+        """22.10: סוגר את התוכנה ומפעיל מחדש (run.bat מוסתר). תמיד יוצאים – גם אם ההפעלה מחדש נכשלה (נרשם ב-update.log)."""
         import subprocess
         import threading
         root = app_dir()
 
+        def log(msg: str) -> None:
+            try:
+                with open(root / "update.log", "a", encoding="utf-8") as f:
+                    f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} restart: {msg}\n")
+            except Exception:  # noqa: BLE001
+                pass
+
         def go():
             import time
             time.sleep(0.8)
-            if sys.platform.startswith("win"):
-                # 22.10: בלי חלון – run.bat רץ מוסתר ומפעיל את התוכנה (pythonw); החלון לא נשאר פתוח
-                subprocess.Popen(["cmd", "/c", str(root / "run.bat")], cwd=str(root), creationflags=0x08000000,
-                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            else:
-                subprocess.Popen(["/bin/bash", str(root / "run.command")], cwd=str(root))
-            os._exit(0)
+            try:
+                if sys.platform.startswith("win"):
+                    subprocess.Popen(["cmd", "/c", str(root / "run.bat")], cwd=str(root), creationflags=0x08000000,
+                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+                else:
+                    subprocess.Popen(["/bin/bash", str(root / "run.command")], cwd=str(root))
+                log("launched")
+            except Exception as e:  # noqa: BLE001
+                log(f"launch failed: {e}")
+            finally:
+                try:
+                    for w in list(webview.windows):
+                        w.destroy()
+                except Exception:  # noqa: BLE001
+                    pass
+                log(f"exit pid {os.getpid()}")
+                os._exit(0)
         threading.Thread(target=go, daemon=True).start()
+
+    def restart_app(self):
+        self._restart()
+        return {"ok": True}
 
     def open_source(self, cid: str, index: int):
         """פתיחת הקובץ המקורי שהועלה (PDF בקורא, קובץ ריווחית באקסל)."""
@@ -636,7 +658,30 @@ def set_app_name() -> None:
         pass
 
 
+def _single_instance() -> None:
+    """22.10: מופע אחד בלבד – מופע ישן שנשאר פתוח (למשל אחרי עדכון) נסגר כשהחדש עולה."""
+    pidf = app_dir() / "app.pid"
+    try:
+        old = int(pidf.read_text().strip()) if pidf.exists() else 0
+    except Exception:  # noqa: BLE001
+        old = 0
+    if old and old != os.getpid() and sys.platform.startswith("win"):
+        import subprocess
+        try:
+            out = subprocess.run(["tasklist", "/FI", f"PID eq {old}", "/FO", "CSV", "/NH"], capture_output=True, text=True,
+                                 creationflags=0x08000000, timeout=10).stdout.lower()
+            if "python" in out:
+                subprocess.run(["taskkill", "/PID", str(old), "/F"], capture_output=True, creationflags=0x08000000, timeout=10)
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        pidf.write_text(str(os.getpid()))
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main() -> None:
+    _single_instance()
     set_app_id()
     set_app_name()
     api = Api()

@@ -9,3 +9,5 @@ build/
 examples/real/
 tesseract/
 data_dir.txt
+app.pid
+update.log
