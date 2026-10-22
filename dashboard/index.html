@@ -699,9 +699,10 @@
     const notices = [];
     notices.push(`<div class="card" id="cardSlots" style="display:none;margin-bottom:12px"><h3 style="margin-top:0">עדכון מקבצים</h3><div class="slots" id="cardSlotsBody"></div></div>`);
     // אברהם 15.10/18.10/22.10: למעלה רק מאזן בוחן, מיושן, מעבר שנה, השתנה; סתירות, חסרים ובדיקת היגיון – תחת "מידע נוסף"; השאר תחת "מידע נוסף"
-    const MORE = new Set(['ai', 'missing', 'aireview', 'pending', 'annual', 'today', 'actions', 'review', 'history', 'sources']);
-    const topFlags = flags.filter(f => !MORE.has(f.key));
-    const more = [...flags.filter(f => MORE.has(f.key)).map(f => ({...f, notice: true})), ...bottom];
+    // 22.10: למעלה רק מאזן הבוחן; כל השאר (סתירות, חסרים, בדיקת היגיון, מיושן, מעבר שנה, השתנה…) תחת "מידע נוסף"
+    const TOP = new Set(['gaps']);
+    const topFlags = flags.filter(f => TOP.has(f.key));
+    const more = [...flags.filter(f => !TOP.has(f.key)).map(f => ({...f, notice: true})), ...bottom];
     const openMore = more.some(f => openFlags.has(f.key));
     if (openMore) openFlags.add('more');
     const btn = f => `<button type="button" class="flag ${f.tone || 'neutral'} ${openFlags.has(f.key) ? 'on' : ''}" onclick="toggleFlag('${f.key}')">${esc(f.label)}</button>`;
