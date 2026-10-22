@@ -183,7 +183,9 @@ def _missing_human(meta: dict, inp: dict | None = None) -> list[str]:
     """שדות שרק אדם יודע ועדיין לא נגעו בהם (אין מצב ידני/מאושר). בתרחיש ב׳ גם דיבידנד השנה הקודמת.
     21.10: וסתירות בין הקורא שלנו לבודק השני – עד שאברהם בוחר."""
     conf = (((inp or {}).get("ai_annual") or {}).get("conflicts") or {})
-    extra = [f"סתירה בין הקוראים: {c.get('label') or p}" if not c.get("reread") else f"הקורא החדש מצא ערך אחר: {c.get('label') or p}" for p, c in conf.items()]
+    # 22.10: סתירת OCR/AI כבר בחישוב (ערך ה-AI) – לא "חסר"; קריאה מחדש / הוזן ידנית – עדיין ממתינות לבחירה
+    extra = [f"הקורא החדש מצא ערך אחר: {c.get('label') or p}" if c.get("ours_name") != "הוזן ידנית" else f"הקובץ החדש שונה מההזנה הידנית: {c.get('label') or p}"
+             for p, c in conf.items() if c.get("reread")]
     return extra + _missing_human_base(meta, inp)
 
 
@@ -681,7 +683,7 @@ class ClientStore:
         vals = {path: c[choice], **(c.get(choice + "_also") or {})}
         meta = {}
         now = datetime.now().isoformat(timespec="seconds")
-        who = c.get(choice + "_name") or ("הקורא שלנו" if choice == "ours" else "הבודק השני")
+        who = c.get(choice + "_name") or ("OCR" if choice == "ours" else "AI")
         for p, v in vals.items():
             parts = p.split(".")
             t = inp
@@ -770,7 +772,7 @@ class ClientStore:
         new = self.save(inp, cid)
         from .ai_check import KINDS
         shown = KINDS.get(val, val) if c.get("type") == "kind" else ("עלות מכר" if val else "לא עלות מכר")
-        self._log(new, "תיקון", f"{c.get('name') or row_id}: נבחר {'הקורא שלנו' if choice == 'ours' else 'הבודק השני'} – {shown}")
+        self._log(new, "תיקון", f"{c.get('name') or row_id}: נבחר {'OCR' if choice == 'ours' else 'AI'} – {shown}")
         return self._write(cid, new)
 
     def set_tb_cogs(self, cid: str, row_id: str, on: bool) -> dict[str, Any]:

@@ -290,17 +290,20 @@ def compare_annual(ours: dict, our_src: dict, model_f: dict, model_src: dict) ->
                 agree += 1
                 sources[path] = (sources.get(path) or "") + " · ✓ אומת בבודק השני"
             else:
+                # 22.10 (ניר): סתירה – נכנס ערך ה-AI לחישוב; הסתירה נשארת לעיון, ואפשר לבחור את ה-OCR
                 conflicts[path] = {
-                    "label": LABELS.get(path, path),
-                    "ours": a, "ours_src": our_src.get(path, ""), "ours_also": {c: ours[c] for c in _COMPANIONS.get(path, ()) if c in ours},
-                    "model": b, "model_src": model_src.get(path, ""), "model_also": {c: model_f[c] for c in _COMPANIONS.get(path, ()) if c in model_f},
+                    "label": LABELS.get(path, path), "in_calc": "model",
+                    "ours": a, "ours_name": "OCR", "ours_src": our_src.get(path, ""), "ours_also": {c: ours[c] for c in _COMPANIONS.get(path, ()) if c in ours},
+                    "model": b, "model_name": "AI", "model_src": model_src.get(path, ""), "model_also": {c: model_f[c] for c in _COMPANIONS.get(path, ()) if c in model_f},
                 }
-                fields.pop(path, None)
+                fields[path] = b
                 for c in _COMPANIONS.get(path, ()):
-                    fields.pop(c, None)
+                    if c in model_f:
+                        fields[c] = model_f[c]
+                sources[path] = f"AI: {model_src.get(path) or ''} · סתירה – OCR קרא {a}"
         elif pa:
             only_ours += 1
-            sources[path] = (sources.get(path) or "") + " · הבודק השני לא מצא – לוודא"
+            sources[path] = (sources.get(path) or "") + " · AI לא מצא – לוודא"
         else:
             fields[path] = b
             if isinstance(b, (int, float)) and not isinstance(b, bool) and abs(b) < 100:     # הון מניות של שקל – לא מטרידים
@@ -310,7 +313,7 @@ def compare_annual(ours: dict, our_src: dict, model_f: dict, model_src: dict) ->
             for c in _COMPANIONS.get(path, ()):
                 if c in model_f:
                     fields[c] = model_f[c]
-            sources[path] = "בודק שני: " + (model_src.get(path) or "") + " · הקורא שלנו לא מצא – לוודא"
+            sources[path] = "AI: " + (model_src.get(path) or "") + " · OCR לא מצא – לוודא"
     return {"fields": fields, "sources": sources, "conflicts": conflicts,
             "stats": {"agree": agree, "conflicts": len(conflicts), "only_ours": only_ours, "only_model": only_model}}
 
@@ -322,24 +325,24 @@ def verify_annual(r: dict, pdf: str | Path, tax_year: int | None, key: str, mode
         m = read_annual(pdf, key, model, caller)
         mf, msrc, _ = model_annual_fields(m, tax_year)
     except AIError as e:
-        r.setdefault("notes", []).append(f"בודק שני לא רץ: {e} – הערכים מהקורא שלנו בלבד, לבדוק ידנית")
+        r.setdefault("notes", []).append(f"AI לא רץ: {e} – הערכים מ-OCR בלבד, לבדוק ידנית")
         r["ai"] = {"ok": False, "msg": str(e)}
         r["fields"]["ai_annual"] = {"at": now, "ok": False, "msg": str(e), "conflicts": {}}
         return r
     except Exception as e:  # noqa: BLE001
         msg = f"שגיאה בבדיקה השנייה: {e}"
-        r.setdefault("notes", []).append(msg + " – הערכים מהקורא שלנו בלבד")
+        r.setdefault("notes", []).append(msg + " – הערכים מ-OCR בלבד")
         r["ai"] = {"ok": False, "msg": msg}
         r["fields"]["ai_annual"] = {"at": now, "ok": False, "msg": msg, "conflicts": {}}
         return r
     c = compare_annual(r.get("fields") or {}, r.get("sources") or {}, mf, msrc)
     r["fields"], r["sources"] = c["fields"], c["sources"]
     s = c["stats"]
-    msg = f"בודק שני: {s['agree']} ערכים תואמים" + (f", {s['conflicts']} סתירות – אברהם בוחר" if s["conflicts"] else "") + \
+    msg = f"AI: {s['agree']} ערכים תואמים ל-OCR" + (f", {s['conflicts']} סתירות – בחישוב ערך ה-AI, אפשר לבחור OCR" if s["conflicts"] else "") + \
           (f", {s['only_model'] + s['only_ours']} נמצאו רק אצל אחד – לוודא" if s["only_model"] + s["only_ours"] else "")
     r.setdefault("notes", []).append(msg)
     for d in (m.get("doubts") or [])[:6]:
-        r["notes"].append("בודק שני – ספק: " + str(d))
+        r["notes"].append("AI – ספק: " + str(d))
     r["ai"] = {"ok": True, "msg": msg, **s}
     r["fields"]["ai_annual"] = {"at": now, "ok": True, "msg": msg, "conflicts": c["conflicts"]}
     return r

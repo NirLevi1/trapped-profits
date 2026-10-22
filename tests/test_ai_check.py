@@ -38,7 +38,8 @@ def test_agree_conflict_and_one_sided():
     mf, msrc, _ = model_annual_fields(_model(dep=30000, name='חברה לדוגמה, בע"מ'), 2026)
     c = compare_annual(ours, src, mf, msrc)
     assert list(c["conflicts"]) == ["shields.depreciation_annual_estimate"]
-    assert "shields.depreciation_annual_estimate" not in c["fields"]           # סתירה – לא נכנס עד שבוחרים
+    assert c["fields"]["shields.depreciation_annual_estimate"] == 30000          # 22.10: סתירה – בחישוב ערך ה-AI
+    assert c["conflicts"]["shields.depreciation_annual_estimate"]["in_calc"] == "model"
     assert "✓ אומת" in c["sources"]["retained.balance_sheet_retained_earnings"]
     assert "structure.name" not in c["conflicts"]                              # פסיק – לא סתירה
     assert c["fields"]["shields.share_capital_and_premium"] == 100              # רק המודל מצא – נלקח
@@ -81,10 +82,11 @@ def test_conflict_blocks_until_chosen(tmp_path):
     c = compare_annual(ours, src, mf, msrc)
     fields = {**c["fields"], "ai_annual": {"at": "2000-01-01T00:00:00", "ok": True, "msg": "", "conflicts": c["conflicts"]}}
     rec = st.apply_import(rec["id"], fields, c["sources"], "דוח")
-    assert any("סתירה בין הקוראים: פחת שנתי" in x for x in rec["missing_human"])
+    assert rec["input"]["shields"]["depreciation_annual_estimate"] == 30000      # בחישוב: AI
+    assert not any("פחת" in x for x in rec["missing_human"])                     # לא "חסר" – כבר בחישוב
     assert "ai_annual" not in rec["pending_file_fields"]
-    rec = st.resolve_ai(rec["id"], "shields.depreciation_annual_estimate", "model")
-    assert rec["input"]["shields"]["depreciation_annual_estimate"] == 30000
+    rec = st.resolve_ai(rec["id"], "shields.depreciation_annual_estimate", "ours")
+    assert rec["input"]["shields"]["depreciation_annual_estimate"] == 12000      # אברהם בחר OCR
     assert not rec["input"]["ai_annual"]["conflicts"]
     assert not any("סתירה" in x for x in rec["missing_human"])
     assert rec["field_meta"]["shields.depreciation_annual_estimate"]["state"] == "approved"

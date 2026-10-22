@@ -129,7 +129,7 @@
   input.st-missing{border-color:var(--serious);background:#fdf1ee}
   table.mini{border-collapse:collapse;font-size:12px} table.mini th,table.mini td{padding:2px 10px 2px 0;text-align:right} table.mini th{font-weight:500;color:inherit;opacity:.8}
   .fstate{font-size:11px;margin-top:3px;display:flex;gap:6px;align-items:center}
-  .rvf{border-top:1px solid var(--line-soft);padding:8px 0;color:var(--ink)} .rvf .hint{color:var(--ink-3)} .rvf:first-of-type{border-top:0} .rvh{display:flex;gap:8px;align-items:center;margin-bottom:3px} .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
+  .rvf{border-top:1px solid var(--line-soft);padding:8px 0;color:var(--ink)} .rvf .hint{color:var(--ink-3)} .rvf:first-of-type{border-top:0} .rvh{display:flex;gap:8px;align-items:center;margin-bottom:3px} .aiconf button.on{border-color:var(--good);color:var(--good)} .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
   .fstate button{padding:0 6px;font-size:11px;line-height:18px;border-radius:5px}
   .check .fstate{margin-inline-start:0}
   .slots{display:grid;gap:10px}
@@ -296,7 +296,7 @@
       <div class="toolbar" style="margin:0"><div><b id="upd_title">גרסה —</b><div class="hint" id="upd_text">לחיצה על "בדיקת עדכונים" בודקת מול גיטהאב. עדכון מושך את הגרסה האחרונה ומפעיל מחדש; הנתונים לא נוגעים.</div></div><div class="spacer"></div><button type="button" onclick="checkUpdate(true)">בדיקת עדכונים</button><button type="button" class="primary" id="upd_btn" style="display:none" onclick="applyUpdate()">עדכון והפעלה מחדש</button></div>
       <ul class="rev" id="upd_notes" style="display:none;margin-top:8px"></ul>
     </div>
-    <h2>בודק שני</h2>
+    <h2>AI</h2>
     <div class="card">
       <div class="row" style="align-items:flex-end">
         <label class="field"><span>מפתח</span><input type="password" id="st_aikey" autocomplete="off" dir="ltr"></label>
@@ -634,13 +634,13 @@
     // אברהם (ממשק 3): ההתראות בטוגלים – שורת צ'יפים עם מונים, לחיצה פותחת את הפירוט
     const flags = [];
     const addFlag = (key, tone, label, html) => flags.push({key, tone, label, html});
-    // 21.10: סתירות בין הקורא שלנו לבודק השני – אברהם בוחר; עד אז השדה לא מתמלא
+    // 21.10/22.10: סתירות – OCR מול AI (בחישוב: AI, אפשר לבחור OCR); קריאה מחדש / הוזן ידנית – ממתינות לבחירה
     { const ai = rec.input?.ai_annual || {}, conf = Object.entries(ai.conflicts || {});
       const rr = conf.filter(([, x]) => x.reread), two = conf.filter(([, x]) => !x.reread);
-      if (conf.length) addFlag('ai', 'serious', `סתירות ${conf.length}`,
-        (two.length ? `<div class="hint" style="margin-bottom:6px">הקורא שלנו והבודק השני קראו ערך שונה בדוח השנתי. השדה לא נכנס לחישוב עד שבוחרים.</div>${two.map(([p, x]) => aiConfHtml(rec.id, p, x, 'card')).join('')}` : '') +
-        (rr.length ? `<div style="display:flex;gap:10px;align-items:center;margin:${two.length ? '10px' : '0'} 0 6px"><span class="hint">הדוח השנתי נקרא שוב בגרסה החדשה של הקורא ויצא ערך אחר. החישוב עדיין עם הערך השמור – לבחור.</span><div class="spacer"></div>${rr.length > 1 ? `<button onclick="resolveAiAll('${esc(rec.id)}','model')">✓ הכל מהקורא החדש</button><button class="quiet" onclick="resolveAiAll('${esc(rec.id)}','ours')">להשאיר הכל</button>` : ''}</div>${rr.map(([p, x]) => aiConfHtml(rec.id, p, x, 'card')).join('')}` : ''));
-      else if (ai.ok === false && ai.msg) addFlag('ai', 'neutral', 'בודק שני לא רץ', `<div>${esc(ai.msg)} – הערכים מהדוח השנתי מהקורא שלנו בלבד. אפשר להעלות שוב את הדוח אחרי התיקון.</div>`); }
+      if (conf.length) addFlag('ai', rr.length ? 'serious' : 'warn', `סתירות ${conf.length}`,
+        (two.length ? `<div class="hint" style="margin-bottom:6px">OCR ו-AI קראו ערך שונה בדוח השנתי. בחישוב נכנס ערך ה-AI (מסומן ✓). אפשר לבחור את ה-OCR.</div>${two.map(([p, x]) => aiConfHtml(rec.id, p, x, 'card')).join('')}` : '') +
+        (rr.length ? `<div style="display:flex;gap:10px;align-items:center;margin:${two.length ? '10px' : '0'} 0 6px"><span class="hint">ערך חדש מהקובץ שונה ממה ששמור. החישוב עדיין עם הערך השמור – לבחור.</span><div class="spacer"></div>${rr.length > 1 ? `<button onclick="resolveAiAll('${esc(rec.id)}','model')">✓ הכל מהקובץ</button><button class="quiet" onclick="resolveAiAll('${esc(rec.id)}','ours')">להשאיר הכל</button>` : ''}</div>${rr.map(([p, x]) => aiConfHtml(rec.id, p, x, 'card')).join('')}` : ''));
+      else if (ai.ok === false && ai.msg) addFlag('ai', 'neutral', 'AI לא רץ', `<div>${esc(ai.msg)} – הערכים מהדוח השנתי מ-OCR בלבד. אפשר להעלות שוב את הדוח אחרי התיקון.</div>`); }
     // 22.10: מבקר – ממצאים של המודל על התמונה כולה (לא משנה מספרים)
     { const rv = rec.review;
       if (rv){
@@ -662,7 +662,7 @@
         }
       }
     }
-    { const items = [...(rec.missing_human || []).filter(x => !x.startsWith('סתירה בין הקוראים') && !x.startsWith('הקורא החדש מצא')).map(x => ({t: 'serious', x})), ...(c.missing_fields || []).map(x => ({t: 'warn', x: x + ' – חושב עם אפס'}))];
+    { const items = [...(rec.missing_human || []).filter(x => !x.startsWith('סתירה בין הקוראים') && !x.startsWith('הקורא החדש מצא') && !x.startsWith('הקובץ החדש שונה')).map(x => ({t: 'serious', x})), ...(c.missing_fields || []).map(x => ({t: 'warn', x: x + ' – חושב עם אפס'}))];
       if (items.length) addFlag('missing', 'serious', `חסרים ${items.length}`, `<ul style="margin:0;padding-inline-start:18px">${items.map(i => `<li style="color:var(--${i.t})">${esc(i.x)}</li>`).join('')}</ul><div class="hint" style="margin-top:6px"><button class="quiet" onclick="editClient('${esc(rec.id)}')">להשלים בעריכה</button></div>`); }
     if (rec.pending_file_fields?.length) addFlag('pending', 'warn', `לאישור ${rec.pending_file_fields.length}`, `<div style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
     { const items = c.estimate_items || []; const pend = items.filter(i => i.status === 'pending').length;
@@ -1041,7 +1041,7 @@
   }
   async function importSlot(slot){
     const btn = $('btn_' + slot), st = $('st_' + slot);
-    btn.disabled = true; st.className = 'st'; st.textContent = slot === 'annual_report' ? (settings?.ai_key_tail ? 'קורא את הדוח ובודק פעם שנייה… (עד דקה וחצי)' : 'קורא את הדוח… (סרוק: עד חצי דקה)') : 'קורא…';
+    btn.disabled = true; st.className = 'st'; st.textContent = slot === 'annual_report' ? (settings?.ai_key_tail ? 'קורא את הדוח (OCR + AI)… עד דקה וחצי' : 'קורא את הדוח… (סרוק: עד חצי דקה)') : 'קורא…';
     const curRec = slotMode === 'card' ? records.find(x => x.id === selectedId) : null;
     const ty = slotMode === 'card' ? curRec?.input?.structure?.tax_year : (parseNum($(fid('structure.tax_year'))?.value) || null);
     const cname = slotMode === 'card' ? curRec?.input?.structure?.name : ($(fid('structure.name'))?.value || '');
@@ -1070,7 +1070,7 @@
       } }
     const n = fillFields(r.fields, r.sources, slotMeta.slots[slot]?.title);
     const confList = Object.entries(r.fields?.ai_annual?.conflicts || {});
-    const confHtml = confList.length ? `<div class="notes" style="color:var(--serious)"><b>${confList.length} סתירות בין הקוראים – לבחור (או להקליד בשדה):</b></div>` + confList.map(([p, x]) => `<div data-aiconf="${esc(p)}">${aiConfHtml(null, p, x, 'form')}</div>`).join('') : '';
+    const confHtml = confList.length ? `<div class="notes" style="color:var(--serious)"><b>${confList.length} סתירות OCR / AI – בחישוב ערך ה-AI (✓); אפשר לבחור OCR או להקליד:</b></div>` + confList.map(([p, x]) => `<div data-aiconf="${esc(p)}">${aiConfHtml(null, p, x, 'form')}</div>`).join('') : '';
     if (slot === 'annual_report' && r.year && ty && ty - r.year > closedLag){ closedLag = Math.min(3, ty - r.year); const two = closedLag >= 3; slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${n} שדות מולאו<div class="notes">${two ? `הדוח ישן בשנתיים – נפתחו חריצי מאזן בוחן מלא של ${ty - 2} ו־${ty - 1} (תרחיש ג׳)` : 'הדוח ישן בשנה – נפתחו חריצי השנה הקודמת (תרחיש ב׳)'}</div>${confHtml}`}; await renderSlots(slotMode, 'slots'); toast(two ? `הדוח ישן בשנתיים – להעלות מאזני בוחן מלאים של ${ty - 2} ו־${ty - 1}` : 'הדוח ישן בשנה – להעלות גם מאזן בוחן מלא של השנה הקודמת'); return; }
     slotStatus[slot] = {cls: 'ok', html: `✓ ${esc(r.file)} – ${n} שדות מולאו` + ((r.notes || []).length ? `<div class="notes">${(r.notes || []).map(esc).join('<br>')}</div>` : '') + (r.saved_copy ? `<div class="notes">עותק נשמר (יועבר לתיקיית הלקוח בשמירה)</div>` : '')};
     slotStatus[slot].html += confHtml;
@@ -1081,8 +1081,9 @@
   async function toggleCardSlots(){ const box = $('cardSlots'); if (!box) return; if (slotsFor !== selectedId){ window._showPdfSlot = false; Object.keys(slotStatus).forEach(k => delete slotStatus[k]); slotsFor = selectedId; } const open = box.style.display === 'none'; box.style.display = open ? '' : 'none'; if (open) await renderSlots('card', 'cardSlotsBody'); }
   function aiVal(p, v){ if (v == null || v === '') return '—'; if (typeof v === 'boolean') return v ? 'כן' : 'לא'; if (p === 's62a.gross_margin_rate') return (v * 100).toFixed(1) + '%'; if (typeof v === 'number') return p.endsWith('report_year') ? String(v) : ((Math.round(v) || 0).toLocaleString('he-IL') + ' ₪'); return String(v); }
   function aiConfHtml(id, p, x, mode){
-    const b = (ch, who) => `<button type="button" onclick="${mode === 'card' ? `resolveAi('${esc(id)}','${esc(p)}','${ch}')` : `pickAiForm('${esc(p)}','${ch}')`}" title="${esc(x[ch + '_src'] || '')}">${esc(x[ch + '_name'] || who)}: <b>${esc(aiVal(p, x[ch]))}</b></button>`;
-    return `<div class="aiconf"><span class="lab">${esc(x.label || p)}</span>${b('ours', 'הקורא שלנו')}${b('model', 'הבודק השני')}</div>`;
+    const on = ch => (x.in_calc || (x.reread ? 'ours' : '')) === ch;
+    const b = (ch, who) => `<button type="button" class="${on(ch) ? 'on' : ''}" onclick="${mode === 'card' ? `resolveAi('${esc(id)}','${esc(p)}','${ch}')` : `pickAiForm('${esc(p)}','${ch}')`}" title="${esc(x[ch + '_src'] || '')}${on(ch) ? ' – בחישוב כרגע; לחיצה מאשרת' : ''}">${on(ch) ? '✓ ' : ''}${esc(x[ch + '_name'] || who)}: <b>${esc(aiVal(p, x[ch]))}</b></button>`;
+    return `<div class="aiconf"><span class="lab">${esc(x.label || p)}</span>${b('ours', 'OCR')}${b('model', 'AI')}</div>`;
   }
   async function resolveAi(id, p, ch){ const r = await api('resolve_ai', id, p, ch); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('נבחר וחושב מחדש'); }
   async function reviewMark(id, fid, st){ const r = await api('review_mark', id, fid, st); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); }
@@ -1103,7 +1104,7 @@
   function pickAiForm(p, ch){
     const ai = getp(formHidden, 'ai_annual'); const x = ai?.conflicts?.[p]; if (!x) return;
     const vals = {[p]: x[ch], ...(x[ch + '_also'] || {})};
-    fillFields(vals, Object.fromEntries(Object.keys(vals).map(k => [k, (ch === 'ours' ? 'הקורא שלנו: ' : 'הבודק השני: ') + (x[ch + '_src'] || '')])));
+    fillFields(vals, Object.fromEntries(Object.keys(vals).map(k => [k, (ch === 'ours' ? 'OCR: ' : 'AI: ') + (x[ch + '_src'] || '')])));
     Object.keys(vals).forEach(k => { if (formMeta[k]){ formMeta[k].state = 'approved'; formMeta[k].at = new Date().toISOString().slice(0,19); paintState(k); } });
     delete ai.conflicts[p]; const el = document.querySelector(`[data-aiconf="${CSS.escape(p)}"]`); if (el) el.remove();
     toast('נבחר');
@@ -1259,9 +1260,9 @@
     const aiTb = rec.input?.ai_tb || {}, aiC = aiTb.conflicts || {};
     const KHE = {revenue: 'הכנסה מהעסק', other_income: 'הכנסה אחרת', fin_income: 'הכנסת מימון'};
     const aiShow = (x, v) => x.type === 'kind' ? (KHE[v] || v) : (v ? 'עלות מכר' : 'לא עלות מכר');
-    const aiChip = r => { const x = aiC[String(r.id)]; if (!x) return ''; return `<span class="aichip" title="${esc(x.reason || '')}">⚠ הבודק השני: ${esc(aiShow(x, x.model))}<button type="button" class="quiet" onclick="resolveTbAi('${id}','${esc(String(r.id))}','model')">לקבל</button><button type="button" class="quiet" onclick="resolveTbAi('${id}','${esc(String(r.id))}','ours')">להשאיר ${esc(aiShow(x, x.ours))}</button></span>`; };
+    const aiChip = r => { const x = aiC[String(r.id)]; if (!x) return ''; return `<span class="aichip" title="${esc(x.reason || '')}">⚠ AI: ${esc(aiShow(x, x.model))}<button type="button" class="quiet" onclick="resolveTbAi('${id}','${esc(String(r.id))}','model')">לקבל</button><button type="button" class="quiet" onclick="resolveTbAi('${id}','${esc(String(r.id))}','ours')">להשאיר ${esc(aiShow(x, x.ours))}</button></span>`; };
     const nAi = Object.keys(aiC).length;
-    const aiLine = nAi ? `<div class="notice serious" style="margin:0 0 8px">הבודק השני סיווג ${nAi} שורות אחרת – מסומנות ⚠ בטבלה. לבחור בכל שורה.</div>` : (aiTb.ok === false && aiTb.msg ? `<div class="hint" style="margin:0 0 8px">בודק שני לא רץ על מאזן הבוחן: ${esc(aiTb.msg)}</div>` : '');
+    const aiLine = nAi ? `<div class="notice serious" style="margin:0 0 8px">AI סיווג ${nAi} שורות אחרת – מסומנות ⚠ בטבלה. לבחור בכל שורה.</div>` : (aiTb.ok === false && aiTb.msg ? `<div class="hint" style="margin:0 0 8px">AI לא רץ על מאזן הבוחן: ${esc(aiTb.msg)}</div>` : '');
     const SRC_HE = {file: 'מהקובץ', estimate: 'אומדן – החודש טרם הוזן', gap: 'חור – 0 בחודש כשבשאר החודשים יש; האומדן נכנס לחישוב', manual: 'תיקון של רואה החשבון', accepted: 'אומדן שאושר', dismissed: 'סומן: לא חסר'};
     const cell = (r, cl, i) => {
       const tip = `${r.name} · ${MONTHS_HE[i]}: ${SRC_HE[cl.src]}${cl.src !== 'file' && cl.src !== 'manual' ? '' : ''}${cl.src === 'manual' || cl.src === 'accepted' ? ` (${cl.by || ''} ${when(cl.at).slice(0, 10)}${cl.note ? ' – ' + cl.note : ''}; לפני: ${fmtNum(cl.base)})` : ''}`;
