@@ -134,7 +134,7 @@
   input.st-missing{border-color:var(--serious);background:#fdf1ee}
   table.mini{border-collapse:collapse;font-size:12px} table.mini th,table.mini td{padding:2px 10px 2px 0;text-align:right} table.mini th{font-weight:500;color:inherit;opacity:.8}
   .fstate{font-size:11px;margin-top:3px;display:flex;gap:6px;align-items:center}
-  @keyframes spin{to{transform:rotate(360deg)}} .xrow{cursor:pointer} .xrow .tog{font-size:11px;color:var(--ink-3)} .xdet{background:var(--surface-2,#f5f3ef);border-radius:8px;padding:8px 10px;font-size:12.5px} .xdet>div{display:flex;justify-content:space-between;gap:12px;padding:2px 0} .xdet>div.sum{border-top:1px solid var(--line-soft);margin-bottom:4px} .xdet>div.gov{color:var(--good);font-weight:600} .xdet small{font-weight:400} .rvf{border-top:1px solid var(--line-soft);padding:8px 0;color:var(--ink)} .rvf .hint{color:var(--ink-3)} .rvf:first-of-type{border-top:0} .rvh{display:flex;gap:8px;align-items:center;margin-bottom:3px} .aiconf button.on{border-color:var(--good);color:var(--good)} .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
+  @keyframes spin{to{transform:rotate(360deg)}} .simopts{display:flex;flex-direction:column;gap:8px;margin-bottom:10px} .simopt{border:1px solid var(--line);border-radius:10px;padding:8px 10px} .simopt.good{border-color:var(--good)} .simopt.bad .simopt-r{color:var(--serious)} .simopt.good .simopt-r{color:var(--good)} .simopt-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline} .simopt-r{font-weight:600;white-space:nowrap} .xrow{cursor:pointer} .xrow .tog{font-size:11px;color:var(--ink-3)} .xdet{background:var(--surface-2,#f5f3ef);border-radius:8px;padding:8px 10px;font-size:12.5px} .xdet>div{display:flex;justify-content:space-between;gap:12px;padding:2px 0} .xdet>div.sum{border-top:1px solid var(--line-soft);margin-bottom:4px} .xdet>div.gov{color:var(--good);font-weight:600} .xdet small{font-weight:400} .rvf{border-top:1px solid var(--line-soft);padding:8px 0;color:var(--ink)} .rvf .hint{color:var(--ink-3)} .rvf:first-of-type{border-top:0} .rvh{display:flex;gap:8px;align-items:center;margin-bottom:3px} .aiconf button.on{border-color:var(--good);color:var(--good)} .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
   .fstate button{padding:0 6px;font-size:11px;line-height:18px;border-radius:5px}
   .check .fstate{margin-inline-start:0}
   .slots{display:grid;gap:10px}
@@ -158,7 +158,7 @@
   /* ── detail ── */
   .detail-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
   .detail-head h1{margin:0}
-  .cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start}
+  .cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;align-items:start} .cols.two{grid-template-columns:repeat(2,minmax(0,1fr))}
   @media (max-width:1100px){.cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
   .cols .card{margin:0}
   .card.fold>h3{margin:0;cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap} .card.fold>h3 .tog{margin-inline-start:auto;font-size:11px;color:var(--ink-3);white-space:nowrap} .card.fold>.fold-sum{font-size:12px;color:var(--ink-3);margin-top:8px} .card.fold>.fold-body{display:none} .card.fold.open>.fold-body{display:block;margin-top:10px} .card.fold.open>.fold-sum{display:none}
@@ -690,7 +690,8 @@
       if (ro && ro.tax_year === rec.input?.structure?.tax_year) addFlag('roll', 'info', 'מעבר שנה', `<b>מעבר שנה בוצע ${when(ro.at)}</b> – מה הועבר ומה לבדוק:<ul style="margin:6px 0 0;padding-inline-start:18px">${ro.checklist.map(x => `<li>${esc(x)}</li>`).join('')}</ul><div class="hint" style="margin-top:4px">הערכים שהועברו מסומנים "הועבר ממעבר שנה" בטופס, עם מקורם.</div>`); }
     if (rec.changes?.length) addFlag('changes', 'neutral', 'השתנה בחישוב', rec.changes.map(x => `${esc(x.what)}: ${fmtv(x.from)} ← ${fmtv(x.to)}`).join(' · '));
     const bottom = [];
-          if (c.next_year_notes?.length) bottom.push({key:'actions', label:`פעולות שאפשר להתחיל כבר ב-${c.tax_year}`, html: `<div class="card"><h3>פעולות שאפשר להתחיל כבר ב-${c.tax_year} <small class="hint" style="display:inline">– על בסיס עודפי ${c.previous_year} ורווח ${c.tax_year}</small></h3><ul class="rev">${c.next_year_notes.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`});
+          { const sm = c.simulator || {}; const estH = sm.estimated_retained_year_end != null ? `<div style="max-width:520px">${kv([[`<b>אומדן עודפים ל־31.12.${c.tax_year}</b>`, `<b>${ils(sm.estimated_retained_year_end)}</b>`], ...(sm.estimated_retained_parts ? [[estPartsHtml(sm.estimated_retained_parts, c.tax_year), '', false, 'full']] : [])])}</div>` : '';
+            if (c.next_year_notes?.length || estH) bottom.push({key:'actions', label:`תכנון ${c.tax_year + 1}`, html: `<div class="card"><h3>תכנון ${c.tax_year + 1} <small class="hint" style="display:inline">– על בסיס עודפי ${c.previous_year} ורווח ${c.tax_year}</small></h3>${estH}${(c.next_year_notes || []).filter(x => !(estH && x.startsWith('אומדן עודפים'))).length ? `<ul class="rev">${c.next_year_notes.filter(x => !(estH && x.startsWith('אומדן עודפים'))).map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div>`}); }
           if (c.manual_review.length) bottom.push({key:'review', label:`לבדיקה ידנית ${c.manual_review.length}`, html: `<div class="card"><h3>לבדיקה ידנית</h3><ul class="rev">${c.manual_review.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`});
     const handlingMenu = `<div class="menu" id="handlingMenu"><button type="button" onclick="$('handlingMenu').classList.toggle('open')" title="סטטוס הטיפול, הערה למכתב, מעבר שנה">עדכון סטטוס ▾</button><div class="pop" style="min-width:460px;text-align:right"><h3 style="margin-top:0">עדכון סטטוס &nbsp;${handlingPill(rec.handling)}</h3>
           <div class="row">
@@ -723,46 +724,12 @@
       (openFlags.has('more') && more.length ? `<div class="flags sub">${more.map(btn).join('')}</div>` : '') +
       topFlags.filter(f => openFlags.has(f.key)).map(f => `<div class="notice ${f.tone}">${f.html}</div>`).join('') +
       (openFlags.has('more') ? more.filter(f => openFlags.has(f.key)).map(f => f.notice ? `<div class="notice ${f.tone}">${f.html}</div>` : f.html).join('') : ''));
+    // 22.10 (ניר): הסימולטור – רק כשצריך להחליט (חשוף / נדרשת חלוקה); לקוח מוגן – בלי הכרטיס
+    const showSim = !!(m.action_required || c.dashboard.color_81 === 'צהוב');
     el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall), handlingMenu) + notices.join('') + `
-      <div class="cols">
-        ${foldCard('c81', !m.action_required, `סעיף 81 · קנס מס 2% &nbsp;${pill(c.dashboard.color_81, k.surtax > 0 ? `חשוף · קנס ${Math.round(k.surtax).toLocaleString('en-US')} ₪` : (c.dashboard.color_81 === 'צהוב' ? strip(c.dashboard.status_81) : (k.status_label || strip(c.dashboard.status_81))))}`, `רווחים נצברים ${ils(r.retained_for_81a)} · המגן ${ils(k.governing_shield)} · אין קנס השנה`, kv(c81Rows(c, k, r, sh, rec.id)))}
-        ${foldCard('csim', !m.action_required, `סימולטור · לחלק דיבידנד או לשלם 2%?`, `לא נדרש השנה – פתח כדי לתקן "כבר חולק" או לבדוק "מה אם"`, `${m.action_required ? '' : simProtected(k, r)}${kv([
-          // 21.10 (אברהם): מוגן – בלי 6% / 50% / דיבידנד מינימלי / פער (אין מה לסגור); נשאר "כבר חולק", האומדן ו"מה אם"
-          ...(m.action_required ? [
-            [`${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`, ils(m.option_6pct)],
-            ['50% מהרווחים העודפים', m.option_50pct > 0 ? ils(m.option_50pct) : '—'],
-            ...(m.option_20pct_start_day != null ? [['20% מרווחי יום התחילה', ils(m.option_20pct_start_day)]] : []),
-            ['דיבידנד מינימלי לפטור (' + esc(m.cheaper_option) + ')', ils(m.min_dividend), true],
-          ] : []),
-          ['כבר חולק השנה <span class="hint" style="display:inline">(לעריכה)</span>', `<input type="text" inputmode="numeric" value="${fmtNum(m.already_distributed)}" onkeydown="if(event.key==='Enter')saveField('${esc(rec.id)}','distributions.dividends_taxed_current_year',this.value)" onblur="saveField('${esc(rec.id)}','distributions.dividends_taxed_current_year',this.value,true)" oninput="fmtInput(this)">`],
-          ...(m.action_required ? [
-            ['פער לסגירה עד 31.12', ils(m.gap_to_close), true],
-            null,
-            ['מס דיבידנד על הפער', ils(m.dividend_tax_cost)],
-            ['תוספת המס אם לא מחלקים', ils(m.surtax_if_not_distributing)],
-            ...(m.years_to_breakeven ? [['שנים לאיזון', `<span class="num">${m.years_to_breakeven.toFixed(1)}</span>`]] : []),
-          ] : []),
-          ...(m.estimated_retained_year_end != null ? [[`אומדן עודפים ל־31.12.${c.tax_year}`, ils(m.estimated_retained_year_end), true]] : []),
-          ...(m.estimated_retained_parts ? [[estPartsHtml(m.estimated_retained_parts, c.tax_year), '', false, 'full']] : []),
-          ...(m.surtax_if_salary_paid != null && m.surtax_if_salary_paid < k.surtax ? [['תוספת המס אם משלמים את שכר 62א עד 31.12', ils(m.surtax_if_salary_paid), true]] : []),
-        ])}
-        <div class="whatif" id="whatif">
-          <h3 style="margin-top:14px">מה אם…</h3>
-          <div class="row">
-            <label class="field"><span>דיבידנד נוסף לחלוקה</span><input type="text" inputmode="numeric" dir="ltr" id="wi_div" value="0" oninput="fmtInput(this)"></label>
-            <label class="field"><span>שכר נוסף לבעל המניות עד 31.12</span><input type="text" inputmode="numeric" dir="ltr" id="wi_sal" value="0" oninput="fmtInput(this)"></label>
-          </div>
-          <div class="hint" style="display:flex;gap:5px;align-items:center;white-space:nowrap;margin:-2px 0 8px">או העלאה חודשית: <input type="text" inputmode="numeric" dir="ltr" id="wi_raise" value="0" oninput="fmtInput(this);wiRaise()" style="width:72px;padding:3px 6px"> ₪ מחודש <input type="text" inputmode="numeric" dir="ltr" id="wi_from" value="${Math.min(12, (rec.input?.data_through_month || new Date().getMonth()) + 1)}" oninput="wiRaise()" style="width:38px;padding:3px 6px"></div><div class="hint" id="wi_raise_out" style="margin:-4px 0 8px"></div>
-          <div class="toolbar" style="margin-bottom:8px">
-            ${m.action_required ? `<button class="quiet" onclick="wiSet(${Math.round(m.gap_to_close)}, 0)">הפער לפטור</button>` : ''}
-            ${s.attributed_income > 0 ? `<button class="quiet" onclick="wiSet(0, ${Math.round(s.attributed_income)})">שכר התיקון</button>` : ''}
-            ${m.action_required && s.attributed_income > 0 ? `<button class="quiet" onclick="wiSet(${Math.round(m.gap_to_close)}, ${Math.round(s.attributed_income)})">שניהם</button>` : ''}
-            <div class="spacer"></div>
-            <button onclick="runWhatIf()">חשב</button>
-          </div>
-          <div id="wi_out" class="hint">הסימולציה לא נשמרת. ${MOCK ? 'בתצוגת הדפדפן אין מנוע – זמין בתוכנה.' : ''}</div>
-        </div>
-        <div class="rec"><b>המלצה</b>${recHtml(m.recommendation_text || m.recommendation)}</div>`)}
+      <div class="cols ${showSim ? '' : 'two'}">
+        ${foldCard('c81', !m.action_required, `סעיף 81 · קנס מס 2% &nbsp;${pill(c.dashboard.color_81, k.surtax > 0 ? `חשוף · קנס ${Math.round(k.surtax).toLocaleString('en-US')} ₪` : (c.dashboard.color_81 === 'צהוב' ? strip(c.dashboard.status_81) : (k.status_label || strip(c.dashboard.status_81))))}`, `רווחים נצברים ${ils(r.retained_for_81a)} · המגן ${ils(k.governing_shield)} · אין קנס השנה`, kv(c81Rows(c, k, r, sh, rec.id, showSim ? null : m)))}
+        ${showSim ? `<div class="card"><h3>מה לעשות עד 31.12?</h3>${simHtml(c, k, m, s, rec)}</div>` : ''}
         ${foldCard('c62', !(c.applies_62a && s.attributed_income > 0), `סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}`, `${esc(strip(c.dashboard.status_62a))} · רווחיות ${pct(s.governing_profitability)}${s.concentration_share_36m >= 0.55 ? ' · ריכוזיות ' + (s.concentration_share_36m*100).toFixed(0) + '%' : ''}`, `${kv([
           ['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)],
           ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)],
@@ -1249,10 +1216,47 @@
       + (p.dividend ? row('פחות דיבידנד שחולק השנה', '−' + ils(p.dividend)) : '')
       + `<div style="margin-top:2px">אלה הרווחים הנצברים שהחוק יבדוק בשנה הבאה.</div></div>`;
   }
+  function distInput(id, v){ return `<input type="text" inputmode="numeric" value="${fmtNum(v)}" onkeydown="if(event.key==='Enter')saveField('${esc(id)}','distributions.dividends_taxed_current_year',this.value)" onblur="saveField('${esc(id)}','distributions.dividends_taxed_current_year',this.value,true)" oninput="fmtInput(this)">`; }
+  // 22.10 (ניר): הסימולטור – שלוש דרכים להחליט עליהן, "כבר חולק", פירוט בלחיצה ו"מה אם"
+  function simHtml(c, k, m, s, rec){
+    const id = rec.id, est = m.estimated_retained_year_end;
+    const taxPct = m.gap_to_close > 0 ? Math.round(m.dividend_tax_cost / m.gap_to_close * 100) : 33;
+    const opt = (title, result, sub, btn, tone) => `<div class="simopt ${tone || ''}"><div class="simopt-h"><b>${title}</b><span class="simopt-r">${result}</span></div>${sub ? `<div class="hint">${sub}</div>` : ''}${btn ? `<div style="margin-top:4px">${btn}</div>` : ''}</div>`;
+    const tryBtn = (d, sal) => `<button class="quiet" style="font-size:12px;padding:2px 8px" onclick="wiSet(${Math.round(d)}, ${Math.round(sal)})">לבדוק ב"מה אם"</button>`;
+    const opts = [
+      m.gap_to_close > 0 ? opt(`לחלק דיבידנד ${ils(m.gap_to_close)}`, '← פטור מהקנס', `מס דיבידנד ${ils(m.dividend_tax_cost)} (${taxPct}%) – מס שישולם בכל מקרה ביום שהכסף ייצא מהחברה; כאן הוא רק מוקדם.`, tryBtn(m.gap_to_close, 0), 'good') : '',
+      s.attributed_income > 0 && m.surtax_if_salary_paid != null && m.surtax_if_salary_paid < k.surtax ? opt(`לשלם שכר בעלים ${ils(s.attributed_income)}`, `← הקנס יורד ל־${ils(m.surtax_if_salary_paid)}`, 'שכר התיקון של 62א. מגדיל את מגן ההוצאות; אפשר לשלב עם דיבידנד קטן יותר.', tryBtn(0, s.attributed_income)) : '',
+      opt('לא לעשות כלום', `← קנס ${ils(k.surtax)}`, est != null ? `ושוב בשנה הבאה – על עודפים של כ־${ils(est)} בסוף ${c.tax_year}.` : 'ושוב בשנה הבאה.', '', 'bad'),
+    ].join('');
+    const dk = 'simdet', open = openRows.has(dk);
+    const det = kv([
+      [`${(k.required_distribution_rate*100).toFixed(0)}% מהרווחים הנצברים`, ils(m.option_6pct)],
+      ['50% מהרווחים העודפים של השנה הקודמת', m.option_50pct > 0 ? ils(m.option_50pct) : '<span class="hint">לא הוזנו רווחים עודפים של השנה הקודמת</span>'],
+      ...(m.option_20pct_start_day != null ? [['20% מרווחי יום התחילה', ils(m.option_20pct_start_day)]] : []),
+      ['דיבידנד מינימלי לפטור (' + esc(m.cheaper_option) + ')', ils(m.min_dividend), true],
+      ['פחות מה שכבר חולק', ils(m.already_distributed)],
+      ['= פער לסגירה עד 31.12', ils(m.gap_to_close), true],
+      ...(est != null ? [[`אומדן עודפים ל־31.12.${c.tax_year}`, ils(est)]] : []),
+      ...(m.estimated_retained_parts ? [[estPartsHtml(m.estimated_retained_parts, c.tax_year), '', false, 'full']] : []),
+    ]);
+    return `<div class="simopts">${opts}</div>`
+      + kv([['כבר חולק השנה <span class="hint" style="display:inline">(לעריכה)</span>', distInput(id, m.already_distributed)]])
+      + `<div style="margin:8px 0 4px"><span class="xrow hint" onclick="toggleRow('${dk}')">איך חושב <span class="tog">${open ? '▴' : '▾'}</span></span></div>${open ? det : ''}`
+      + `<div class="whatif" id="whatif">
+          <h3 style="margin-top:12px">מה אם…</h3>
+          <div class="row">
+            <label class="field"><span>דיבידנד נוסף לחלוקה</span><input type="text" inputmode="numeric" dir="ltr" id="wi_div" value="0" oninput="fmtInput(this)"></label>
+            <label class="field"><span>שכר נוסף לבעל המניות עד 31.12</span><input type="text" inputmode="numeric" dir="ltr" id="wi_sal" value="0" oninput="fmtInput(this)"></label>
+          </div>
+          <div class="hint" style="display:flex;gap:5px;align-items:center;white-space:nowrap;margin:-2px 0 8px">או העלאה חודשית: <input type="text" inputmode="numeric" dir="ltr" id="wi_raise" value="0" oninput="fmtInput(this);wiRaise()" style="width:72px;padding:3px 6px"> ₪ מחודש <input type="text" inputmode="numeric" dir="ltr" id="wi_from" value="${Math.min(12, (rec.input?.data_through_month || new Date().getMonth()) + 1)}" oninput="wiRaise()" style="width:38px;padding:3px 6px"></div><div class="hint" id="wi_raise_out" style="margin:-4px 0 8px"></div>
+          <div class="toolbar" style="margin-bottom:8px"><div class="spacer"></div><button onclick="runWhatIf()">חשב</button></div>
+          <div id="wi_out" class="hint">הסימולציה לא נשמרת.${MOCK ? ' בתצוגת הדפדפן אין מנוע – זמין בתוכנה.' : ''}</div>
+        </div>`;
+  }
   // 22.10 (ניר): כרטיס 81 – הגלגול והמגנים נפתחים בלחיצה; שורת "מצב" עברה לכותרת; "קנס מס 2%" באדום
   const openRows = new Set();
   function toggleRow(k){ if (openRows.has(k)) openRows.delete(k); else openRows.add(k); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
-  function c81Rows(c, k, r, sh, id){
+  function c81Rows(c, k, r, sh, id, mDist){
     const steps = r.roll_steps || [], rk = 'roll', shk = 'shield';
     const xl = (key, label) => `<span class="xrow" onclick="toggleRow('${key}')">${label} <span class="tog">${openRows.has(key) ? '▴' : '▾'}</span></span>`;
     const keep = steps[0] && steps[0].profit > 0 ? Math.round(steps[0].after_tax / steps[0].profit * 100) : 77;
@@ -1271,6 +1275,7 @@
       ...(openRows.has(shk) ? [[shDet, '', false, 'full']] : []),
       ...(k.transition_reduction ? [['הפחתה לפי הוראות המעבר', ils(k.transition_reduction)]] : []),
       ['רווחים עודפים', ils(k.excess_profits)],
+      ...(mDist ? [['כבר חולק השנה <span class="hint" style="display:inline">(לעריכה)</span>', distInput(id, mDist.already_distributed)]] : []),
       null,
       [`<b style="color:${k.surtax > 0 ? 'var(--serious)' : 'inherit'}">קנס מס 2%</b>`, `<b style="color:${k.surtax > 0 ? 'var(--serious)' : 'inherit'}">${ils(k.surtax)}</b>`],
     ];
