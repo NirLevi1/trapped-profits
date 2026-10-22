@@ -41,5 +41,5 @@ if not exist "%USERPROFILE%\Desktop\Fortera - Trapped Profits.lnk" (
   powershell -NoProfile -Command "$s=(New-Object -ComObject WScript.Shell).CreateShortcut([Environment]::GetFolderPath('Desktop')+'\Fortera - Trapped Profits.lnk');$s.TargetPath='%CD%\run.bat';$s.WorkingDirectory='%CD%';$s.IconLocation='%CD%\assets\icon.ico';$s.Description='Fortera - trapped profits';$s.WindowStyle=7;$s.Save()" >> setup.log 2>&1
 )
 
-start "" /b pythonw app.py
-exit /b 0
+start "" pythonw app.py
+exit

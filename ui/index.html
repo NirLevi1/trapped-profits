@@ -497,7 +497,7 @@
   const handlingPill = h => { const st = h?.status || 'טרם טופל'; const k = st.startsWith('הוחלט') || st === 'טופל' ? 'good' : st === 'בשיחה' ? 'info' : ''; return `<span class="pill ${k}">${esc(st)}</span>`; };
   function row(c){
     return `<tr tabindex="0" class="rowlink" data-id="${esc(c._id)}">
-      <td><div class="file">${esc(c.name)}</div><div class="sub">${c.scenario_label ? esc(c.scenario_label) + ' · ' : (c.is_estimate ? 'אומדן · ' : '')}בסיס לתום ${c.previous_year}${c.dashboard.protected_until && c.dashboard.protected_until !== 'אין' ? ` · מוגן עד ${esc(c.dashboard.protected_until)}` : ''}${c._pending ? ` · <span style="color:var(--warn)">${c._pending} מהקובץ לאישור</span>` : ''}${c._missingHuman ? ` · <span style="color:var(--serious)">חסרים ${c._missingHuman}</span>` : ''}${c.missing_fields?.length ? ` · <span style="color:var(--warn)">חסר ${c.missing_fields.length}</span>` : ''}${c.manual_review?.length ? ` · <span style="color:var(--ink-3)" title="${esc(c.manual_review.join(' | '))}">⚠ ${c.manual_review.length} לבדיקה</span>` : ''}${c._pendingEst ? ` · <span style="color:var(--warn)">${c._pendingEst} אומדנים</span>` : ''}${c._stale ? ` · <span style="color:var(--serious)">נתון מיושן (${esc(fmtDate(c.data_as_of) || when(c._updated))})</span>` : (c.data_as_of ? ` · נכון ל־${esc(fmtDate(c.data_as_of))}` : '')}</div></td>
+      <td><div class="file">${esc(c.name)}</div></td>
       <td>${pill(c.dashboard.color_overall)}</td>
       <td>${pill(c.dashboard.color_81, short(c.dashboard.status_81))}</td>
       <td>${pill(c.dashboard.color_62a, short(c.dashboard.status_62a))}</td>

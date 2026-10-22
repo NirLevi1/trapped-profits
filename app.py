@@ -468,7 +468,9 @@ class Api:
             import time
             time.sleep(0.8)
             if sys.platform.startswith("win"):
-                subprocess.Popen(["cmd", "/c", "start", "", str(root / "run.bat")], cwd=str(root), creationflags=0x08000000)
+                # 22.10: בלי חלון – run.bat רץ מוסתר ומפעיל את התוכנה (pythonw); החלון לא נשאר פתוח
+                subprocess.Popen(["cmd", "/c", str(root / "run.bat")], cwd=str(root), creationflags=0x08000000,
+                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             else:
                 subprocess.Popen(["/bin/bash", str(root / "run.command")], cwd=str(root))
             os._exit(0)
