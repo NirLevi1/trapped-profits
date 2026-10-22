@@ -20,12 +20,25 @@ from typing import Any, Callable
 
 API_URL = "https://api.anthropic.com/v1/messages"
 DEFAULT_MODEL = "claude-opus-5-5"
+# 22.10: אם המודל לא זמין בחשבון – מנסים את הבא; המודל שעבד נשמר בהגדרות
+MODEL_CHAIN = ("claude-opus-5-5", "claude-sonnet-5-5", "claude-opus-4-5", "claude-sonnet-4-5")
 MAX_PDF_BYTES = 30 * 1024 * 1024
 
 # ---------------------------------------------------------------- קריאה לשירות
 
 class AIError(Exception):
     """שגיאה שמוצגת לאברהם כמו שהיא (בעברית)."""
+
+
+class ModelUnavailable(AIError):
+    pass
+
+
+def _service_msg(body: str) -> str:
+    try:
+        return str((json.loads(body).get("error") or {}).get("message") or "")[:200]
+    except Exception:  # noqa: BLE001
+        return body[:200]
 
 
 def _human_error(code: int, body: str) -> str:
@@ -42,7 +55,8 @@ def _human_error(code: int, body: str) -> str:
         return "השירות עמוס כרגע – לנסות שוב מאוחר יותר"
     if code == 413 or "too large" in low:
         return "הקובץ גדול מדי לבדיקה השנייה"
-    return f"שגיאה מהשירות ({code})"
+    m = _service_msg(body)
+    return f"שגיאה מהשירות ({code})" + (f": {m}" if m else "")
 
 
 def call_model(key: str, content: list, tool: dict, model: str = DEFAULT_MODEL, timeout: int = 180, max_tokens: int = 4096) -> dict:
@@ -66,6 +80,9 @@ def call_model(key: str, content: list, tool: dict, model: str = DEFAULT_MODEL, 
             txt = e.read().decode("utf-8", "replace")
         except Exception:  # noqa: BLE001
             txt = ""
+        low = txt.lower()
+        if e.code in (400, 404) and "model" in low and "credit" not in low:
+            raise ModelUnavailable(_human_error(e.code, txt)) from None
         raise AIError(_human_error(e.code, txt)) from None
     except urllib.error.URLError:
         raise AIError("אין חיבור לאינטרנט (או שהשירות חסום ברשת המשרד)") from None
@@ -78,12 +95,20 @@ def call_model(key: str, content: list, tool: dict, model: str = DEFAULT_MODEL, 
 
 
 def test_key(key: str, model: str = DEFAULT_MODEL) -> dict:
+    """בודק את המפתח; אם המודל לא זמין בחשבון – מנסה את הבאים ברשימה ומחזיר את זה שעבד."""
     tool = {"name": "ok", "description": "confirm", "input_schema": {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"]}}
-    try:
-        call_model(key, [{"type": "text", "text": "Call the tool with ok=true."}], tool, model, timeout=40, max_tokens=50)
-        return {"ok": True, "msg": "מחובר – הבדיקה השנייה תרוץ בהעלאת דוח שנתי ומאזן בוחן"}
-    except AIError as e:
-        return {"ok": False, "msg": str(e)}
+    chain = [model] + [m for m in MODEL_CHAIN if m != model]
+    last = ""
+    for m in chain:
+        try:
+            call_model(key, [{"type": "text", "text": "Call the tool with ok=true."}], tool, m, timeout=40, max_tokens=50)
+            return {"ok": True, "msg": "מחובר", "model": m}
+        except ModelUnavailable as e:
+            last = str(e)
+            continue
+        except AIError as e:
+            return {"ok": False, "msg": str(e)}
+    return {"ok": False, "msg": last or "אף מודל לא זמין בחשבון"}
 
 
 # ---------------------------------------------------------------- דוח שנתי

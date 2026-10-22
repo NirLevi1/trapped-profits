@@ -151,7 +151,7 @@ class Api:
             return {**test_key(key, model), "tail": key[-4:]}
         r = test_key(key, self._ai_key()[1])
         if r.get("ok") or "קרדיט" in r.get("msg", ""):
-            self.store.settings.save({"ai_key": key})
+            self.store.settings.save({"ai_key": key, **({"ai_model": r["model"]} if r.get("model") else {})})
             r["tail"] = key[-4:]
         return r
 

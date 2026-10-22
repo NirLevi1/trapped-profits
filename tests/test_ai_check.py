@@ -173,3 +173,18 @@ def test_firm_name_and_key_survive(tmp_path, monkeypatch):
     monkeypatch.setattr(app, "set_data_root", lambda p: None)
     api.choose_data_folder()
     assert api.store.settings.load()["firm_name"] == "משרד אחר" and api._ai_key()[0] == "sk-1234"
+
+
+def test_model_fallback(monkeypatch):
+    """22.10: מודל לא זמין בחשבון (400) – עוברים לבא ברשימה; קרדיט / מפתח – עוצרים עם הודעה ברורה."""
+    tried = []
+    def fake(key, content, tool, model, **k):
+        tried.append(model)
+        if model != "claude-sonnet-5-5":
+            raise ai_check.ModelUnavailable("model not found")
+        return {"ok": True}
+    monkeypatch.setattr(ai_check, "call_model", fake)
+    r = ai_check.test_key("k")
+    assert r["ok"] and r["model"] == "claude-sonnet-5-5" and tried[:2] == ["claude-opus-5-5", "claude-sonnet-5-5"]
+    monkeypatch.setattr(ai_check, "call_model", lambda *a, **k: (_ for _ in ()).throw(AIError("נגמר הקרדיט בחשבון – צריך להטעין")))
+    assert ai_check.test_key("k") == {"ok": False, "msg": "נגמר הקרדיט בחשבון – צריך להטעין"}
