@@ -1198,15 +1198,24 @@
     if (r.error){ $('in_state').textContent = r.error; return; }
     intakePlan = r; const c = r.counts || {}; const n = (c['חדש'] || 0) + (c['לעדכון'] || 0);
     $('in_state').textContent = Object.entries(c).map(([k, v]) => `${k}: ${v}`).join(' · ');
-    $('in_go').style.display = n ? '' : 'none'; $('in_go').textContent = `ייבוא ${n} לקוחות`;
+    $('in_go').style.display = n ? '' : 'none';
     const order = ['לבירור', 'חדש', 'לעדכון', 'לא מוכן', 'אין קבצים', 'ללא שינוי'];
     const items = [...r.items].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
-    $('in_body').innerHTML = `<div class="tablewrap"><table><tr><th>תיקייה</th><th>מצב</th><th>לקוח במערכת</th><th>קבצים חדשים / שהשתנו</th><th>הערות</th></tr>${items.map(it => {
+    const canGo = it => it.status === 'חדש' || it.status === 'לעדכון';
+    $('in_body').innerHTML = `<div class="tablewrap"><table><tr><th style="width:28px">${n ? `<input type="checkbox" id="in_all" checked onchange="document.querySelectorAll('.in_pick').forEach(x => x.checked = this.checked); intakeCount()" title="סימון / ביטול של כולם">` : ''}</th><th>תיקייה</th><th>מצב</th><th>לקוח במערכת</th><th>קבצים חדשים / שהשתנו</th><th>הערות</th></tr>${items.map(it => {
       const ch = it.files.filter(f => f.state !== 'same');
-      return `<tr><td>${esc(it.folder)}</td><td><span class="pill ${IN_TONE[it.status] || 'neutral'}">${esc(it.status)}</span></td><td>${esc(it.client_name || '—')}</td><td class="hint">${ch.map(f => `${f.year} · <bdi>${esc(f.name)}</bdi>` + (f.state === 'changed' ? ' (השתנה)' : '')).join('<br>')}</td><td class="hint">${(it.notes || []).map(n => `<bdi>${esc(n)}</bdi>`).join('<br>')}</td></tr>`; }).join('')}</table></div>`;
+      return `<tr><td>${canGo(it) ? `<input type="checkbox" class="in_pick" data-folder="${esc(it.folder)}" checked onchange="intakeCount()">` : ''}</td><td>${esc(it.folder)}</td><td><span class="pill ${IN_TONE[it.status] || 'neutral'}">${esc(it.status)}</span></td><td>${esc(it.client_name || '—')}</td><td class="hint">${ch.map(f => `${f.year} · <bdi>${esc(f.name)}</bdi>` + (f.state === 'changed' ? ' (השתנה)' : '')).join('<br>')}</td><td class="hint">${(it.notes || []).map(n => `<bdi>${esc(n)}</bdi>`).join('<br>')}</td></tr>`; }).join('')}</table></div>`;
+    intakeCount();
+  }
+  function intakeCount(){
+    const all = [...document.querySelectorAll('.in_pick')], k = all.filter(x => x.checked).length;
+    $('in_go').textContent = `ייבוא ${k} לקוחות`; $('in_go').disabled = !k;
+    const a = $('in_all'); if (a){ a.checked = k === all.length; a.indeterminate = k > 0 && k < all.length; }
   }
   async function intakeGo(){
-    const r = await api('intake_run', null); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
+    const picked = [...document.querySelectorAll('.in_pick')].filter(x => x.checked).map(x => x.dataset.folder);
+    if (!picked.length){ toast('לא סומן אף לקוח'); return; }
+    const r = await api('intake_run', picked); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; }
     $('in_go').style.display = 'none'; intakePoll();
   }
   async function intakePoll(){
