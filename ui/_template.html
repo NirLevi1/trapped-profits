@@ -277,7 +277,7 @@
     <div class="card">
       <div class="field"><span>תיקיית איסוף הדוחות</span>
         <div class="pathbox"><span id="in_dir" dir="ltr"></span><button type="button" class="quiet" onclick="chooseIntake()">בחירה…</button></div>
-        <div class="hint">תיקייה לכל לקוח, ובתוכה תיקייה לכל שנה. נקלטים: דוח שנתי (PDF), "רווח והפסד שנה", "כרטסת שנה". קובץ שכבר נקלט ולא השתנה – מדלגים.</div>
+        <div class="hint">תיקייה לכל לקוח, ובתוכה תיקייה לכל שנה. נקלט רק לקוח שיש לו מינימום לאחד המסלולים: דוח 2025 + רווח והפסד 2026 · דוח 2024 + רווח והפסד 2025–2026 · דוח 2023 + רווח והפסד 2024–2026. כרטסת – לא חובה. קובץ שכבר נקלט ולא השתנה – מדלגים.</div>
       </div>
       <div class="toolbar" style="margin:8px 0 0"><button onclick="intakeScan()">סריקה</button><button class="primary" id="in_go" style="display:none" onclick="intakeGo()">ייבוא</button><span class="hint" id="in_state"></span></div>
     </div>
@@ -1191,7 +1191,7 @@
   let intakePlan = null;
   function intakeInit(){ $('in_dir').textContent = settings?.intake_dir || 'לא נבחרה'; }
   async function chooseIntake(){ const r = await api('choose_intake_folder'); if (!r || r.cancelled) return; if (r.error){ toast(r.error); return; } settings = await api('get_settings'); intakeInit(); intakeScan(); }
-  const IN_TONE = {'חדש': 'info', 'לעדכון': 'warn', 'ללא שינוי': 'neutral', 'לבירור': 'serious', 'אין קבצים': 'neutral', 'נוסף': 'good', 'עודכן': 'good', 'שגיאה': 'serious'};
+  const IN_TONE = {'לא מוכן': 'neutral', 'חדש': 'info', 'לעדכון': 'warn', 'ללא שינוי': 'neutral', 'לבירור': 'serious', 'אין קבצים': 'neutral', 'נוסף': 'good', 'עודכן': 'good', 'שגיאה': 'serious'};
   async function intakeScan(){
     $('in_state').textContent = 'סורק…'; $('in_go').style.display = 'none';
     const r = await api('intake_plan'); if (!r){ $('in_state').textContent = 'זמין רק בתוכנה'; return; }
@@ -1199,7 +1199,7 @@
     intakePlan = r; const c = r.counts || {}; const n = (c['חדש'] || 0) + (c['לעדכון'] || 0);
     $('in_state').textContent = Object.entries(c).map(([k, v]) => `${k}: ${v}`).join(' · ');
     $('in_go').style.display = n ? '' : 'none'; $('in_go').textContent = `ייבוא ${n} לקוחות`;
-    const order = ['לבירור', 'חדש', 'לעדכון', 'אין קבצים', 'ללא שינוי'];
+    const order = ['לבירור', 'חדש', 'לעדכון', 'לא מוכן', 'אין קבצים', 'ללא שינוי'];
     const items = [...r.items].sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status));
     $('in_body').innerHTML = `<div class="tablewrap"><table><tr><th>תיקייה</th><th>מצב</th><th>לקוח במערכת</th><th>קבצים חדשים / שהשתנו</th><th>הערות</th></tr>${items.map(it => {
       const ch = it.files.filter(f => f.state !== 'same');

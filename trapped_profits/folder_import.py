@@ -110,11 +110,11 @@ def _pdf_order(paths: list[Path]) -> list[Path]:
     return sorted(paths, key=key)
 
 
-def pick_annual_report(files: dict, tax_year: int, folder_name: str, log: list, parse: Callable | None = None) -> tuple[Path | None, dict | None]:
+def pick_annual_report(files: dict, tax_year: int, folder_name: str, log: list, parse: Callable | None = None, years: list | None = None) -> tuple[Path | None, dict | None]:
     """הדוח השנתי: השנה האחרונה (עד שנה קודמת) שיש לה דוח שנקרא תקין – שנת הדוח = שם התיקייה ושם החברה תואם."""
     from .importers import import_slot
     parse = parse or (lambda p: import_slot("annual_report", p, tax_year))
-    for y in sorted((y for y in files["pdf"] if y <= tax_year - 1), reverse=True):
+    for y in sorted((y for y in files["pdf"] if y <= tax_year - 1 and (years is None or y in years)), reverse=True):
         for p in _pdf_order(files["pdf"][y]):
             try:
                 r = parse(p)
@@ -134,6 +134,30 @@ def pick_annual_report(files: dict, tax_year: int, folder_name: str, log: list, 
                 continue
             return p, r
     return None, None
+
+
+# ---------------------------------------------------------------- מסלולים (22.10)
+# מינימום לחישוב (שנת מס T): דוח סגור + מאזני בוחן מלאים מהשנה שאחריו ועד T. כרטסת – לא חובה (רק לריכוזיות).
+#   א׳: דוח T−1 + רווח והפסד T   ב׳: דוח T−2 + רווח והפסד T−1, T   ג׳: דוח T−3 + רווח והפסד T−2, T−1, T
+
+def routes(files: dict, tax_year: int) -> tuple[list[int], str]:
+    """שנות הדוח שאפשר לעבוד איתן (מהחדשה), ומה חסר אם אין אף מסלול."""
+    reports = {y for y, ps in files["pdf"].items() if ps}
+    tbs = set(files["tb"])
+    ok, missing = [], []
+    for lag, label in ((1, "א׳"), (2, "ב׳"), (3, "ג׳")):
+        ry = tax_year - lag
+        need_tb = [tax_year - k for k in range(lag - 1, -1, -1)]          # השנים שאחרי הדוח ועד שנת המס
+        miss = ([f"דוח סגור {ry}"] if ry not in reports else []) + [f"רווח והפסד {y}" for y in need_tb if y not in tbs]
+        if not miss:
+            ok.append(ry)
+        elif ry in reports:
+            missing.append(f"מסלול {label} (דוח {ry}): חסר " + ", ".join(miss))
+    if ok:
+        return ok, ""
+    if not missing:
+        return [], f"אין דוח סגור {tax_year - 3}–{tax_year - 1}" + ("" if tax_year in tbs else f" ואין רווח והפסד {tax_year}")
+    return [], "; ".join(missing)
 
 
 # ---------------------------------------------------------------- תכנון
@@ -184,9 +208,14 @@ def plan(root: str | Path, store, tax_year: int, parse_reports: bool = False) ->
             it["notes"].append(f"{p.name}: {why}")
         if files["future"]:
             it["notes"].append(f"יש קבצים לשנת {', '.join(map(str, files['future']))} – מעבר שנה נעשה ידנית")
+        ok_years, why = routes(files, tax_year)
+        it["report_years"] = ok_years
         if not it["status"]:
             if not it["files"]:
                 it["status"] = "אין קבצים"
+            elif not ok_years:
+                it["status"] = "לא מוכן"
+                it["notes"].insert(0, "חסר מינימום לחישוב – " + why)
             elif not rec:
                 it["status"] = "חדש"
             else:
@@ -240,7 +269,7 @@ def import_client(item: dict, store, tax_year: int, root: Path, ai_key: str = ""
     steps: list[tuple[str, Path, dict]] = []                       # (חריץ, קובץ, תוצאת קריאה)
     if pdf_changed:
         notes: list[str] = []
-        p, r = pick_annual_report({"pdf": pdf_files}, ty, item["folder"], notes)
+        p, r = pick_annual_report({"pdf": pdf_files}, ty, item["folder"], notes, years=item.get("report_years") or None)
         res["skipped"] += notes
         if p is not None:
             if ai_key:
@@ -368,7 +397,7 @@ def run(root: str | Path, store, tax_year: int | None = None, ai_key: str = "", 
                     review(r["client_id"])
                 except Exception:  # noqa: BLE001
                     pass
-    summary["other"] = [{"folder": it["folder"], "status": it["status"], "notes": it["notes"]} for it in pl["items"] if it["status"] in ("לבירור", "אין קבצים")]
+    summary["other"] = [{"folder": it["folder"], "status": it["status"], "notes": it["notes"]} for it in pl["items"] if it["status"] in ("לבירור", "אין קבצים", "לא מוכן")]
     summary["counts"] = {}
     for r in summary["results"]:
         summary["counts"][r["status"]] = summary["counts"].get(r["status"], 0) + 1
@@ -415,7 +444,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.dry_run:
         for it in s["items"]:
             ch = [f["name"] for f in it["files"] if f["state"] != "same"]
-            print(f"{it['status']:10} {it['folder']}" + (f"  ← {', '.join(ch)}" if ch and it["status"] != "ללא שינוי" else ""))
+            print(f"{it['status']:10} {it['folder']}" + (f"  ← {', '.join(ch)}" if ch and it["status"] in ("חדש", "לעדכון") else "")
+                  + (f"  ({it['notes'][0]})" if it["status"] == "לא מוכן" else ""))
     else:
         for r in s["results"]:
             print(f"{r['status']:8} {r['folder']}" + (f"  ({', '.join(r['imported'])})" if r.get("imported") else "") + (f"  שגיאות: {'; '.join(r['errors'])}" if r.get("errors") else ""))

@@ -97,3 +97,32 @@ def test_lock(tmp_path):
                 assert False
         except RuntimeError as e:
             assert "כבר רץ" in str(e)
+
+
+def test_routes_minimum():
+    """22.10 (אברהם): מינימום – דוח סגור + רווח והפסד מהשנה שאחריו ועד שנת המס; כרטסת לא חובה."""
+    f = lambda pdf, tb: {"pdf": {y: ["x"] for y in pdf}, "tb": {y: "x" for y in tb}}
+    assert fi.routes(f([2025], [2026]), 2026) == ([2025], "")
+    assert fi.routes(f([2024, 2025], [2025, 2026]), 2026)[0] == [2025, 2024]
+    assert fi.routes(f([2024], [2025, 2026]), 2026)[0] == [2024]
+    assert fi.routes(f([2023], [2024, 2025, 2026]), 2026)[0] == [2023]
+    ok, why = fi.routes(f([2024], [2026]), 2026)
+    assert ok == [] and "רווח והפסד 2025" in why
+    ok, why = fi.routes(f([2025], []), 2026)
+    assert ok == [] and "רווח והפסד 2026" in why
+    ok, why = fi.routes(f([], [2026]), 2026)
+    assert ok == [] and "אין דוח סגור" in why
+
+
+def test_not_ready_not_imported(tmp_path, monkeypatch):
+    root = tmp_path / "root"
+    (root / "רק דוח בעמ" / "2025").mkdir(parents=True)
+    (root / "רק דוח בעמ" / "2025" / "דוחות כספיים.pdf").write_bytes(b"%PDF")
+    (root / "רק דוח בעמ" / "2026").mkdir()
+    (root / "רק דוח בעמ" / "2026" / "כרטסת 2026.xls").write_bytes(b"l")
+    calls = []
+    monkeypatch.setattr(importers, "import_slot", _fake(calls))
+    st = ClientStore(tmp_path / "data" / "clients")
+    s = fi.run(root, st, 2026)
+    assert s["results"] == [] and calls == []
+    assert s["other"][0]["status"] == "לא מוכן" and "רווח והפסד 2026" in s["other"][0]["notes"][0]
