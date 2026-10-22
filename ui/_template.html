@@ -709,6 +709,13 @@
     const notices = [];
     notices.push(`<div class="card" id="cardSlots" style="display:none;margin-bottom:12px"><h3 style="margin-top:0">עדכון מקבצים</h3><div class="slots" id="cardSlotsBody"></div></div>`);
     // אברהם 15.10/18.10/22.10: למעלה רק מאזן בוחן, מיושן, מעבר שנה, השתנה; סתירות, חסרים ובדיקת היגיון – תחת "מידע נוסף"; השאר תחת "מידע נוסף"
+    // 22.10: פרטי החישוב (היו מתחת לשם הלקוח ומעל הכרטיסים) – תחת "מידע נוסף"
+    addFlag('calcinfo', 'neutral', 'פרטי חישוב', '<div style="max-width:520px">' + kv([
+      ['שנת מס', String(c.tax_year)], ['בסיס', `עודפים לתום ${c.previous_year}`],
+      ['מסלול', esc(c.scenario_label || (c.is_estimate ? 'אומדן' : 'דוח סגור של השנה הקודמת'))],
+      ...(c.years_used ? [['שנים – עודפים', esc(c.years_used.retained)], ['שנים – ממוצע הוצאות', esc(c.years_used.expenses_avg)], ['השנה הנבדקת', esc(c.years_used.current_year)], ['שנים – ריכוזיות', esc(c.years_used.concentration)]] : []),
+      ['עודכן', esc(when(rec.updated_at))], ['גרסת לוגיקה', esc(c.logic_version || '')],
+    ]) + '</div>');
     // 22.10: למעלה רק מאזן הבוחן; כל השאר (סתירות, חסרים, בדיקת היגיון, מיושן, מעבר שנה, השתנה…) תחת "מידע נוסף"
     const TOP = new Set(['gaps']);
     const topFlags = flags.filter(f => TOP.has(f.key));
@@ -720,7 +727,6 @@
       (openFlags.has('more') && more.length ? `<div class="flags sub">${more.map(btn).join('')}</div>` : '') +
       topFlags.filter(f => openFlags.has(f.key)).map(f => `<div class="notice ${f.tone}">${f.html}</div>`).join('') +
       (openFlags.has('more') ? more.filter(f => openFlags.has(f.key)).map(f => f.notice ? `<div class="notice ${f.tone}">${f.html}</div>` : f.html).join('') : ''));
-    if (c.years_used) notices.push(`<div class="hint" style="margin:2px 0 8px">שנים בחישוב: עודפים – ${esc(c.years_used.retained)} · ממוצע הוצאות – ${esc(c.years_used.expenses_avg)} · השנה הנבדקת – ${esc(c.years_used.current_year)} · ריכוזיות – ${esc(c.years_used.concentration)}</div>`);
     el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall), handlingMenu) + notices.join('') + `
       <div class="cols">
         ${foldCard('c81', !m.action_required, `סעיף 81 · קנס מס 2% &nbsp;${pill(c.dashboard.color_81, k.surtax > 0 ? `חשוף · קנס ${Math.round(k.surtax).toLocaleString('en-US')} ₪` : (c.dashboard.color_81 === 'צהוב' ? strip(c.dashboard.status_81) : (k.status_label || strip(c.dashboard.status_81))))}`, `רווחים נצברים ${ils(r.retained_for_81a)} · המגן ${ils(k.governing_shield)} · אין קנס השנה`, kv(c81Rows(c, k, r, sh)))}
@@ -779,8 +785,7 @@
         ${c.applies_62a && !s.concentration_test_met && s.attributed_if_concentration > 0 ? `<div class="notice ${s.concentration_share >= 0.7 ? 'serious' : s.concentration_share >= 0.55 ? 'warn' : ''}" style="margin-top:10px;background:${s.concentration_share >= 0.55 ? '' : 'var(--neutral-bg)'}"><b>אם מבחן הריכוזיות מתקיים</b> (לקוח אחד ≥70% מסך 36 חודשים): ייחוס מלא – שכר לתיקון ${ils(s.attributed_if_concentration)}, עלות מס נוספת ${ils(s.extra_tax_if_concentration)} – גם עם פטור 750 אלף וגם מתחת ל-25%. ${s.concentration_share >= 0.7 && (s.concentration_years?.length || 0) < 3 ? 'השנה הלקוח הגדול מעל 70% – להעלות כרטסות של שנתיים אחורה.' : ''}</div>` : ''}`)}
         </div>
       `;
-    $('cardLead').textContent = `שנת מס ${c.tax_year} · בסיס לתום ${c.previous_year}${c.scenario_label ? ' · ' + c.scenario_label : (c.is_estimate ? ' · אומדן' : '')} · עודכן ${when(rec.updated_at)}`;
-    $('cardLead').title = `גרסת לוגיקה ${c.logic_version}`;
+    $('cardLead').textContent = ''; $('cardLead').style.display = 'none';      // 22.10: הפרטים עברו ל"מידע נוסף" ← "פרטי חישוב"
   }
 
   // ── form schema (key = path into ClientInput) ──
