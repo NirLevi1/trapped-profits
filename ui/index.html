@@ -729,7 +729,7 @@
     el.innerHTML = head(c.name, pill(c.dashboard.color_overall, c.dashboard.status_overall), handlingMenu) + notices.join('') + `
       <div class="cols two">
         <div class="stack">${foldCard('c81', !m.action_required, `סעיף 81 · קנס מס 2% &nbsp;${pill(c.dashboard.color_81, k.surtax > 0 ? `חשוף · קנס ${Math.round(k.surtax).toLocaleString('en-US')} ₪` : (c.dashboard.color_81 === 'צהוב' ? strip(c.dashboard.status_81) : (k.status_label || strip(c.dashboard.status_81))))}`, `רווחים נצברים ${ils(r.retained_for_81a)} · המגן ${ils(k.governing_shield)} · אין קנס השנה`, kv(c81Rows(c, k, r, sh, rec.id, showSim ? null : m)))}
-        ${showSim ? `<div class="card"><h3>מה לעשות עד 31.12?</h3>${simHtml(c, k, m, s, rec)}</div>` : ''}</div>
+        ${showSim ? `<div class="card"><h3>אפשרויות פעולה עד 31.12.${c.tax_year}</h3>${simHtml(c, k, m, s, rec)}</div>` : ''}</div>
         ${foldCard('c62', !(c.applies_62a && s.attributed_income > 0), `סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}`, `${esc(strip(c.dashboard.status_62a))} · רווחיות ${pct(s.governing_profitability)}${s.concentration_share_36m >= 0.55 ? ' · ריכוזיות ' + (s.concentration_share_36m*100).toFixed(0) + '%' : ''}`, `${kv([
           ['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)],
           ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)],
@@ -1222,11 +1222,10 @@
     const id = rec.id, est = m.estimated_retained_year_end;
     const taxPct = m.gap_to_close > 0 ? Math.round(m.dividend_tax_cost / m.gap_to_close * 100) : 33;
     const opt = (title, result, sub, btn, tone) => `<div class="simopt ${tone || ''}"><div class="simopt-h"><b>${title}</b><span class="simopt-r">${result}</span></div>${sub ? `<div class="hint">${sub}</div>` : ''}${btn ? `<div style="margin-top:4px">${btn}</div>` : ''}</div>`;
-    const tryBtn = (d, sal) => `<button class="quiet" style="font-size:12px;padding:2px 8px" onclick="wiSet(${Math.round(d)}, ${Math.round(sal)})">לבדוק ב"מה אם"</button>`;
     const opts = [
-      m.gap_to_close > 0 ? opt(`לחלק דיבידנד ${ils(m.gap_to_close)}`, '← פטור מהקנס', `מס דיבידנד ${ils(m.dividend_tax_cost)} (${taxPct}%) – מס שישולם בכל מקרה ביום שהכסף ייצא מהחברה; כאן הוא רק מוקדם.`, tryBtn(m.gap_to_close, 0), 'good') : '',
-      s.attributed_income > 0 && m.surtax_if_salary_paid != null && m.surtax_if_salary_paid < k.surtax ? opt(`לשלם שכר בעלים ${ils(s.attributed_income)}`, `← הקנס יורד ל־${ils(m.surtax_if_salary_paid)}`, 'שכר התיקון של 62א. מגדיל את מגן ההוצאות; אפשר לשלב עם דיבידנד קטן יותר.', tryBtn(0, s.attributed_income)) : '',
-      opt('לא לעשות כלום', `← קנס ${ils(k.surtax)}`, est != null ? `ושוב בשנה הבאה – על עודפים של כ־${ils(est)} בסוף ${c.tax_year}.` : 'ושוב בשנה הבאה.', '', 'bad'),
+      opt('לשלם קנס מס 2%', `← ${ils(k.surtax)}`, est != null ? `ושוב בשנה הבאה – על עודפים של כ־${ils(est)} בסוף ${c.tax_year}.` : 'ושוב בשנה הבאה.', '', 'bad'),
+      m.gap_to_close > 0 ? opt(`לחלק דיבידנד ${ils(m.gap_to_close)}`, '← פטור מהקנס', `מס דיבידנד ${ils(m.dividend_tax_cost)} (${taxPct}%) – מס שישולם בכל מקרה ביום שהכסף ייצא מהחברה; כאן הוא רק מוקדם.`, '', 'good') : '',
+      s.attributed_income > 0 && m.surtax_if_salary_paid != null && m.surtax_if_salary_paid < k.surtax ? opt(`לשלם שכר בעלים ${ils(s.attributed_income)}`, `← הקנס יורד ל־${ils(m.surtax_if_salary_paid)}`, 'שכר התיקון של 62א. מגדיל את מגן ההוצאות; אפשר לשלב עם דיבידנד קטן יותר.', '') : '',
     ].join('');
     const dk = 'simdet', open = openRows.has(dk);
     const det = kv([
@@ -1242,8 +1241,8 @@
     return `<div class="simopts">${opts}</div>`
       + kv([['כבר חולק השנה <span class="hint" style="display:inline">(לעריכה)</span>', distInput(id, m.already_distributed)]])
       + `<div style="margin:8px 0 4px"><span class="xrow hint" onclick="toggleRow('${dk}')">איך חושב <span class="tog">${open ? '▴' : '▾'}</span></span></div>${open ? det : ''}`
-      + `<div class="whatif" id="whatif">
-          <h3 style="margin-top:12px">מה אם…</h3>
+      + `<div style="margin:4px 0"><span class="xrow hint" onclick="toggleRow('whatif')">מה אם… <span class="tog">${openRows.has('whatif') ? '▴' : '▾'}</span></span></div>`
+      + (!openRows.has('whatif') ? '' : `<div class="whatif" id="whatif">
           <div class="row">
             <label class="field"><span>דיבידנד נוסף לחלוקה</span><input type="text" inputmode="numeric" dir="ltr" id="wi_div" value="0" oninput="fmtInput(this)"></label>
             <label class="field"><span>שכר נוסף לבעל המניות עד 31.12</span><input type="text" inputmode="numeric" dir="ltr" id="wi_sal" value="0" oninput="fmtInput(this)"></label>
@@ -1251,7 +1250,7 @@
           <div class="hint" style="display:flex;gap:5px;align-items:center;white-space:nowrap;margin:-2px 0 8px">או העלאה חודשית: <input type="text" inputmode="numeric" dir="ltr" id="wi_raise" value="0" oninput="fmtInput(this);wiRaise()" style="width:72px;padding:3px 6px"> ₪ מחודש <input type="text" inputmode="numeric" dir="ltr" id="wi_from" value="${Math.min(12, (rec.input?.data_through_month || new Date().getMonth()) + 1)}" oninput="wiRaise()" style="width:38px;padding:3px 6px"></div><div class="hint" id="wi_raise_out" style="margin:-4px 0 8px"></div>
           <div class="toolbar" style="margin-bottom:8px"><div class="spacer"></div><button onclick="runWhatIf()">חשב</button></div>
           <div id="wi_out" class="hint">הסימולציה לא נשמרת.${MOCK ? ' בתצוגת הדפדפן אין מנוע – זמין בתוכנה.' : ''}</div>
-        </div>`;
+        </div>`);
   }
   // 22.10 (ניר): כרטיס 81 – הגלגול והמגנים נפתחים בלחיצה; שורת "מצב" עברה לכותרת; "קנס מס 2%" באדום
   const openRows = new Set();
@@ -1447,7 +1446,7 @@
     const x = r.result || {};
     if (x.changed){ await reload(); if ($('s-client')?.classList.contains('active')) renderClient(); toast(`הדוחות השנתיים נקראו שוב בגרסה החדשה: אצל ${x.changed} לקוחות יצא ערך אחר – מסומן "סתירות" לבחירה (${(x.names || []).slice(0, 4).join(', ')}${x.changed > 4 ? '…' : ''})`, 9000); }
   }
-  const UI_VERSION = '1.32';
+  const UI_VERSION = '1.33';
   // 22.10: הממשק חדש אבל התהליך ישן (עדכון שלא הופעל מחדש) – פס בראש המסך עם הפעלה מחדש
   function versionMismatch(){
     const v = settings?.app_version; if (MOCK || !UI_VERSION || !v || v === UI_VERSION) return;

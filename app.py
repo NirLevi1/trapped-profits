@@ -492,12 +492,7 @@ class Api:
             except Exception as e:  # noqa: BLE001
                 log(f"launch failed: {e}")
             finally:
-                try:
-                    for w in list(webview.windows):
-                        w.destroy()
-                except Exception:  # noqa: BLE001
-                    pass
-                log(f"exit pid {os.getpid()}")
+                log(f"exit pid {os.getpid()}")      # 22.10: בלי destroy לחלון (נתקע מחוץ לתהליך הראשי) – יציאה ישירה
                 os._exit(0)
         threading.Thread(target=go, daemon=True).start()
 
@@ -672,6 +667,25 @@ def _single_instance() -> None:
                                  creationflags=0x08000000, timeout=10).stdout.lower()
             if "python" in out:
                 subprocess.run(["taskkill", "/PID", str(old), "/F"], capture_output=True, creationflags=0x08000000, timeout=10)
+        except Exception:  # noqa: BLE001
+            pass
+    # כל חלון של התוכנה שעדיין פתוח (מכל תהליך אחר) – נסגר. גיבוי לקובץ ה-pid
+    if sys.platform.startswith("win"):
+        try:
+            import ctypes
+            import subprocess
+            u = ctypes.windll.user32
+            for _ in range(6):
+                hwnd = u.FindWindowW(None, WINDOW_TITLE)
+                if not hwnd:
+                    break
+                pid = ctypes.c_ulong()
+                u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+                if not pid.value or pid.value == os.getpid():
+                    break
+                subprocess.run(["taskkill", "/PID", str(pid.value), "/F"], capture_output=True, creationflags=0x08000000, timeout=10)
+                import time
+                time.sleep(0.5)
         except Exception:  # noqa: BLE001
             pass
     try:
