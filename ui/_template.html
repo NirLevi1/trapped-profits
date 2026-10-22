@@ -1274,11 +1274,11 @@
     const concLbl = cy.length ? `ריכוזיות ${(conc * 100).toFixed(0)}% <span class="hint" style="display:inline">(${cy[0]}${cy.length > 1 ? '–' + cy.at(-1) : ''}${cy.length < 3 ? `, חסרות ${3 - cy.length} כרטסות` : ''})</span>` : 'ריכוזיות <span class="hint" style="display:inline">(אין כרטסת)</span>';
     const sal = s.attributed_income || 0;
     return [
-      [xl('p62', `רווחיות ${pct(prof)}`), meter(prof, 0.25, '25%')],
+      [xl('p62', 'רווחיות'), pct(prof)],
       ...(openRows.has('p62') ? [[det([['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)], ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)], ['= רווחיות', pct(prof), 'sum'], ['25% מההכנסה', ils(0.25 * (s.personal_effort_income || 0))], ['מעל 25% = שכר לתיקון', ils(Math.max(0, (s.taxable_income_personal_effort || 0) - 0.25 * (s.personal_effort_income || 0)))]]), '', false, 'full']] : []),
-      [xl('w62', s.section_applies || sal > 0 ? 'למה חל' : 'למה לא חל'), `<span class="hint">${esc(why.join(' · '))}</span>`],
+      [xl('w62', s.section_applies || sal > 0 ? 'למה חל' : 'למה לא חל'), ''],
       ...(openRows.has('w62') ? [[det([['חצה 25%?', yn(s.crossed_25pct)], ['מתחת לסף המחזור?', yn(s.below_revenue_threshold)], ['זכאית לפטור 750 אלף?', yn(s.exemption_750k_applies)], ['מבחן הריכוזיות מתקיים?', yn(s.concentration_test_met)], ['62א חל?', yn(s.section_applies || sal > 0), 'sum']]), '', false, 'full']] : []),
-      [bd.length || cy.length ? xl('c62c', concLbl) : concLbl, cy.length ? meter(conc, 0.7, '70%') : ''],
+      [bd.length || cy.length ? xl('c62c', concLbl.replace(/ריכוזיות [\d.]+% /, 'ריכוזיות ')) : concLbl, cy.length ? `<span class="num" style="color:${conc >= 0.7 ? 'var(--serious)' : 'inherit'}">${(conc * 100).toFixed(0)}%</span>` : ''],
       ...(openRows.has('c62c') ? [[det([...bd.map(x => [esc(x.name), `${ils(x.amount)} · ${(x.share * 100).toFixed(0)}%`]), ...(s.concentration_years?.length ? [] : [])]) + (c.applies_62a && !s.concentration_test_met && s.attributed_if_concentration > 0 ? `<div class="hint" style="margin-top:6px">אם מבחן הריכוזיות מתקיים (לקוח אחד ≥70% מ־36 חודשים): ייחוס מלא – שכר לתיקון ${ils(s.attributed_if_concentration)}, עלות מס ${ils(s.extra_tax_if_concentration)}.</div>` : ''), '', false, 'full']] : []),
       ...(c.applies_62a && !s.concentration_test_met && s.attributed_if_concentration > 0 && (s.concentration_share || 0) >= 0.55 && !openRows.has('c62c') ? [[`<div class="notice ${(s.concentration_share || 0) >= 0.7 ? 'serious' : 'warn'}" style="margin:0">הלקוח הגדול ${((s.concentration_share || 0) * 100).toFixed(0)}% השנה – אם מבחן הריכוזיות מתקיים: ייחוס מלא ${ils(s.attributed_if_concentration)}.${(s.concentration_share || 0) >= 0.7 && cy.length < 3 ? ' להעלות כרטסות של שנתיים אחורה.' : ''}</div>`, '', false, 'full']] : []),
       null,
