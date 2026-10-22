@@ -30,6 +30,8 @@ class RetainedResult:
     taxable_retained_alt2: float      # B38
     manual_review_reasons: list[str]
     rollover_note: str = ""           # תרחיש ב׳: איך גולגלו העודפים = field(default_factory=list)
+    roll_steps: list = field(default_factory=list)   # 22.10: שלבי הגלגול לתצוגה בלחיצה
+    roll_base_year: int | None = None
 
 
 @dataclass
@@ -299,6 +301,8 @@ def _retained_full(ci: ClientInput, special_assets_net: float) -> RetainedResult
         taxable_retained_alt2=max(0.0, for_81a - alt2),                       # B38
         manual_review_reasons=reasons,
         rollover_note=_rollover_note(ci),
+        roll_steps=[{k: (round(v) if isinstance(v, float) else v) for k, v in x.items()} for x in _roll_steps(ci)],
+        roll_base_year=(ci.retained.retained_as_of_year or ci.structure.last_closed_report_year) if _roll_steps(ci) else None,
     )
 
 
