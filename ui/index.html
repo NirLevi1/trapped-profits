@@ -134,7 +134,7 @@
   input.st-missing{border-color:var(--serious);background:#fdf1ee}
   table.mini{border-collapse:collapse;font-size:12px} table.mini th,table.mini td{padding:2px 10px 2px 0;text-align:right} table.mini th{font-weight:500;color:inherit;opacity:.8}
   .fstate{font-size:11px;margin-top:3px;display:flex;gap:6px;align-items:center}
-  @keyframes spin{to{transform:rotate(360deg)}} .simopts{display:flex;flex-direction:column;gap:8px;margin-bottom:10px} .simopt{border:1px solid var(--line);border-radius:10px;padding:8px 10px} .simopt.good{border-color:var(--good)} .simopt.bad .simopt-r{color:var(--serious)} .simopt.good .simopt-r{color:var(--good)} .simopt-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline} .simopt-r{font-weight:600;white-space:nowrap} .xrow{cursor:pointer} .xrow .tog{font-size:11px;color:var(--ink-3)} .xdet{background:var(--surface-2,#f5f3ef);border-radius:8px;padding:8px 10px;font-size:12.5px} .xdet>div{display:flex;justify-content:space-between;gap:12px;padding:2px 0} .xdet>div.sum{border-top:1px solid var(--line-soft);margin-bottom:4px} .xdet>div.gov{color:var(--good);font-weight:600} .xdet small{font-weight:400} .rvf{border-top:1px solid var(--line-soft);padding:8px 0;color:var(--ink)} .rvf .hint{color:var(--ink-3)} .rvf:first-of-type{border-top:0} .rvh{display:flex;gap:8px;align-items:center;margin-bottom:3px} .aiconf button.on{border-color:var(--good);color:var(--good)} .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
+  @keyframes spin{to{transform:rotate(360deg)}} .simopts{display:flex;flex-direction:column;gap:8px;margin-bottom:10px} .simopt{border:1px solid var(--line);border-radius:10px;padding:8px 10px} .simopt.good{border-color:var(--good)} .simopt.bad .simopt-r{color:var(--serious)} .simopt.good .simopt-r{color:var(--good)} .simopt-h{display:flex;justify-content:space-between;gap:10px;align-items:baseline} .simopt-r{font-weight:600;white-space:nowrap} .meter{position:relative;width:120px;height:8px;background:var(--neutral-bg);border-radius:4px;display:inline-block;vertical-align:middle} .meter i{position:absolute;inset-block:0;inset-inline-start:0;border-radius:4px} .meter b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);transform:translateX(50%)} .xrow{cursor:pointer} .xrow .tog{font-size:11px;color:var(--ink-3)} .xdet{background:var(--surface-2,#f5f3ef);border-radius:8px;padding:8px 10px;font-size:12.5px} .xdet>div{display:flex;justify-content:space-between;gap:12px;padding:2px 0} .xdet>div.sum{border-top:1px solid var(--line-soft);margin-bottom:4px} .xdet>div.gov{color:var(--good);font-weight:600} .xdet small{font-weight:400} .rvf{border-top:1px solid var(--line-soft);padding:8px 0;color:var(--ink)} .rvf .hint{color:var(--ink-3)} .rvf:first-of-type{border-top:0} .rvh{display:flex;gap:8px;align-items:center;margin-bottom:3px} .aiconf button.on{border-color:var(--good);color:var(--good)} .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
   .fstate button{padding:0 6px;font-size:11px;line-height:18px;border-radius:5px}
   .check .fstate{margin-inline-start:0}
   .slots{display:grid;gap:10px}
@@ -730,22 +730,7 @@
       <div class="cols two">
         <div class="stack">${foldCard('c81', !m.action_required, `סעיף 81 · קנס מס 2% &nbsp;${pill(c.dashboard.color_81, k.surtax > 0 ? `חשוף · קנס ${Math.round(k.surtax).toLocaleString('en-US')} ₪` : (c.dashboard.color_81 === 'צהוב' ? strip(c.dashboard.status_81) : (k.status_label || strip(c.dashboard.status_81))))}`, `רווחים נצברים ${ils(r.retained_for_81a)} · המגן ${ils(k.governing_shield)} · אין קנס השנה`, kv(c81Rows(c, k, r, sh, rec.id, showSim ? null : m)))}
         ${showSim ? `<div class="card"><h3>אפשרויות פעולה עד 31.12.${c.tax_year}</h3>${simHtml(c, k, m, s, rec)}</div>` : ''}</div>
-        ${foldCard('c62', !(c.applies_62a && s.attributed_income > 0), `סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, strip(c.dashboard.status_62a))}`, `${esc(strip(c.dashboard.status_62a))} · רווחיות ${pct(s.governing_profitability)}${s.concentration_share_36m >= 0.55 ? ' · ריכוזיות ' + (s.concentration_share_36m*100).toFixed(0) + '%' : ''}`, `${kv([
-          ['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)],
-          ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)],
-          ['שיעור רווחיות', pct(s.governing_profitability)],
-          ['חצה סף 25%?', yn(s.crossed_25pct)],
-          ['מתחת לסף המחזור?', yn(s.below_revenue_threshold)],
-          ['זכאית לפטור 750 אלף ₪?', yn(s.exemption_750k_applies)],
-          ['62א חל?', yn(s.section_applies)],
-          null,
-          ...(s.concentration_years?.length ? [[`ריכוזיות ${s.concentration_years.length === 1 ? 'על שנה אחת' : s.concentration_years.length === 2 ? 'על שנתיים' : 'על 3 שנים'} (${s.concentration_years[0]}${s.concentration_years.length > 1 ? '–' + s.concentration_years.at(-1) : ''})`, `<span class="num" style="color:${s.concentration_share_36m >= 0.7 ? 'var(--serious)' : 'inherit'}">${(s.concentration_share_36m * 100).toFixed(0)}%</span> ${s.concentration_years.length < 3 ? `<span class="hint" style="display:inline">(חסרות ${3 - s.concentration_years.length} כרטסות)</span>` : s.concentration_met_by_data ? '<span style="color:var(--serious)">– המבחן מתקיים לפי הנתונים</span>' : '– מתחת ל-70%'}`]] : []),
-          ['שכר לתיקון עד 31.12', ils(s.attributed_income), true],
-          ['שכר בעלים ששולם השנה', `<input type="text" inputmode="numeric" placeholder="לא הוזן" value="${s.owner_salary == null ? '' : fmtNum(s.owner_salary)}" onkeydown="if(event.key==='Enter')saveField('${esc(rec.id)}','s62a.owner_salary_current_year',this.value,false,true)" onblur="saveField('${esc(rec.id)}','s62a.owner_salary_current_year',this.value,true,true)" oninput="fmtInput(this)">`],
-          ['עלות מס נוספת מוערכת', ils(s.extra_tax_cost)],
-        ])}<div class="hint" style="margin-top:6px">${esc(s.extra_tax_cost_method || '')}</div>
-        ${pieHtml(s)}
-        ${c.applies_62a && !s.concentration_test_met && s.attributed_if_concentration > 0 ? `<div class="notice ${s.concentration_share >= 0.7 ? 'serious' : s.concentration_share >= 0.55 ? 'warn' : ''}" style="margin-top:10px;background:${s.concentration_share >= 0.55 ? '' : 'var(--neutral-bg)'}"><b>אם מבחן הריכוזיות מתקיים</b> (לקוח אחד ≥70% מסך 36 חודשים): ייחוס מלא – שכר לתיקון ${ils(s.attributed_if_concentration)}, עלות מס נוספת ${ils(s.extra_tax_if_concentration)} – גם עם פטור 750 אלף וגם מתחת ל-25%. ${s.concentration_share >= 0.7 && (s.concentration_years?.length || 0) < 3 ? 'השנה הלקוח הגדול מעל 70% – להעלות כרטסות של שנתיים אחורה.' : ''}</div>` : ''}`)}
+        ${foldCard('c62', !(c.applies_62a && s.attributed_income > 0), `סעיף 62א · רווחיות עודפת &nbsp;${pill(c.dashboard.color_62a, s62Head(c, s))}`, `${esc(s62Head(c, s))} · רווחיות ${pct(s.governing_profitability)}${s.concentration_share_36m >= 0.55 ? ' · ריכוזיות ' + (s.concentration_share_36m*100).toFixed(0) + '%' : ''}`, kv(c62Rows(c, s, rec.id)))}
         </div>
       `;
     $('cardLead').textContent = ''; $('cardLead').style.display = 'none';      // 22.10: הפרטים עברו ל"מידע נוסף" ← "פרטי חישוב"
@@ -1252,6 +1237,52 @@
           <div id="wi_out" class="hint">הסימולציה לא נשמרת.${MOCK ? ' בתצוגת הדפדפן אין מנוע – זמין בתוכנה.' : ''}</div>
         </div>`);
   }
+  // 22.10 (ניר): כרטיס 62א – מצב מלא בכותרת; רווחיות / למה חל / ריכוזיות נפתחים בלחיצה; בלי עוגה
+  function s62Head(c, s){
+    const fmt = v => Math.round(v || 0).toLocaleString('en-US') + ' ₪';
+    if (!c.applies_62a) return 'הסעיף אינו חל';
+    if (s.concentration_test_met && s.attributed_income > 0) return `ריכוזיות · ייחוס מלא ${fmt(s.attributed_income)}`;
+    if (s.attributed_income > 0) return `חל · שכר לתיקון ${fmt(s.attributed_income)}`;
+    if (s.crossed_25pct && s.exemption_750k_applies) return `פטור 750 אלף · רווחיות ${Math.round((s.governing_profitability || 0) * 100) + '%'} – לעקוב`;
+    if (!s.below_revenue_threshold) return 'מחזור מעל הסף – אינו חל';
+    return `מתחת לסף · רווחיות ${Math.round((s.governing_profitability || 0) * 100) + '%'}`;
+  }
+  function meter(v, line, lineLabel){
+    const w = Math.max(0, Math.min(1, v)) * 100, over = v >= line;
+    return `<div class="meter" title="${Math.round(v * 100)}% · סף ${lineLabel}"><i style="width:${w}%;background:${over ? 'var(--serious)' : 'var(--good)'}"></i><b style="inset-inline-start:${line * 100}%"></b></div>`;
+  }
+  function c62Rows(c, s, id){
+    const xl = (key, label) => `<span class="xrow" onclick="toggleRow('${key}')">${label} <span class="tog">${openRows.has(key) ? '▴' : '▾'}</span></span>`;
+    const det = rows => `<div class="xdet">${rows.map(([l, v, cls]) => `<div class="${cls || ''}"><span>${l}</span><b>${v}</b></div>`).join('')}</div>`;
+    const prof = s.governing_profitability || 0;
+    // למה חל / לא חל – שורה אחת
+    const why = [];
+    if (!c.applies_62a) why.push('החברה סומנה כלא כפופה לסעיף');
+    else {
+      if (s.concentration_test_met) why.push(`לקוח אחד ≥70% (${(s.concentration_share_36m * 100).toFixed(0)}%) – ייחוס מלא`);
+      why.push(s.crossed_25pct ? 'רווחיות מעל 25%' : 'רווחיות עד 25%');
+      if (s.crossed_25pct) why.push(s.exemption_750k_applies ? 'פטור 750 אלף (עודפים עד 750 אלף)' : 'אין פטור 750 אלף');
+      why.push(s.below_revenue_threshold ? 'מחזור מתחת ל־30 מיליון' : 'מחזור מעל 30 מיליון');
+    }
+    const bd = (s.customers_breakdown || []);
+    const cy = s.concentration_years || [];
+    const conc = s.concentration_share_36m || 0;
+    const concLbl = cy.length ? `ריכוזיות ${(conc * 100).toFixed(0)}% <span class="hint" style="display:inline">(${cy[0]}${cy.length > 1 ? '–' + cy.at(-1) : ''}${cy.length < 3 ? `, חסרות ${3 - cy.length} כרטסות` : ''})</span>` : 'ריכוזיות <span class="hint" style="display:inline">(אין כרטסת)</span>';
+    const sal = s.attributed_income || 0;
+    return [
+      [xl('p62', `רווחיות ${pct(prof)}`), meter(prof, 0.25, '25%')],
+      ...(openRows.has('p62') ? [[det([['הכנסה מעתירת יגיעה אישית', ils(s.personal_effort_income)], ['הכנסה חייבת מפעילות זו', ils(s.taxable_income_personal_effort)], ['= רווחיות', pct(prof), 'sum'], ['25% מההכנסה', ils(0.25 * (s.personal_effort_income || 0))], ['מעל 25% = שכר לתיקון', ils(Math.max(0, (s.taxable_income_personal_effort || 0) - 0.25 * (s.personal_effort_income || 0)))]]), '', false, 'full']] : []),
+      [xl('w62', s.section_applies || sal > 0 ? 'למה חל' : 'למה לא חל'), `<span class="hint">${esc(why.join(' · '))}</span>`],
+      ...(openRows.has('w62') ? [[det([['חצה 25%?', yn(s.crossed_25pct)], ['מתחת לסף המחזור?', yn(s.below_revenue_threshold)], ['זכאית לפטור 750 אלף?', yn(s.exemption_750k_applies)], ['מבחן הריכוזיות מתקיים?', yn(s.concentration_test_met)], ['62א חל?', yn(s.section_applies || sal > 0), 'sum']]), '', false, 'full']] : []),
+      [bd.length || cy.length ? xl('c62c', concLbl) : concLbl, cy.length ? meter(conc, 0.7, '70%') : ''],
+      ...(openRows.has('c62c') ? [[det([...bd.map(x => [esc(x.name), `${ils(x.amount)} · ${(x.share * 100).toFixed(0)}%`]), ...(s.concentration_years?.length ? [] : [])]) + (c.applies_62a && !s.concentration_test_met && s.attributed_if_concentration > 0 ? `<div class="hint" style="margin-top:6px">אם מבחן הריכוזיות מתקיים (לקוח אחד ≥70% מ־36 חודשים): ייחוס מלא – שכר לתיקון ${ils(s.attributed_if_concentration)}, עלות מס ${ils(s.extra_tax_if_concentration)}.</div>` : ''), '', false, 'full']] : []),
+      ...(c.applies_62a && !s.concentration_test_met && s.attributed_if_concentration > 0 && (s.concentration_share || 0) >= 0.55 && !openRows.has('c62c') ? [[`<div class="notice ${(s.concentration_share || 0) >= 0.7 ? 'serious' : 'warn'}" style="margin:0">הלקוח הגדול ${((s.concentration_share || 0) * 100).toFixed(0)}% השנה – אם מבחן הריכוזיות מתקיים: ייחוס מלא ${ils(s.attributed_if_concentration)}.${(s.concentration_share || 0) >= 0.7 && cy.length < 3 ? ' להעלות כרטסות של שנתיים אחורה.' : ''}</div>`, '', false, 'full']] : []),
+      null,
+      [`<b style="color:${sal > 0 ? 'var(--serious)' : 'inherit'}">שכר לתיקון עד 31.12</b>`, `<b style="color:${sal > 0 ? 'var(--serious)' : 'inherit'}">${ils(sal)}</b>`],
+      ['שכר בעלים ששולם השנה', `<input type="text" inputmode="numeric" placeholder="לא הוזן" value="${s.owner_salary == null ? '' : fmtNum(s.owner_salary)}" onkeydown="if(event.key==='Enter')saveField('${esc(id)}','s62a.owner_salary_current_year',this.value,false,true)" onblur="saveField('${esc(id)}','s62a.owner_salary_current_year',this.value,true,true)" oninput="fmtInput(this)">`],
+      ...(sal > 0 ? [[`<span class="hint" title="${esc(s.extra_tax_cost_method || '')}">עלות מס אם לא משלמים</span>`, `<span class="hint" title="${esc(s.extra_tax_cost_method || '')}">${ils(s.extra_tax_cost)}</span>`]] : []),
+    ];
+  }
   // 22.10 (ניר): כרטיס 81 – הגלגול והמגנים נפתחים בלחיצה; שורת "מצב" עברה לכותרת; "קנס מס 2%" באדום
   const openRows = new Set();
   function toggleRow(k){ if (openRows.has(k)) openRows.delete(k); else openRows.add(k); const top = document.querySelector('main').scrollTop; renderClient(); document.querySelector('main').scrollTop = top; }
@@ -1446,7 +1477,7 @@
     const x = r.result || {};
     if (x.changed){ await reload(); if ($('s-client')?.classList.contains('active')) renderClient(); toast(`הדוחות השנתיים נקראו שוב בגרסה החדשה: אצל ${x.changed} לקוחות יצא ערך אחר – מסומן "סתירות" לבחירה (${(x.names || []).slice(0, 4).join(', ')}${x.changed > 4 ? '…' : ''})`, 9000); }
   }
-  const UI_VERSION = '1.33';
+  const UI_VERSION = '1.34';
   // 22.10: הממשק חדש אבל התהליך ישן (עדכון שלא הופעל מחדש) – פס בראש המסך עם הפעלה מחדש
   function versionMismatch(){
     const v = settings?.app_version; if (MOCK || !UI_VERSION || !v || v === UI_VERSION) return;
