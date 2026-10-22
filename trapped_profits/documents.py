@@ -157,11 +157,11 @@ def build_accountant_doc(r: ClientResult, handling: dict | None = None, history:
         ("עלות מס נוספת מוערכת", _ils(s.extra_tax_cost), False),
         ("אופן החישוב", s.extra_tax_cost_method, False),
     ]))
-    if s.concentration_years:
-        b.append(Block("p", f"ריכוזיות על {len(s.concentration_years)} שנים ({s.concentration_years[0]}–{s.concentration_years[-1]}): "
-                            f"{s.concentration_top_name} {s.concentration_share_36m:.0%} מסך ההכנסות"
-                            + (" – המבחן מתקיים לפי הנתונים (ייחוס מלא)." if s.concentration_met_by_data else
-                               (f" – חסרות כרטסות של {3 - len(s.concentration_years)} שנים למבחן 36 החודשים." if len(s.concentration_years) < 3 else " – מתחת ל-70%."))))
+    if s.concentration_top_name:
+        b.append(Block("p", f"ריכוזיות: {s.concentration_top_name} – {s.concentration_share:.0%} מההכנסות השנה"
+                            + (f", {s.concentration_months} חודשי שירות בשלוש השנים" if s.concentration_months is not None else "")
+                            + (" – המבחן מתקיים (70% ו-22 חודשים): ייחוס מלא, אלא אם החברה מעסיקה 4 עובדים או יותר." if s.concentration_met_by_data else
+                               (" – מתחת ל-70%." if s.concentration_share < 0.70 else " – פחות מ-22 חודשי שירות; המבחן לא מתקיים."))))
     if r.applies_62a and s.attributed_if_concentration > 0 and not s.concentration_test_met:
         b.append(Block("p", f"אם מבחן הריכוזיות מתקיים (לקוח אחד 70% ומעלה מסך 36 חודשים): ייחוס מלא של "
                             f"{_ils(s.attributed_if_concentration)} – עלות מס נוספת {_ils(s.extra_tax_if_concentration)}, "

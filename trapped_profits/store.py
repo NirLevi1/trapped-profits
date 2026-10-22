@@ -969,6 +969,36 @@ class ClientStore:
                 self._write(rec["id"], full)
         return out
 
+    def backfill_ledger_months(self) -> int:
+        """22.10: מבחן הריכוזיות לפי החוק סופר חודשי שירות – לכרטסות שנקלטו לפני כן, קוראים שוב את העותק השמור ומוסיפים חודשים."""
+        from .importers import parse_ledger
+        field = {"ledger": "top_customers", "ledger_prev": "top_customers_prev_year", "ledger_prev2": "top_customers_prev2_year"}
+        n = 0
+        for rec in self.list():
+            inp = rec.get("input") or {}
+            s62 = inp.get("s62a") or {}
+            todo = [(slot, f) for slot, f in field.items() if s62.get(f) and not any("months" in c for c in s62.get(f) or [])]
+            if not todo:
+                continue
+            full = self.get(rec["id"])
+            changed = False
+            for slot, f in todo:
+                src = next((x for x in reversed(full.get("sources") or []) if x.get("slot") == slot and not x.get("superseded")), None)
+                p = Path(src.get("path") or "") if src else None
+                if not (p and p.exists()):
+                    continue
+                try:
+                    tc = {c["name"]: c.get("months", []) for c in parse_ledger(p)["fields"]["s62a.top_customers"]}
+                except Exception:  # noqa: BLE001
+                    continue
+                for c in full["input"]["s62a"].get(f) or []:
+                    c["months"] = tc.get(c.get("name"), [])
+                changed = True
+            if changed:
+                self.save(full["input"], rec["id"])
+                n += 1
+        return n
+
     def recompute_all(self, only_outdated: bool = False) -> int:
         """מחשב מחדש את כל הלקוחות. only_outdated=True – רק מי שחושב בגרסת לוגיקה ישנה (אחרי update.bat)."""
         n = 0

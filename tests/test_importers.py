@@ -66,7 +66,7 @@ def test_ledger_by_customer():
     assert detect(p) == "ledger"
     r = parse_ledger(p)
     tc = r["fields"]["s62a.top_customers"]
-    assert tc[0] == {"name": "לקוח א", "amount": 60_000.0} and len(tc) == 3
+    assert {k: v for k, v in tc[0].items() if k != "months"} == {"name": "לקוח א", "amount": 60_000.0} and len(tc) == 3 and tc[0]["months"]
     assert abs(r["summary"]["top_share"] - 0.6) < 1e-9
 
 

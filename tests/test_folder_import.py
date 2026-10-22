@@ -126,3 +126,16 @@ def test_not_ready_not_imported(tmp_path, monkeypatch):
     s = fi.run(root, st, 2026)
     assert s["results"] == [] and calls == []
     assert s["other"][0]["status"] == "לא מוכן" and "רווח והפסד 2026" in s["other"][0]["notes"][0]
+
+
+def test_backfill_ledger_months(tmp_path, monkeypatch):
+    """22.10: כרטסת שנקלטה בלי חודשים – נקראת שוב מהעותק השמור ומקבלת חודשי שירות."""
+    st = ClientStore(tmp_path / "clients")
+    f = tmp_path / "l.xls"
+    f.write_bytes(b"x")
+    rec = st.save({"structure": {"name": "x", "tax_year": 2026}, "s62a": {"top_customers": [{"name": "מקאן", "amount": 10}]}})
+    rec = st.apply_import(rec["id"], {}, {}, "כרטסת", source={"slot": "ledger", "title": "כרטסת", "file": "l.xls", "path": str(f)})
+    monkeypatch.setattr(importers, "parse_ledger", lambda p: {"fields": {"s62a.top_customers": [{"name": "מקאן", "amount": 10, "months": ["2026-01", "2026-02"]}]}})
+    assert st.backfill_ledger_months() == 1
+    assert st.get(rec["id"])["input"]["s62a"]["top_customers"][0]["months"] == ["2026-01", "2026-02"]
+    assert st.backfill_ledger_months() == 0

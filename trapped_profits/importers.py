@@ -213,6 +213,7 @@ def parse_ledger(path: str | Path) -> dict[str, Any]:
     i_credit, i_debit, i_contra = hdr.index("זכות"), hdr.index("חובה"), hdr.index("חשבון נגדי")
     i_date = hdr.index("תאריך ערך") if "תאריך ערך" in hdr else None
     by_customer: dict[str, float] = defaultdict(float)
+    cust_months: dict[str, set] = defaultdict(set)                       # 22.10: חודשי שירות לכל לקוח (מבחן 22 חודשים, 62א(א)(3))
     years: dict[int, int] = defaultdict(int)
     n = 0
     for r in rows[header_idx + 1:]:
@@ -231,6 +232,10 @@ def parse_ledger(path: str | Path) -> dict[str, Any]:
             if m:
                 y = int(m.group(1))
                 years[y + 2000 if y < 100 else y] += 1
+            md = re.search(r"(\d{1,2})/(\d{1,2})/(\d{2,4})", r[i_date])
+            if md and (credit or 0.0) - (debit or 0.0) > 0:
+                yy = int(md.group(3)); yy = yy + 2000 if yy < 100 else yy
+                cust_months[name].add(f"{yy}-{int(md.group(2)):02d}")
     if not n:
         raise ValueError("לא נמצאו תנועות בכרטסת")
     total = sum(by_customer.values())
@@ -238,7 +243,7 @@ def parse_ledger(path: str | Path) -> dict[str, Any]:
     generic = {k: v for k, v in by_customer.items() if _is_generic_counter(k)}
     real = {k: v for k, v in by_customer.items() if k not in generic}
     top = sorted(real.items(), key=lambda x: -x[1])[:5]
-    customers = [{"name": k, "amount": round(v)} for k, v in top if v > 0]
+    customers = [{"name": k, "amount": round(v), "months": sorted(cust_months.get(k, ()))} for k, v in top if v > 0]
     share = (top[0][1] / total) if total > 0 and top else 0.0
     gen_total = sum(v for v in generic.values() if v > 0)
     year = max(years, key=years.get) if years else None

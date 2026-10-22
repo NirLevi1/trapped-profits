@@ -93,6 +93,10 @@ class Api:
 
         def _bg():
             try:
+                self.store.backfill_ledger_months()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
                 self._reread["result"] = self.store.reread_reports()
             except Exception as e:  # noqa: BLE001
                 self._reread["result"] = {"error": str(e)}

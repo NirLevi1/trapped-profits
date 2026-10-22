@@ -88,6 +88,7 @@ class Section62AResult:
     # אברהם (סבב 2, 3): 70% מלקוח אחד על סך 36 חודשים (שלוש כרטסות)
     concentration_share_36m: float = 0.0
     concentration_years: list = field(default_factory=list)   # השנים שנכנסו לחישוב
+    concentration_months: int | None = None                    # 22.10: חודשי שירות ללקוח הגדול בשלוש השנים (None – כרטסות בלי תאריכים / ישנות)
     concentration_met_by_data: bool = False                    # שלוש שנים ו-≥70% → המבחן מתקיים לפי הנתונים
     concentration_test_met: bool = False                       # ידני או לפי הנתונים
 
@@ -309,24 +310,31 @@ def _retained_full(ci: ClientInput, special_assets_net: float) -> RetainedResult
 # ---------------------------------------------------------------------------
 # לשונית «סעיף_62א»
 # ---------------------------------------------------------------------------
-def _conc_met_by_data(ci: ClientInput) -> bool:
-    """אברהם (סבב 2, 3): שלוש כרטסות (36 חודשים) והלקוח הגדול של השנה מעל 70% מסך שלוש השנים."""
+def _conc_law(ci: ClientInput) -> dict:
+    """22.10 – מבחן 62א(א)(3) לפי החוק: 70% או יותר מהכנסות **שנת המס** מלקוח אחד, והשירות לו ניתן
+    **22 חודשים לפחות מתוך שלוש שנים** (חודש עם הכנסה מהלקוח בכרטסות השנה ושתי הקודמות).
+    חריג 4 עובדים ומעלה – לא נבדק (אברהם יודע; מוזן ידנית אם צריך דרך "מבחן ריכוזיות מתקיים")."""
     s = ci.s62a
-    cur = [(str(c.get("name") or ""), float(c.get("amount") or 0)) for c in (s.top_customers or []) if float(c.get("amount") or 0) > 0]
+    cur = [c for c in (s.top_customers or []) if float(c.get("amount") or 0) > 0]
     if not cur:
-        return False
-    cur.sort(key=lambda x: -x[1])
-    name = cur[0][0]
-    num = cur[0][1]
-    den = max(s.total_revenue, sum(a for _, a in cur))
-    n_years = 1
-    for lst, tot_in in ((s.top_customers_prev_year, s.prev_year_revenue_for_concentration), (s.top_customers_prev2_year, s.prev2_year_revenue_for_concentration)):
-        rows = [(str(c.get("name") or ""), float(c.get("amount") or 0)) for c in (lst or []) if float(c.get("amount") or 0) > 0]
-        if rows:
-            num += next((a for n, a in rows if n == name), 0.0)
-            den += max(tot_in, sum(a for _, a in rows))
-            n_years += 1
-    return n_years >= 3 and den > 0 and num / den >= 0.70 - 1e-9
+        return {"name": "", "share": 0.0, "months": None, "met": False}
+    cur.sort(key=lambda c: -float(c.get("amount") or 0))
+    name = str(cur[0].get("name") or "")
+    amt = float(cur[0].get("amount") or 0)
+    den = max(s.total_revenue, sum(float(c.get("amount") or 0) for c in cur))
+    share = amt / den if den > 0 else 0.0
+    months: set = set()
+    known = "months" in cur[0]
+    for lst in (s.top_customers, s.top_customers_prev_year, s.top_customers_prev2_year):
+        for c in lst or []:
+            if str(c.get("name") or "") == name:
+                months |= set(c.get("months") or [])
+    n = len(months) if known else None
+    return {"name": name, "share": share, "months": n, "met": share >= 0.70 - 1e-9 and n is not None and n >= 22}
+
+
+def _conc_met_by_data(ci: ClientInput) -> bool:
+    return _conc_law(ci)["met"]
 
 
 def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
@@ -399,7 +407,8 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
             den36 += tot
             years_avail.append(y)
     share36 = num36 / den36 if den36 > 0 else 0.0
-    met_by_data = len(years_avail) >= 3 and share36 >= 0.70 - 1e-9
+    law = _conc_law(ci)
+    met_by_data = law["met"]
     conc_met = s.concentration_test_met or met_by_data
     full = s.taxable_income_personal_effort if st.applies_62a else 0.0
     if full > 0 and s.owner_salary_current_year is not None:
@@ -438,6 +447,7 @@ def _section_62a(ci: ClientInput, retained_for_81a: float) -> Section62AResult:
         concentration_share_36m=share36,
         concentration_years=sorted(years_avail),
         concentration_met_by_data=met_by_data,
+        concentration_months=law["months"],
         concentration_test_met=conc_met,
     )
 
@@ -691,11 +701,11 @@ def _dashboard(ci: ClientInput, s62: Section62AResult, tr: TransitionResult,
     if not st.applies_62a:
         status62 = "ירוק – הסעיף אינו חל"
     elif s62.concentration_test_met:
-        status62 = "אדום – מבחן ריכוזיות: ייחוס מלא" + (f" (לפי כרטסות {s62.concentration_years[0]}–{s62.concentration_years[-1]}: {s62.concentration_share_36m:.0%})" if s62.concentration_met_by_data and not ci.s62a.concentration_test_met else "")
+        status62 = "אדום – מבחן ריכוזיות: ייחוס מלא" + (f" ({s62.concentration_top_name} {s62.concentration_share:.0%} השנה, {s62.concentration_months} חודשים)" if s62.concentration_met_by_data and not ci.s62a.concentration_test_met else "")
     elif s62.section_applies and s62.attributed_income > 0.5:
         status62 = "אדום – ייחוס הכנסה לבעל המניות"
     elif s62.concentration_share >= 0.70:
-        status62 = f"צהוב – לקוח אחד {s62.concentration_share:.0%} מההכנסות – לבדוק ריכוזיות על 36 חודשים"
+        status62 = f"צהוב – ריכוזיות: לקוח אחד {s62.concentration_share:.0%} השנה – " + (f"{s62.concentration_months} חודשי שירות (נדרשים 22)" if s62.concentration_months is not None else "לבדוק 22 חודשי שירות (להעלות כרטסות מחדש)")
     elif s62.crossed_25pct and s62.exemption_750k_applies:
         # 17.10: רווחיות מעל 25% אבל עודפים עד 750 אלף ואין שליטה בחברה נוספת – הסעיף אינו חל (קודם: "מתקרבת לסף" – מטעה)
         # צבע כמו באקסל של אברהם (צהוב – לעקוב: כשהעודפים יעברו 750 אלף הסעיף יחול); רק הניסוח מדויק
@@ -752,14 +762,13 @@ def _manual_review(ci: ClientInput, ret: RetainedResult, s62: Section62AResult, 
                    + (f"; חסר רווח {', '.join(map(str, need))} (מאזן בוחן מלא) לגלגול" if need else ""))
     elif ci.is_estimate or ci.structure.is_scenario_b:
         out.append("תרחיש ב׳ – נתוני הבסיס הם אומדן גלגול, לא דוח סגור" + ("; " + ret.rollover_note if ret.rollover_note else "; להזין רווח השנה הקודמת (מאזן בוחן) לגלגול אוטומטי"))
+    # 22.10: מבחן הריכוזיות לפי החוק – 70% בשנת המס + 22 חודשי שירות מתוך 3 שנים; חריג 4 עובדים – אברהם
     if s62.concentration_met_by_data and not ci.s62a.concentration_test_met:
-        out.append(f"ריכוזיות: לפי כרטסות {s62.concentration_years[0]}–{s62.concentration_years[-1]} – {s62.concentration_top_name} {s62.concentration_share_36m:.0%} "
-                   "מסך 36 החודשים → המבחן מתקיים לפי הנתונים: ייחוס מלא. לאשר (או לסמן ידנית אם לא)")
+        out.append(f"ריכוזיות: {s62.concentration_top_name} {s62.concentration_share:.0%} מההכנסות השנה ו-{s62.concentration_months} חודשי שירות ב-3 שנים → "
+                   "המבחן מתקיים: ייחוס מלא. לא חל אם החברה מעסיקה 4 עובדים או יותר – לבדוק")
     elif s62.concentration_share >= 0.70 and not s62.concentration_test_met:
-        n = len(s62.concentration_years)
-        out.append(f"ריכוזיות: {s62.concentration_top_name} – {s62.concentration_share:.0%} מההכנסות השנה"
-                   + (f"; על פני {n} שנים ({s62.concentration_years[0]}–{s62.concentration_years[-1]}): {s62.concentration_share_36m:.0%}" if n > 1 else "")
-                   + f". המבחן הוא 70% על סך 36 חודשים – חסרות כרטסות של {3 - n} שנים" if n < 3 else ". מתחת ל-70% על 36 חודשים – המבחן לא מתקיים")
+        out.append(f"ריכוזיות: {s62.concentration_top_name} {s62.concentration_share:.0%} מההכנסות השנה; "
+                   + (f"{s62.concentration_months} חודשי שירות ב-3 שנים – נדרשים 22" if s62.concentration_months is not None else "אין תאריכים בכרטסות – להעלות מחדש כדי לספור 22 חודשי שירות"))
     if ci.structure.applies_62a and s62.attributed_income > 0 and ci.s62a.owner_salary_current_year is None:
         out.append("לא הוזן שכר בעלים – עלות המס הנוספת לפי מס שולי משוקלל; להזין שכר לחישוב לפי מדרגות")
     return out
