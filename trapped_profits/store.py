@@ -332,7 +332,11 @@ class ClientStore:
             "years": (prev or {}).get("years") or {},            # תמונות של שנים שנסגרו (מעבר שנה)
             "sources": _merge_sources((prev or {}).get("sources"), sources),   # סבב 3: הקבצים שהלקוח מבוסס עליהם
             "report_parser_version": (prev or {}).get("report_parser_version"),
+            "review": (prev or {}).get("review"),
         }
+        # 22.10: מבקר – שינוי בנתונים אחרי הבדיקה → הממצאים "ייתכן שלא עדכניים"
+        if rec["review"] and prev and rec["review"].get("status") == "done" and (prev.get("input") or {}) != rec["input"]:
+            rec["review"] = {**rec["review"], "stale": True}
         if any(isinstance(x, dict) and x.get("slot") == "annual_report" for x in (sources or [])):
             from .annual_report import PARSER_VERSION
             rec["report_parser_version"] = PARSER_VERSION
@@ -674,6 +678,51 @@ class ClientStore:
         shown = f"{v:,.0f}" if isinstance((v := c[choice]), (int, float)) and not isinstance(v, bool) and abs(v) > 1 else str(v)
         self._log(new, "תיקון", f"{c.get('label') or path}: נבחר {who} ({shown})")
         return self._write(cid, new)
+
+    # ---- 22.10: מבקר
+    def review_start(self, cid: str) -> dict | None:
+        rec = self.get(cid)
+        if not rec:
+            return None
+        rv = dict(rec.get("review") or {})
+        rv.update(status="running", started=datetime.now().isoformat(timespec="seconds"))
+        rec["review"] = rv
+        return self._write(cid, rec)
+
+    def review_finish(self, cid: str, result: dict | None = None, error: str = "") -> dict | None:
+        rec = self.get(cid)
+        if not rec:
+            return None
+        old = rec.get("review") or {}
+        now = datetime.now().isoformat(timespec="seconds")
+        if error:
+            rec["review"] = {**old, "status": "error", "msg": error, "at": now}
+        else:
+            dismissed = list(old.get("dismissed") or []) + [f for f in old.get("findings") or [] if f.get("state") in ("checked", "irrelevant")]
+            seen, dd = set(), []
+            for f in reversed(dismissed):
+                k = (f.get("title"), f.get("field"))
+                if k not in seen:
+                    seen.add(k); dd.append(f)
+            rec["review"] = {"status": "done", "at": now, "stale": False, "msg": "", "overall": (result or {}).get("overall", ""),
+                             "findings": (result or {}).get("findings") or [], "dismissed": list(reversed(dd))[-30:]}
+            n = len(rec["review"]["findings"])
+            self._log(rec, "בדיקת היגיון", f"{n} ממצאים" if n else "לא נמצאו ממצאים")
+        return self._write(cid, rec)
+
+    def review_mark(self, cid: str, fid: str, state: str) -> dict:
+        rec = self.get(cid)
+        if not rec:
+            raise ValueError("לקוח לא נמצא")
+        if state not in ("open", "checked", "irrelevant"):
+            raise ValueError("מצב לא מוכר")
+        for f in (rec.get("review") or {}).get("findings") or []:
+            if f.get("id") == fid:
+                f["state"] = state
+                f["by"], f["at"] = self._by(), datetime.now().isoformat(timespec="seconds")
+                if state != "open":
+                    self._log(rec, "בדיקת היגיון", f"{f.get('title') or f.get('finding', '')[:40]}: {'נבדק' if state == 'checked' else 'לא רלוונטי'}")
+        return self._write(cid, rec)
 
     def resolve_ai_all(self, cid: str, choice: str, reread: bool = True) -> dict[str, Any]:
         """21.10: "לקחת את כל הערכים מהקורא החדש" – כל הסתירות מהקריאה מחדש בבת אחת."""

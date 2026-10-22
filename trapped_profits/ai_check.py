@@ -423,3 +423,87 @@ def verify_tb(r: dict, key: str, model: str = DEFAULT_MODEL, cogs_default: Calla
     r["ai"] = {"ok": True, "msg": msg, "agree": agree, "conflicts": len(conflicts)}
     r["fields"]["ai_tb"] = {"at": now, "ok": True, "msg": msg, "conflicts": conflicts}
     return r
+
+
+# ---------------------------------------------------------------- מבקר (22.10)
+# אחרי שכל הקבצים בפנים: המודל רואה את הנתונים, המקורות והתוצאה ומחזיר ממצאים – לא משנה מספרים.
+
+REVIEW_RULES = """Rules the calculation follows (Israeli trapped-profits law, as implemented and APPROVED by the firm – do not argue with them):
+Tax year = the client's tax_year; previous year = tax_year − 1. Data are up to data_through_month; later months are estimated.
+SECTION 81 (2% surtax on excess retained profits)
+- Retained profits = retained earnings in the last closed balance sheet (end of previous year). If the closed report is 1–2 years old it is rolled forward: + profit of each open year × (1 − 23%) − that year's dividends (estimate).
+- Exempt if retained ≤ 750,000 (split between related companies).
+- Shield = max of: fixed 750,000; expenses shield = max(current-year expenses, average of the last 3 years' expenses) – expenses INCLUDE depreciation in all years (prior years from the closed report; current year adds the report's annual depreciation because the trial balance has none); assets shield = cost of fixed assets (by law COST; if the report has no fixed-asset note, net book value is used as a fallback and is flagged for confirmation).
+- Excess = retained − governing shield (after transition reductions). Surtax = 2% × excess unless 6% of retained or 50% of excess is distributed by year end.
+SECTION 62A (attribution of personal-effort income)
+- Personal-effort revenue = business revenue only (finance income and other income – grants, refunds, compensation – are excluded).
+- Taxable income from the activity = revenue − expenses (excluding finance/other income). Profitability = taxable ÷ personal-effort revenue.
+- If profitability > 25% → the excess over 25% is attributed to the owner ("salary fix"), unless the 750K exemption applies (retained at end of previous year ≤ 750,000 and the owner controls no other company).
+- Concentration path: one customer ≥ 70% of revenue over 36 months (customer ledgers) → FULL attribution regardless of profitability and of the 750K exemption.
+- Ledger lines on generic accounts (cash, transfers, cheques, misc customers) are excluded from concentration.
+TRIAL BALANCE: every P&L row × 12 months; future months estimated (seasonality from the previous year scaled to this year's pace, payment cycles, averages, run-rate); the year = sum of the 12 cells. Zero in a past month of a regular row = "gap", estimated until the accountant confirms.
+Inventory companies: cost of sales from the report's gross margin ("inventory adjustment"); purchases are offset. Cost-of-sales marking affects only the displayed gross profit.
+Salaries booked under "production costs" are NOT cost of sales by default (firm decision)."""
+
+REVIEW_PROMPT = """You are a senior Israeli CPA reviewing an automated trapped-profits calculation (sections 81 and 62A) before it goes to the partner.
+Look for what does not add up or what a careful reviewer would question: data that looks wrong or inconsistent between files, suspicious year-over-year jumps,
+estimates (especially seasonal/average estimates distorted by one unusual month) that drive the result, classifications that change the outcome,
+conclusions that depend on an assumption that must be confirmed. Only findings that could change the 81/62A outcome or materially change amounts.
+Do NOT repeat items already listed in "already_shown_to_accountant" (missing fields, owner salary not entered, open estimate approvals) – they are shown separately.
+Do NOT repeat findings in "dismissed_by_accountant" unless the numbers behind them changed materially.
+Avoid pure speculation without a sign in the data. At most 6 findings, most important first; zero findings is fine.
+Write in Hebrew. Each finding: a short title, one or two sentences, and what to check. Use report_findings."""
+
+REVIEW_TOOL = {
+    "name": "report_findings",
+    "description": "Report review findings.",
+    "input_schema": {"type": "object", "properties": {
+        "findings": {"type": "array", "items": {"type": "object", "properties": {
+            "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+            "field": {"type": "string", "description": "input/result path or trial-balance row name"},
+            "title": {"type": "string"}, "finding": {"type": "string"}, "check": {"type": "string"},
+        }, "required": ["severity", "title", "finding", "check"]}},
+        "overall": {"type": "string"},
+    }, "required": ["findings", "overall"]},
+}
+
+
+def review_packet(rec: dict) -> dict:
+    import copy
+    inp = copy.deepcopy(rec.get("input") or {})
+    res = copy.deepcopy(rec.get("result") or {})
+    for k in ("tb_rows", "tb_rows_prev_year"):
+        if inp.get(k):
+            inp[k] = [{"name": r.get("name"), "section": r.get("section"), "group": r.get("group"), "income": r.get("income"),
+                       "months": [round(float(x or 0)) for x in r.get("months") or []]} for r in inp[k]]
+    for k in ("ai_annual", "ai_tb", "adjustments"):
+        inp.pop(k, None)
+    mt = res.get("months_table")
+    if mt:
+        res["months_table"] = {"through_month": mt.get("through_month"), "annual": mt.get("annual"), "gross_history": mt.get("gross_history"),
+                               "rows": [{"name": r["name"], "kind": r["kind"], "total_with_estimates": r["total"], "file_total": r.get("file_total"), "method": r.get("method")} for r in mt.get("rows") or []]}
+    for k in ("months_gap_table", "data_breakdown"):
+        res.pop(k, None)
+    meta = rec.get("field_meta") or {}
+    sources = {k: v.get("source") for k, v in meta.items() if v.get("source")}
+    shown = list(rec.get("missing_human") or []) + [f"{x} – חושב עם אפס" for x in (res.get("missing_fields") or [])]
+    shown += [f"אומדן ממתין לאישור: {i.get('label')}" for i in (res.get("estimate_items") or []) if i.get("status") == "pending"][:20]
+    old = (rec.get("review") or {}).get("findings") or []
+    dismissed = [{"title": f.get("title"), "field": f.get("field"), "finding": f.get("finding"), "state": f.get("state")} for f in old if f.get("state") in ("checked", "irrelevant")]
+    return {"input": inp, "result": res, "field_sources": sources, "files": [{"title": s.get("title"), "file": s.get("file"), "year": s.get("year")} for s in rec.get("sources") or [] if not s.get("superseded")],
+            "already_shown_to_accountant": shown, "dismissed_by_accountant": dismissed}
+
+
+def review_client(rec: dict, key: str, model: str = DEFAULT_MODEL, caller: Callable | None = None) -> dict:
+    pk = review_packet(rec)
+    content = [{"type": "text", "text": REVIEW_RULES}, {"type": "text", "text": REVIEW_PROMPT},
+               {"type": "text", "text": "CLIENT DATA (JSON):\n" + json.dumps(pk, ensure_ascii=False, default=str)}]
+    m = (caller or call_model)(key, content, REVIEW_TOOL, model, timeout=240, max_tokens=4000)
+    out = []
+    for i, f in enumerate(m.get("findings") or []):
+        if not isinstance(f, dict) or not f.get("finding"):
+            continue
+        out.append({"id": f"f{i}", "severity": f.get("severity") if f.get("severity") in ("high", "medium", "low") else "medium",
+                    "field": str(f.get("field") or ""), "title": str(f.get("title") or ""), "finding": str(f.get("finding") or ""),
+                    "check": str(f.get("check") or ""), "state": "open"})
+    return {"findings": out[:6], "overall": str(m.get("overall") or "")}

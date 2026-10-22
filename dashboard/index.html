@@ -129,7 +129,7 @@
   input.st-missing{border-color:var(--serious);background:#fdf1ee}
   table.mini{border-collapse:collapse;font-size:12px} table.mini th,table.mini td{padding:2px 10px 2px 0;text-align:right} table.mini th{font-weight:500;color:inherit;opacity:.8}
   .fstate{font-size:11px;margin-top:3px;display:flex;gap:6px;align-items:center}
-  .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
+  .rvf{border-top:1px solid var(--line-soft);padding:8px 0;color:var(--ink)} .rvf .hint{color:var(--ink-3)} .rvf:first-of-type{border-top:0} .rvh{display:flex;gap:8px;align-items:center;margin-bottom:3px} .aiconf{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0} .aiconf .lab{min-width:150px;font-weight:600} .aichip{display:inline-flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:3px;font-size:12px;color:var(--serious)} .aichip button{font-size:11px;padding:1px 6px} .fstate.file{color:var(--warn)} .fstate.approved,.fstate.manual,.fstate.carried{color:var(--good)} .fstate.estimate{color:var(--warn)} .fstate.missing{color:var(--serious)} .fstate.filled{color:var(--ink-4)}
   .fstate button{padding:0 6px;font-size:11px;line-height:18px;border-radius:5px}
   .check .fstate{margin-inline-start:0}
   .slots{display:grid;gap:10px}
@@ -626,6 +626,27 @@
         (two.length ? `<div class="hint" style="margin-bottom:6px">הקורא שלנו והבודק השני קראו ערך שונה בדוח השנתי. השדה לא נכנס לחישוב עד שבוחרים.</div>${two.map(([p, x]) => aiConfHtml(rec.id, p, x, 'card')).join('')}` : '') +
         (rr.length ? `<div style="display:flex;gap:10px;align-items:center;margin:${two.length ? '10px' : '0'} 0 6px"><span class="hint">הדוח השנתי נקרא שוב בגרסה החדשה של הקורא ויצא ערך אחר. החישוב עדיין עם הערך השמור – לבחור.</span><div class="spacer"></div>${rr.length > 1 ? `<button onclick="resolveAiAll('${esc(rec.id)}','model')">✓ הכל מהקורא החדש</button><button class="quiet" onclick="resolveAiAll('${esc(rec.id)}','ours')">להשאיר הכל</button>` : ''}</div>${rr.map(([p, x]) => aiConfHtml(rec.id, p, x, 'card')).join('')}` : ''));
       else if (ai.ok === false && ai.msg) addFlag('ai', 'neutral', 'בודק שני לא רץ', `<div>${esc(ai.msg)} – הערכים מהדוח השנתי מהקורא שלנו בלבד. אפשר להעלות שוב את הדוח אחרי התיקון.</div>`); }
+    // 22.10: מבקר – ממצאים של המודל על התמונה כולה (לא משנה מספרים)
+    { const rv = rec.review;
+      if (rv){
+        const id = esc(rec.id), open = (rv.findings || []).filter(f => f.state === 'open'), closed = (rv.findings || []).filter(f => f.state !== 'open');
+        const again = `<button class="quiet" onclick="reviewNow('${id}')">בדיקה מחדש</button>`;
+        const SEV = {high: ['serious', 'חשוב'], medium: ['warn', 'בינוני'], low: ['neutral', 'נמוך']};
+        const one = f => `<div class="rvf"><div class="rvh"><span class="pill ${SEV[f.severity][0]}">${SEV[f.severity][1]}</span><b>${esc(f.title || '')}</b><div class="spacer"></div><button class="quiet" onclick="reviewMark('${id}','${esc(f.id)}','checked')">✓ בדקתי</button><button class="quiet" onclick="reviewMark('${id}','${esc(f.id)}','irrelevant')">לא רלוונטי</button></div><div>${esc(f.finding)}</div>${f.check ? `<div class="hint">לבדוק: ${esc(f.check)}</div>` : ''}</div>`;
+        if (rv.status === 'running' && !MOCK) setTimeout(() => pollReview(rec.id), 0);
+        if (rv.status === 'running') addFlag('aireview', 'neutral', 'בדיקת היגיון…', `<div>המודל עובר על כל הנתונים והתוצאה (כדקה). אפשר להמשיך לעבוד.</div>`);
+        else if (rv.status === 'error') addFlag('aireview', 'neutral', 'בדיקת היגיון לא רצה', `<div style="display:flex;gap:10px;align-items:center"><span>${esc(rv.msg || '')}</span><div class="spacer"></div>${again}</div>`);
+        else if (rv.status === 'done'){
+          const tone = open.some(f => f.severity === 'high') ? 'serious' : open.length ? 'warn' : 'good';
+          addFlag('aireview', tone, open.length ? `בדיקת היגיון · ${open.length}` : 'בדיקת היגיון ✓',
+            (rv.stale ? `<div class="notice warn" style="display:flex;gap:10px;align-items:center;margin:0 0 8px"><span>הנתונים השתנו מאז הבדיקה – ייתכן שהממצאים לא עדכניים.</span><div class="spacer"></div>${again}</div>` : '')
+            + (rv.overall ? `<div style="margin-bottom:8px"><b>${esc(rv.overall)}</b></div>` : '')
+            + (open.length ? open.map(one).join('') : `<div class="hint">אין ממצאים פתוחים.</div>`)
+            + (closed.length ? `<details style="margin-top:8px"><summary class="hint">סומנו ${closed.length}</summary>${closed.map(f => `<div class="hint" style="display:flex;gap:8px;align-items:center;margin:3px 0"><span>${f.state === 'checked' ? '✓ נבדק' : 'לא רלוונטי'} – ${esc(f.title || f.finding)}</span><button class="quiet" onclick="reviewMark('${id}','${esc(f.id)}','open')">↶</button></div>`).join('')}</details>` : '')
+            + (!rv.stale ? `<div class="hint" style="margin-top:8px;display:flex;gap:10px;align-items:center"><span>נבדק ${when(rv.at)}</span><div class="spacer"></div>${again}</div>` : ''));
+        }
+      }
+    }
     { const items = [...(rec.missing_human || []).filter(x => !x.startsWith('סתירה בין הקוראים') && !x.startsWith('הקורא החדש מצא')).map(x => ({t: 'serious', x})), ...(c.missing_fields || []).map(x => ({t: 'warn', x: x + ' – חושב עם אפס'}))];
       if (items.length) addFlag('missing', 'serious', `חסרים ${items.length}`, `<ul style="margin:0;padding-inline-start:18px">${items.map(i => `<li style="color:var(--${i.t})">${esc(i.x)}</li>`).join('')}</ul><div class="hint" style="margin-top:6px"><button class="quiet" onclick="editClient('${esc(rec.id)}')">להשלים בעריכה</button></div>`); }
     if (rec.pending_file_fields?.length) addFlag('pending', 'warn', `לאישור ${rec.pending_file_fields.length}`, `<div style="display:flex;gap:10px;align-items:center"><span>${rec.pending_file_fields.length} שדות מולאו מקובץ וממתינים לאישור.</span><div class="spacer"></div><button class="quiet" onclick="editClient('${esc(rec.id)}')">לעבור עליהם</button><button onclick="approveAllCard('${esc(rec.id)}')">✓ אשר הכל</button></div>`);
@@ -1049,6 +1070,19 @@
     return `<div class="aiconf"><span class="lab">${esc(x.label || p)}</span>${b('ours', 'הקורא שלנו')}${b('model', 'הבודק השני')}</div>`;
   }
   async function resolveAi(id, p, ch){ const r = await api('resolve_ai', id, p, ch); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('נבחר וחושב מחדש'); }
+  async function reviewMark(id, fid, st){ const r = await api('review_mark', id, fid, st); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); }
+  async function reviewNow(id){ const r = await api('review_client', id); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); pollReview(id); }
+  let reviewPolling = false;
+  async function pollReview(id){
+    if (reviewPolling) return; reviewPolling = true;
+    try {
+      for (let i = 0; i < 90; i++){
+        await new Promise(res => setTimeout(res, 4000));
+        const r = await api('get_client', id); if (!r) return;
+        if (r.review?.status !== 'running'){ await reload(); if (selectedId === id && $('s-client')?.classList.contains('active')) renderClient(); const n = (r.review?.findings || []).filter(f => f.state === 'open').length; toast(r.review?.status === 'done' ? (n ? `בדיקת היגיון: ${n} ממצאים` : 'בדיקת היגיון: לא נמצאו ממצאים') : 'בדיקת היגיון לא רצה'); return; }
+      }
+    } finally { reviewPolling = false; }
+  }
   async function resolveAiAll(id, ch){ const r = await api('resolve_ai_all', id, ch, true); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast(ch === 'model' ? 'נלקחו הערכים מהקורא החדש – חושב מחדש' : 'נשארו הערכים השמורים'); }
   async function resolveTbAi(id, row, ch){ const r = await api('resolve_tb_ai', id, row, ch); if (!r || r.error){ toast(r?.error || 'זמין רק בתוכנה'); return; } await reload(); renderClient(); toast('הסיווג נשמר וחושב מחדש'); }
   function pickAiForm(p, ch){

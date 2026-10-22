@@ -188,3 +188,26 @@ def test_model_fallback(monkeypatch):
     assert r["ok"] and r["model"] == "claude-sonnet-5-5" and tried[:2] == ["claude-opus-5-5", "claude-sonnet-5-5"]
     monkeypatch.setattr(ai_check, "call_model", lambda *a, **k: (_ for _ in ()).throw(AIError("נגמר הקרדיט בחשבון – צריך להטעין")))
     assert ai_check.test_key("k") == {"ok": False, "msg": "נגמר הקרדיט בחשבון – צריך להטעין"}
+
+
+def test_review_lifecycle(tmp_path):
+    """22.10: מבקר – ממצאים נשמרים, מסומנים, "לא עדכני" אחרי שינוי, ומה שסומן עובר למודל כדי לא לחזור."""
+    st = ClientStore(tmp_path / "clients")
+    rec = st.save({"structure": {"name": "x", "tax_year": 2026}})
+    seen = {}
+    def fake(key, content, tool, model, **k):
+        seen["data"] = json.loads(content[-1]["text"].split("\n", 1)[1])
+        return {"overall": "בסדר", "findings": [{"severity": "high", "field": "s62a", "title": "ריכוזיות", "finding": "הכרטסת על קופה", "check": "לבקש כרטסת"}]}
+    st.review_start(rec["id"])
+    assert st.get(rec["id"])["review"]["status"] == "running"
+    st.review_finish(rec["id"], ai_check.review_client(st.get(rec["id"]), "k", caller=fake))
+    rv = st.get(rec["id"])["review"]
+    assert rv["status"] == "done" and rv["findings"][0]["title"] == "ריכוזיות" and not rv["stale"]
+    st.review_mark(rec["id"], "f0", "irrelevant")
+    st.update_field(rec["id"], "shields.total_assets_cost", 5)
+    assert st.get(rec["id"])["review"]["stale"] is True
+    ai_check.review_client(st.get(rec["id"]), "k", caller=fake)
+    assert seen["data"]["dismissed_by_accountant"][0]["title"] == "ריכוזיות"
+    assert "tb_rows" not in seen["data"]["input"] or isinstance(seen["data"]["input"]["tb_rows"], list)
+    st.review_finish(rec["id"], error="נגמר הקרדיט")
+    assert st.get(rec["id"])["review"]["status"] == "error"

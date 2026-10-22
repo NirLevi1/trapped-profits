@@ -109,7 +109,55 @@ class Api:
     # ---- write
     def save_client(self, inp: dict, cid: str | None = None, field_meta: dict | None = None, sources: list | None = None):
         try:
-            return self.store.save(inp, cid, field_meta, sources=sources)
+            rec = self.store.save(inp, cid, field_meta, sources=sources)
+        except Exception as e:  # noqa: BLE001
+            return {"error": str(e)}
+        if cid is None or sources:                       # 22.10: לקוח חדש / קבצים חדשים – מבקר אוטומטי ברקע
+            rec = self._start_review(rec["id"]) or rec
+        return rec
+
+    # ---- 22.10: מבקר – רץ ברקע אחרי שהקבצים בפנים; ממצאים בלבד, לא משנה מספרים
+    def _start_review(self, cid: str):
+        key, model = self._ai_key()
+        if not key:
+            return None
+        if not hasattr(self, "_reviewing"):
+            self._reviewing, self._rerun = set(), set()
+        if cid in self._reviewing:
+            self._rerun.add(cid)
+            return None
+        self._reviewing.add(cid)
+        rec = self.store.review_start(cid)
+        import threading
+
+        def _bg():
+            from trapped_profits import ai_check
+            try:
+                while True:
+                    self._rerun.discard(cid)
+                    cur = self.store.get(cid)
+                    try:
+                        r = ai_check.review_client(cur, key, model)
+                        self.store.review_finish(cid, r)
+                    except ai_check.AIError as e:
+                        self.store.review_finish(cid, error=str(e))
+                    except Exception as e:  # noqa: BLE001
+                        self.store.review_finish(cid, error=f"שגיאה בבדיקה: {e}")
+                    if cid not in self._rerun:
+                        break
+            finally:
+                self._reviewing.discard(cid)
+        threading.Thread(target=_bg, daemon=True).start()
+        return rec
+
+    def review_client(self, cid: str):
+        if not self._ai_key()[0]:
+            return {"error": "אין מפתח – להגדיר בהגדרות"}
+        return self._start_review(cid) or self.store.get(cid)
+
+    def review_mark(self, cid: str, fid: str, state: str):
+        try:
+            return self.store.review_mark(cid, fid, state)
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
 
@@ -220,9 +268,10 @@ class Api:
 
     def apply_import(self, cid: str, fields: dict, sources: dict | None = None, label: str = "קובץ", source: dict | None = None):
         try:
-            return self.store.apply_import(cid, fields, sources, label, source=source)
+            rec = self.store.apply_import(cid, fields, sources, label, source=source)
         except Exception as e:  # noqa: BLE001
             return {"error": str(e)}
+        return self._start_review(cid) or rec           # 22.10: עדכון מקובץ – מבקר ברקע
 
     def field_info(self):
         from trapped_profits.store import HUMAN_ONLY_FIELDS
