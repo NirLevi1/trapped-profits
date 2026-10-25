@@ -929,6 +929,9 @@ def what_if(ci: ClientInput, extra_dividend: float = 0.0, salary: float = 0.0) -
 MONTHS_HE = ["ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני", "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר"]
 
 
+REV_CHANGE = "שינוי בהכנסות"
+
+
 def _adj_for(ci: ClientInput, key: str, month) -> dict | None:
     for a in ci.adjustments or []:
         if a.get("key") == key and (a.get("month") or None) == (month or None):
@@ -1262,17 +1265,29 @@ def _estimates(ci: ClientInput) -> tuple[ClientInput, list[str]]:
                    f"{cogs:,.0f} ₪; הרווח {'קטן' if delta > 0 else 'גדל'} ב-{abs(delta):,.0f} ₪ (אומדן, אין ספירת מלאי)")
         add_exp += v
         add_cost += v
+    elif ci.tb_rows:                                             # 25.10: חברה בלי מלאי – "שינוי במלאי" רק אם הוזן ידנית
+        adj = _adj_for(ci, "מלאי", None)
+        if adj and adj.get("kind") in ("manual", "accepted"):
+            v = float(adj.get("amount") or 0)
+            add_exp += v
+            add_cost += v
+    add_rev = 0.0                                                # 25.10: "שינוי בהכנסות" (הכנסות לקבל / מראש / עבודות בביצוע) – ידני
+    if ci.tb_rows:
+        adj = _adj_for(ci, REV_CHANGE, None)
+        if adj and adj.get("kind") in ("manual", "accepted"):
+            add_rev = float(adj.get("amount") or 0)
     for cat, v_prev in bd_prev.items():
         v_prev = float(v_prev or 0)
         if bd and v_prev > 0 and not bd.get(cat) and cat not in ("פחת", "קניות"):
             v = decide(f"{cat}:שנה", v_prev, f"חסר השנה: {cat} – בשנה הקודמת {v_prev:,.0f} ₪; נוסף כאומדן שנתי (לבדוק אם חסר רישום)")
             add_exp += v
             add_cost += v
-    if not add_exp and not add_cost:
+    if not add_exp and not add_cost and not add_rev:
         return ci, notes
-    s2 = replace(s, taxable_income_personal_effort=max(0.0, s.taxable_income_personal_effort - add_cost))
+    s2 = replace(s, taxable_income_personal_effort=max(0.0, s.taxable_income_personal_effort - add_cost + add_rev),
+                 total_revenue=s.total_revenue + add_rev)
     sh2 = replace(sh, expenses_current_year=max(0.0, sh.expenses_current_year + add_exp))
-    d2 = replace(d, current_year_profit_estimate=d.current_year_profit_estimate - add_cost) if d.current_year_profit_estimate is not None else d
+    d2 = replace(d, current_year_profit_estimate=d.current_year_profit_estimate - add_cost + add_rev) if d.current_year_profit_estimate is not None else d
     return replace(ci, s62a=s2, shields=sh2, distributions=d2), notes
 
 
@@ -1304,7 +1319,15 @@ def _annual_item_keys(ci: ClientInput, notes: list[str]) -> list:
         purchases = float(s.purchases_current_year) * f
         delta = s.total_revenue * (1 - s.gross_margin_rate) - purchases
         cogs = s.total_revenue * (1 - s.gross_margin_rate)
-        out.append(item("מלאי", f"התאמת מלאי: קניות בקובץ {purchases:,.0f} ₪ ← עלות מכר לפי רווח גולמי {s.gross_margin_rate:.1%} (מהדוח השנתי) {cogs:,.0f} ₪ ← הפרש {abs(delta):,.0f} ₪ {'נוסף להוצאות (הרווח קטן)' if delta > 0 else 'יורד מההוצאות (הרווח גדל)'}", delta))
+        out.append(item("מלאי", f"שינוי במלאי: קניות בקובץ {purchases:,.0f} ₪ ← עלות מכר לפי רווח גולמי {s.gross_margin_rate:.1%} (מהדוח השנתי) {cogs:,.0f} ₪ ← הפרש {abs(delta):,.0f} ₪ {'נוסף להוצאות (הרווח קטן)' if delta > 0 else 'יורד מההוצאות (הרווח גדל)'}", delta))
+    if ci.tb_rows:                                                # 25.10: שתי השורות מעל הרווח הגולמי – תמיד קיימות, 0 עד שמוזן
+        for key, label in ((REV_CHANGE, "שינוי בהכנסות (הכנסות לקבל / מראש / עבודות בביצוע) – ידני"),) + \
+                (() if any(k == "מלאי" for k, _ in out) else (("מלאי", "שינוי במלאי – חברה בלי מלאי בדוח; ידני"),)):
+            adj = _adj_for(ci, key, None)
+            if adj and adj.get("kind") in ("manual", "accepted"):
+                out.append(item(key, label, 0.0))
+            else:
+                out.append((key, {"key": key, "month": None, "label": label, "amount": 0.0, "estimate": 0.0, "status": "none", "note": ""}))
     for cat, v_prev in bd_prev.items():
         v_prev = float(v_prev or 0)
         if bd and v_prev > 0 and not bd.get(cat) and cat not in ("פחת", "קניות"):
@@ -1349,6 +1372,13 @@ def compute(ci: ClientInput) -> ClientResult:
     annual_items = []
     for key, note in _annual_item_keys(ci, est_notes):
         annual_items.append(note)
+    if months_table:                                               # 25.10: רווח גולמי כולל שינוי בהכנסות ושינוי במלאי
+        amt = {it["key"]: (it["amount"] if it["status"] != "dismissed" else 0.0) for it in annual_items}
+        an = months_table["annual"]
+        an["rev_change"], an["inv_change"] = round(amt.get(REV_CHANGE, 0.0)), round(amt.get("מלאי", 0.0))
+        rev = an["revenue"] + an["rev_change"]
+        an["gross"] = round(rev - an["cogs"] - an["inv_change"])
+        an["gross_rate"] = (an["gross"] / rev) if rev else None
     all_items = month_items + annual_items
     _, _, _, _, retained_for_81a = _retained_base(ci)
     s62 = _section_62a(ci, retained_for_81a)

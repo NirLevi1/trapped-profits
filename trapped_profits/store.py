@@ -804,7 +804,7 @@ class ClientStore:
         inp = rec["input"]
         month = int(month) if month else None
         adj = [a for a in (inp.get("adjustments") or []) if not (a.get("key") == key and (a.get("month") or None) == month)]
-        name = key
+        name = {"מלאי": "שינוי במלאי"}.get(key, key)
         if str(key).startswith("tb:"):
             rid = str(key)[3:]
             name = next((f"{r.get('name')} (מאזן בוחן)" for r in (inp.get("tb_rows") or []) if str(r.get("id")) == rid), key)
