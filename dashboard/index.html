@@ -366,7 +366,7 @@
       case 'update_field': { const r = S.find(x => x.id === a); if (!r) return {error:'לא נמצא'}; const ps = b.split('.'); let o = r.input; ps.slice(0,-1).forEach(k => o = o[k] = o[k] || {}); o[ps.at(-1)] = arguments[3]; return r; }
       case 'set_letter_note': { const r = S.find(x => x.id === a); if (r) r.letter_note = b; return r; }
       case 'set_handling': { const r = S.find(x => x.id === a); if (r) r.handling = {status: b, note: arguments[3] || '', at: new Date().toISOString().slice(0,19)}; return r; }
-      case 'get_settings': return window.__settings ||= {default_tax_year: 2026, firm_name: "מדהלה שלמה ושות'", stale_days: 60, data_dir: '/Users/niro/Projects/trapped-profits/data', app_version: '1.0', handling_statuses: ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל'], flags: {deduct_transition_from_50pct_base:false, enable_20pct_current_year_rule:true, deduction_base_excludes_related_payments:false, profitability_warning_threshold:.2}};
+      case 'get_settings': return window.__settings ||= {default_tax_year: 2026, firm_name: "מדהלה שלמה ושות'", stale_days: 60, data_dir: '/Users/niro/Projects/trapped-profits/data', app_version: '1.0', handling_statuses: ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: שכר וחלוקה','הוחלט: לא לפעול','טופל'], flags: {deduct_transition_from_50pct_base:false, enable_20pct_current_year_rule:true, deduction_base_excludes_related_payments:false, profitability_warning_threshold:.2}};
       case 'save_settings': Object.assign(window.__settings, a, {flags: {...window.__settings.flags, ...a.flags}}); return {ok: true, recomputed: 0};
       case 'export_report': return {path: null};
       case 'export_document': return {error: 'ייצוא קבצים זמין רק בתוכנה המותקנת'};
@@ -694,7 +694,7 @@
           if (c.manual_review.length) bottom.push({key:'review', label:`לבדיקה ידנית ${c.manual_review.length}`, html: `<div class="card"><h3>לבדיקה ידנית</h3><ul class="rev">${c.manual_review.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>`});
     const handlingMenu = `<div class="menu" id="handlingMenu"><button type="button" onclick="$('handlingMenu').classList.toggle('open')" title="סטטוס הטיפול, הערה למכתב, מעבר שנה">עדכון סטטוס ▾</button><div class="pop" style="min-width:460px;text-align:right"><h3 style="margin-top:0">עדכון סטטוס &nbsp;${handlingPill(rec.handling)}</h3>
           <div class="row">
-            <label class="field"><span>סטטוס</span><select id="h_status">${(settings?.handling_statuses || ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: לא לפעול','טופל']).map(x => `<option ${rec.handling?.status === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
+            <label class="field"><span>סטטוס</span><select id="h_status">${(settings?.handling_statuses || ['טרם טופל','בשיחה','הוחלט: חלוקה','הוחלט: שכר','הוחלט: שכר וחלוקה','הוחלט: לא לפעול','טופל']).map(x => `<option ${rec.handling?.status === x ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></label>
             <label class="field" style="flex:2"><span>הערה</span><input type="text" id="h_note" value="${esc(rec.handling?.note || '')}" placeholder="מה סוכם עם הלקוח"></label>
           </div>
           <label class="field" style="margin-top:8px"><span>הערה מהשיחה – מצטרפת למכתב ללקוח ("בהמשך לשיחתנו")</span><textarea id="letter_note" placeholder="טקסט חופשי שייכנס למכתב">${esc(rec.letter_note || '')}</textarea></label>
@@ -1494,6 +1494,13 @@
   // ── boot ──
   async function reload(){
     records = (await api('list_clients')) || [];
+    // 26.10 (אברהם): לקוח שטופל / הוחלט לגביו לא נשאר "טיפול נדרש" – עובר ל"מעקב – טופל". תצוגה בלבד; החישוב, המכתב והדוח לפי המספרים
+    for (const r of records){ const d = r.result?.dashboard; if (!d) continue;
+      d.color_calc ??= d.color_overall; d.status_calc ??= d.status_overall;
+      const st = r.handling?.status || '';
+      const done = st === 'טופל' || st.startsWith('הוחלט');
+      if (done && d.color_calc === 'אדום'){ d.color_overall = 'צהוב'; d.status_overall = `צהוב – מעקב · ${st}`; }
+      else { d.color_overall = d.color_calc; d.status_overall = d.status_calc; } }
     renderQueue(); renderReview(); renderClients();
   }
   // 21.10: קריאה מחדש של דוחות שמורים ברקע (אחרי עדכון של הקורא) – כשמסתיים: רענון והודעה
@@ -1503,7 +1510,7 @@
     const x = r.result || {};
     if (x.changed){ await reload(); if ($('s-client')?.classList.contains('active')) renderClient(); toast(`הדוחות השנתיים נקראו שוב בגרסה החדשה: אצל ${x.changed} לקוחות יצא ערך אחר – מסומן "סתירות" לבחירה (${(x.names || []).slice(0, 4).join(', ')}${x.changed > 4 ? '…' : ''})`, 9000); }
   }
-  const UI_VERSION = '1.38';
+  const UI_VERSION = '1.39';
   // 22.10: הממשק חדש אבל התהליך ישן (עדכון שלא הופעל מחדש) – פס בראש המסך עם הפעלה מחדש
   function versionMismatch(){
     const v = settings?.app_version; if (MOCK || !UI_VERSION || !v || v === UI_VERSION) return;
